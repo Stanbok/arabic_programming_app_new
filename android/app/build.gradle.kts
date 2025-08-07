@@ -62,4 +62,3 @@ dependencies {
     // Analytics (لو هتستخدمها)
     implementation("com.google.firebase:firebase-analytics-ktx")
 }
-apply plugin: 'com.google.gms.google-services'

@@ -9,8 +9,9 @@ plugins {
 
 android {
     namespace = "com.example.python_in_arabic"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 35
+    targetSdk = 35
+    ndkVersion = "27.0.11718014"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

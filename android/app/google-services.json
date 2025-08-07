@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "671004396835",
+    "project_id": "python-in-arabic",
+    "storage_bucket": "python-in-arabic.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:671004396835:android:b446bfff3baf9495361096",
+        "android_client_info": {
+          "package_name": "com.example.python_in_arabic"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXn9ezt1CGVzjJBQ8SGdIZqPBrgWLzvwg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

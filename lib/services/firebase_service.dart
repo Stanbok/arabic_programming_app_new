@@ -65,11 +65,17 @@ class FirebaseService {
 
   static Future<UserModel?> getUserData(String userId) async {
     try {
-      DocumentSnapshot doc = await _firestore.collection('users').doc(userId).get();
-      if (doc.exists) {
-        return UserModel.fromMap(doc.data() as Map<String, dynamic>);
-      }
-      return null;
+      return await retryOperation(() async {
+        DocumentSnapshot doc = await _firestore
+            .collection('users')
+            .doc(userId)
+            .get(const GetOptions(source: Source.serverAndCache));
+        
+        if (doc.exists) {
+          return UserModel.fromMap(doc.data() as Map<String, dynamic>);
+        }
+        return null;
+      });
     } catch (e) {
       throw Exception('خطأ في جلب بيانات المستخدم: ${e.toString()}');
     }
@@ -87,8 +93,17 @@ class FirebaseService {
     return _firestore
         .collection('users')
         .doc(userId)
-        .snapshots()
-        .map((doc) => doc.exists ? UserModel.fromMap(doc.data()!) : null);
+        .snapshots(includeMetadataChanges: true)
+        .map((doc) {
+          if (doc.exists && doc.data() != null) {
+            return UserModel.fromMap(doc.data()!);
+          }
+          return null;
+        })
+        .handleError((error) {
+          print('خطأ في stream بيانات المستخدم: $error');
+          throw Exception('خطأ في الاستماع لبيانات المستخدم: $error');
+        });
   }
 
   // Lesson Methods
@@ -352,5 +367,32 @@ class FirebaseService {
     } catch (e) {
       throw Exception('خطأ في منح مكافأة المشاركة: ${e.toString()}');
     }
+  }
+
+  // التحقق من اتصال الشبكة
+  static Future<bool> checkConnection() async {
+    try {
+      await _firestore.doc('test/connection').get();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // إعادة المحاولة مع التأخير
+  static Future<T> retryOperation<T>(
+    Future<T> Function() operation, {
+    int maxRetries = 3,
+    Duration delay = const Duration(seconds: 1),
+  }) async {
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        return await operation();
+      } catch (e) {
+        if (i == maxRetries - 1) rethrow;
+        await Future.delayed(delay * (i + 1));
+      }
+    }
+    throw Exception('فشل في العملية بعد $maxRetries محاولات');
   }
 }

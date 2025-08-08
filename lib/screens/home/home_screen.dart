@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/lesson_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/xp_bar.dart';
 import '../../widgets/lesson_card.dart';
 import '../../widgets/level_test_button.dart';
@@ -15,16 +16,100 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  bool _isInitialized = false;
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
-    _loadData();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeData();
   }
 
-  Future<void> _loadData() async {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _isInitialized) {
+      _refreshData();
+    }
+  }
+
+  Future<void> _initializeData() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
     final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
-    await lessonProvider.loadLessons();
+
+    if (authProvider.user == null) {
+      // إذا لم يكن المستخدم مسجل دخول، انتقل لصفحة تسجيل الدخول
+      if (mounted) {
+        context.go('/login');
+      }
+      return;
+    }
+
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // بدء الاستماع لبيانات المستخدم
+      userProvider.startListening(authProvider.user!.uid);
+      
+      // تحميل بيانات المستخدم إذا لم تكن محملة
+      if (userProvider.user == null) {
+        await userProvider.loadUserData(authProvider.user!.uid);
+      }
+
+      // تحميل الدروس
+      await lessonProvider.loadLessons();
+
+      setState(() {
+        _isInitialized = true;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('خطأ في تحميل البيانات: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل البيانات: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'إعادة المحاولة',
+              onPressed: _initializeData,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _refreshData() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
+
+    if (authProvider.user == null) return;
+
+    try {
+      // إعادة تحميل بيانات المستخدم
+      await userProvider.loadUserData(authProvider.user!.uid);
+      
+      // إعادة تحميل الدروس
+      await lessonProvider.loadLessons();
+    } catch (e) {
+      print('خطأ في تحديث البيانات: $e');
+    }
   }
 
   @override
@@ -39,50 +124,71 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Consumer2<UserProvider, LessonProvider>(
-        builder: (context, userProvider, lessonProvider, child) {
-          final user = userProvider.user;
-          
-          if (user == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final availableLessons = lessonProvider.getAvailableLessons(
-            user.completedLessons,
-            user.currentLevel,
-          );
-
-          return RefreshIndicator(
-            onRefresh: _loadData,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+      body: _isLoading
+          ? const Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Top Section - Profile & XP
-                  _buildTopSection(user),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Welcome Message
-                  _buildWelcomeMessage(user),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Lessons Grid
-                  _buildLessonsSection(availableLessons, user),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Level Test Button
-                  _buildLevelTestSection(user, availableLessons),
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('جاري تحميل البيانات...'),
                 ],
               ),
+            )
+          : Consumer3<UserProvider, LessonProvider, AuthProvider>(
+              builder: (context, userProvider, lessonProvider, authProvider, child) {
+                final user = userProvider.user;
+                
+                // إذا لم تكن بيانات المستخدم محملة بعد
+                if (user == null) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('جاري تحميل بيانات المستخدم...'),
+                      ],
+                    ),
+                  );
+                }
+
+                final availableLessons = lessonProvider.getAvailableLessons(
+                  user.completedLessons,
+                  user.currentLevel,
+                );
+
+                return RefreshIndicator(
+                  onRefresh: _refreshData,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Top Section - Profile & XP
+                        _buildTopSection(user),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Welcome Message
+                        _buildWelcomeMessage(user),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Lessons Grid
+                        _buildLessonsSection(availableLessons, user, lessonProvider.isLoading),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Level Test Button
+                        _buildLevelTestSection(user, availableLessons),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 
@@ -99,27 +205,53 @@ class _HomeScreenState extends State<HomeScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Row(
             children: [
               // Profile Image
-              CircleAvatar(
-                radius: 30,
-                backgroundImage: user.profileImageUrl != null
-                    ? CachedNetworkImageProvider(user.profileImageUrl!)
-                    : null,
-                child: user.profileImageUrl == null
-                    ? Text(
-                        user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      )
-                    : null,
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    backgroundImage: user.profileImageUrl != null
+                        ? CachedNetworkImageProvider(user.profileImageUrl!)
+                        : null,
+                    child: user.profileImageUrl == null
+                        ? Text(
+                            user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          )
+                        : null,
+                  ),
+                  // Online indicator
+                  Positioned(
+                    bottom: 2,
+                    right: 2,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               
               const SizedBox(width: 16),
@@ -136,7 +268,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       'المستوى ${user.level}',
                       style: TextStyle(
@@ -154,6 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -169,6 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
                     ),
                   ],
@@ -193,13 +330,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildWelcomeMessage(user) {
     final timeOfDay = DateTime.now().hour;
     String greeting;
+    String emoji;
     
     if (timeOfDay < 12) {
       greeting = 'صباح الخير';
+      emoji = '🌅';
     } else if (timeOfDay < 17) {
       greeting = 'مساء الخير';
+      emoji = '☀️';
     } else {
       greeting = 'مساء الخير';
+      emoji = '🌙';
     }
 
     return Container(
@@ -211,21 +352,42 @@ class _HomeScreenState extends State<HomeScreen> {
         border: Border.all(
           color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$greeting، ${user.name}! 👋',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Text(
+                emoji,
+                style: const TextStyle(fontSize: 24),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$greeting، ${user.name}!',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
-            'أنت في المستوى ${user.level}. استمر في التعلم لتصل إلى المستوى التالي!',
+            'أنت في المستوى ${user.level}. لديك ${user.completedLessons.length} درس مكتمل. استمر في التعلم لتصل إلى المستوى التالي!',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              height: 1.4,
             ),
           ),
         ],
@@ -233,20 +395,38 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLessonsSection(List availableLessons, user) {
+  Widget _buildLessonsSection(List availableLessons, user, bool isLessonsLoading) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'الدروس المتاحة',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'الدروس المتاحة',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (isLessonsLoading)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
         ),
         
         const SizedBox(height: 16),
         
-        if (availableLessons.isEmpty)
+        if (isLessonsLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (availableLessons.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(32),
@@ -310,7 +490,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildLevelTestSection(user, availableLessons) {
     // Check if current level is completed
     final currentLevelLessons = availableLessons.where((l) => l.level == user.currentLevel).toList();
-    final isLevelCompleted = currentLevelLessons.every((l) => user.completedLessons.contains(l.id));
+    final isLevelCompleted = currentLevelLessons.isNotEmpty && 
+                            currentLevelLessons.every((l) => user.completedLessons.contains(l.id));
     
     if (!isLevelCompleted) return const SizedBox.shrink();
     
@@ -330,7 +511,12 @@ class _HomeScreenState extends State<HomeScreen> {
           level: user.currentLevel,
           onPressed: () {
             // Navigate to level test
-            // This would be implemented based on your level test logic
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('اختبار المستوى قريباً...'),
+                backgroundColor: Colors.blue,
+              ),
+            );
           },
         ),
       ],

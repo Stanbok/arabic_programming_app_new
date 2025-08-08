@@ -3,7 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options.dart';
 
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
@@ -21,9 +20,7 @@ import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-  options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp();
   
   // Enable offline persistence
   FirebaseFirestore.instance.settings = const Settings(

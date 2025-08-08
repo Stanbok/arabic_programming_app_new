@@ -27,13 +27,23 @@ class _SplashScreenState extends State<SplashScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     
-    if (authProvider.isAuthenticated) {
-      // User is logged in, load user data and go to home
-      await userProvider.loadUserData(authProvider.user!.uid);
-      userProvider.startListening(authProvider.user!.uid);
-      
-      if (mounted) {
-        context.go('/home');
+    if (authProvider.isAuthenticated && authProvider.user != null) {
+      try {
+        // User is logged in, start listening and load user data
+        userProvider.startListening(authProvider.user!.uid);
+        
+        // Load initial data
+        await userProvider.loadUserData(authProvider.user!.uid);
+        
+        if (mounted) {
+          context.go('/home');
+        }
+      } catch (e) {
+        print('خطأ في تحميل بيانات المستخدم: $e');
+        // في حالة الخطأ، اذهب لصفحة تسجيل الدخول
+        if (mounted) {
+          context.go('/login');
+        }
       }
     } else {
       // User is not logged in, go to login screen

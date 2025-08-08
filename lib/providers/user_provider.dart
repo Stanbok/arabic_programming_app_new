@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import '../services/firebase_service.dart';
 import '../models/user_model.dart';
 import '../models/quiz_result_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserProvider with ChangeNotifier {
   UserModel? _user;
@@ -11,21 +11,31 @@ class UserProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   StreamSubscription<UserModel?>? _userSubscription;
+  bool _isListening = false;
 
   UserModel? get user => _user;
   List<QuizResultModel> get quizResults => _quizResults;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get isListening => _isListening;
 
   void startListening(String userId) {
+    if (_isListening && _userSubscription != null) {
+      return; // Already listening
+    }
+    
     _userSubscription?.cancel();
+    _isListening = true;
+    
     _userSubscription = FirebaseService.getUserDataStream(userId).listen(
       (user) {
         _user = user;
         notifyListeners();
       },
       onError: (error) {
+        print('خطأ في الاستماع لبيانات المستخدم: $error');
         _setError(error.toString());
+        _isListening = false;
       },
     );
   }
@@ -33,6 +43,7 @@ class UserProvider with ChangeNotifier {
   void stopListening() {
     _userSubscription?.cancel();
     _userSubscription = null;
+    _isListening = false;
   }
 
   Future<void> loadUserData(String userId) async {
@@ -40,6 +51,12 @@ class UserProvider with ChangeNotifier {
       _setLoading(true);
       _clearError();
       
+      // إذا لم نكن نستمع بعد، ابدأ الاستماع
+      if (!_isListening) {
+        startListening(userId);
+      }
+      
+      // جلب البيانات مرة واحدة للتحميل السريع
       _user = await FirebaseService.getUserData(userId);
       _quizResults = await FirebaseService.getQuizResults(userId);
       

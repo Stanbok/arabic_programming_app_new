@@ -51,14 +51,14 @@ dependencies {
     // اختار بقى اللي انت عايز تستخدمه 👇 (ضيفهم كلهم أو اللي تحتاجه بس)
 
     // Authentication
-    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-auth")
 
     // Firestore
-    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-firestore")
 
     // Storage
-    implementation("com.google.firebase:firebase-storage-ktx")
+    implementation("com.google.firebase:firebase-storage")
 
     // Analytics (لو هتستخدمها)
-    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("com.google.firebase:firebase-analytics")
 }

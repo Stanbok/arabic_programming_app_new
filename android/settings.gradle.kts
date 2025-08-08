@@ -22,7 +22,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven {
-    url 'https://storage.googleapis.com/download.flutter.io'
+            url = uri("https://storage.googleapis.com/download.flutter.io")
         }
     }
 }

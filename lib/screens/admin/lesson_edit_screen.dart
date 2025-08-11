@@ -77,13 +77,9 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
     _xpRewardController.text = _lesson!.xpReward.toString();
     _gemsRewardController.text = _lesson!.gemsReward.toString();
     
-    // تحميل الشرائح
-    _slides = List.from(_lesson!.slides);
+    _slides = _lesson!.slides.map((slide) => SlideUploadModel.fromSlideModel(slide)).toList();
     
-    // تحميل الاختبار
-    if (_lesson!.quiz != null) {
-      _quiz = _lesson!.quiz!;
-    }
+    _quiz = _lesson!.quiz.map((quiz) => QuizUploadModel.fromQuizQuestionModel(quiz)).toList();
   }
 
   @override
@@ -102,15 +98,14 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
   Widget build(BuildContext context) {
     if (_isLoadingLesson) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_lesson == null) {
-      return const Scaffold(
-        body: Center(
+      return Scaffold(
+        appBar: AppBar(title: const Text('خطأ')),
+        body: const Center(
           child: Text('لم يتم العثور على الدرس'),
         ),
       );
@@ -122,26 +117,40 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
         backgroundColor: Colors.red[600],
         foregroundColor: Colors.white,
         actions: [
-          TextButton(
-            onPressed: _updateLesson,
-            child: const Text(
-              'حفظ',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
+          Consumer<AdminProvider>(
+            builder: (context, adminProvider, child) {
+              return IconButton(
+                onPressed: adminProvider.isLoading ? null : _updateLesson,
+                icon: adminProvider.isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.save),
+                tooltip: 'حفظ التغييرات',
+              );
+            },
           ),
         ],
       ),
       body: Form(
         key: _formKey,
-        child: ListView(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          children: [
-            _buildBasicInfoSection(),
-            const SizedBox(height: 24),
-            _buildSlidesSection(),
-            const SizedBox(height: 24),
-            _buildQuizSection(),
-          ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildBasicInfoSection(),
+              const SizedBox(height: 24),
+              _buildSlidesSection(),
+              const SizedBox(height: 24),
+              _buildQuizSection(),
+            ],
+          ),
         ),
       ),
     );
@@ -155,7 +164,7 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'معلومات الدرس الأساسية',
+              'المعلومات الأساسية',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -167,7 +176,7 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'يرجى إدخال عنوان الدرس';
+                  return 'مطلوب';
                 }
                 return null;
               },
@@ -182,7 +191,7 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
               maxLines: 3,
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'يرجى إدخال وصف الدرس';
+                  return 'مطلوب';
                 }
                 return null;
               },
@@ -246,10 +255,19 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
                   child: TextFormField(
                     controller: _xpRewardController,
                     decoration: const InputDecoration(
-                      labelText: 'مكافأة XP',
+                      labelText: 'نقاط الخبرة *',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'مطلوب';
+                      }
+                      if (int.tryParse(value) == null) {
+                        return 'رقم غير صحيح';
+                      }
+                      return null;
+                    },
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -257,10 +275,19 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
                   child: TextFormField(
                     controller: _gemsRewardController,
                     decoration: const InputDecoration(
-                      labelText: 'مكافأة الجواهر',
+                      labelText: 'الجواهر *',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'مطلوب';
+                      }
+                      if (int.tryParse(value) == null) {
+                        return 'رقم غير صحيح';
+                      }
+                      return null;
+                    },
                   ),
                 ),
               ],
@@ -282,11 +309,11 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'شرائح الدرس',
+                  'الشرائح',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 ElevatedButton.icon(
-                  onPressed: _addSlide,
+                  onPressed: () => _showSlideDialog(),
                   icon: const Icon(Icons.add),
                   label: const Text('إضافة شريحة'),
                 ),
@@ -296,88 +323,42 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
             if (_slides.isEmpty)
               const Center(
                 child: Text(
-                  'لم يتم إضافة شرائح بعد',
+                  'لا توجد شرائح',
                   style: TextStyle(color: Colors.grey),
                 ),
               )
             else
-              ReorderableListView.builder(
+              ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _slides.length,
-                onReorder: (oldIndex, newIndex) {
-                  setState(() {
-                    if (newIndex > oldIndex) {
-                      newIndex -= 1;
-                    }
-                    final item = _slides.removeAt(oldIndex);
-                    _slides.insert(newIndex, item);
-                  });
-                },
                 itemBuilder: (context, index) {
-                  return _buildSlideCard(index);
+                  final slide = _slides[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      title: Text(slide.title),
+                      subtitle: Text(
+                        slide.content,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () => _showSlideDialog(slide: slide, index: index),
+                            icon: const Icon(Icons.edit),
+                          ),
+                          IconButton(
+                            onPressed: () => _removeSlide(index),
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSlideCard(int index) {
-    final slide = _slides[index];
-    return Card(
-      key: ValueKey(index),
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'الشريحة ${index + 1}: ${slide.title}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Row(
-                  children: [
-                    const Icon(Icons.drag_handle, color: Colors.grey),
-                    IconButton(
-                      onPressed: () => _editSlide(index),
-                      icon: const Icon(Icons.edit, size: 20),
-                    ),
-                    IconButton(
-                      onPressed: () => _removeSlide(index),
-                      icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            Text(
-              slide.content,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            if (slide.codeExample != null)
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  slide.codeExample!,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
               ),
           ],
         ),
@@ -396,11 +377,11 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'أسئلة الاختبار',
+                  'الاختبار',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 ElevatedButton.icon(
-                  onPressed: _addQuizQuestion,
+                  onPressed: () => _showQuizDialog(),
                   icon: const Icon(Icons.add),
                   label: const Text('إضافة سؤال'),
                 ),
@@ -410,121 +391,43 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
             if (_quiz.isEmpty)
               const Center(
                 child: Text(
-                  'لم يتم إضافة أسئلة بعد',
+                  'لا توجد أسئلة',
                   style: TextStyle(color: Colors.grey),
                 ),
               )
             else
-              ReorderableListView.builder(
+              ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _quiz.length,
-                onReorder: (oldIndex, newIndex) {
-                  setState(() {
-                    if (newIndex > oldIndex) {
-                      newIndex -= 1;
-                    }
-                    final item = _quiz.removeAt(oldIndex);
-                    _quiz.insert(newIndex, item);
-                  });
-                },
                 itemBuilder: (context, index) {
-                  return _buildQuizCard(index);
+                  final question = _quiz[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      title: Text(question.question),
+                      subtitle: Text('${question.options.length} خيارات'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () => _showQuizDialog(question: question, index: index),
+                            icon: const Icon(Icons.edit),
+                          ),
+                          IconButton(
+                            onPressed: () => _removeQuizQuestion(index),
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 },
               ),
           ],
         ),
       ),
     );
-  }
-
-  Widget _buildQuizCard(int index) {
-    final question = _quiz[index];
-    return Card(
-      key: ValueKey('quiz_$index'),
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'السؤال ${index + 1}: ${question.question}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Row(
-                  children: [
-                    const Icon(Icons.drag_handle, color: Colors.grey),
-                    IconButton(
-                      onPressed: () => _editQuizQuestion(index),
-                      icon: const Icon(Icons.edit, size: 20),
-                    ),
-                    IconButton(
-                      onPressed: () => _removeQuizQuestion(index),
-                      icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ...question.options.asMap().entries.map((entry) {
-              final optionIndex = entry.key;
-              final option = entry.value;
-              final isCorrect = optionIndex == question.correctAnswerIndex;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    Icon(
-                      isCorrect ? Icons.check_circle : Icons.radio_button_unchecked,
-                      color: isCorrect ? Colors.green : Colors.grey,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(option)),
-                  ],
-                ),
-              );
-            }).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Similar methods as in LessonUploadScreen for adding/editing slides and quiz questions
-  void _addSlide() {
-    _showSlideDialog();
-  }
-
-  void _editSlide(int index) {
-    _showSlideDialog(slide: _slides[index], index: index);
-  }
-
-  void _removeSlide(int index) {
-    setState(() {
-      _slides.removeAt(index);
-    });
-  }
-
-  void _addQuizQuestion() {
-    _showQuizDialog();
-  }
-
-  void _editQuizQuestion(int index) {
-    _showQuizDialog(question: _quiz[index], index: index);
-  }
-
-  void _removeQuizQuestion(int index) {
-    setState(() {
-      _quiz.removeAt(index);
-    });
   }
 
   void _showSlideDialog({SlideUploadModel? slide, int? index}) {
@@ -602,7 +505,7 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
     final questionController = TextEditingController(text: question?.question ?? '');
     final explanationController = TextEditingController(text: question?.explanation ?? '');
     final optionControllers = List.generate(4, (i) => 
-        TextEditingController(text: question?.options.length ?? 0 > i ? question!.options[i] : ''));
+        TextEditingController(text: ((question?.options.length ?? 0) > i) ? question!.options[i] : ''));
     int correctAnswer = question?.correctAnswerIndex ?? 0;
 
     showDialog(
@@ -616,7 +519,7 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
               children: [
                 TextField(
                   controller: questionController,
-                  decoration: const InputDecoration(labelText: 'نص السؤال'),
+                  decoration: const InputDecoration(labelText: 'السؤال'),
                   maxLines: 2,
                 ),
                 const SizedBox(height: 16),
@@ -685,15 +588,20 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
     );
   }
 
+  void _removeSlide(int index) {
+    setState(() {
+      _slides.removeAt(index);
+    });
+  }
+
+  void _removeQuizQuestion(int index) {
+    setState(() {
+      _quiz.removeAt(index);
+    });
+  }
+
   Future<void> _updateLesson() async {
     if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (_slides.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يجب إضافة شريحة واحدة على الأقل')),
-      );
       return;
     }
 
@@ -709,17 +617,16 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
       quiz: _quiz,
     );
 
-    final success = await context.read<AdminProvider>().updateLesson(_lesson!.id, lessonData);
-    
+    final success = await context.read<AdminProvider>().updateLesson(widget.lessonId, lessonData);
+
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تحديث الدرس بنجاح!')),
+        const SnackBar(content: Text('تم تحديث الدرس بنجاح')),
       );
       Navigator.pop(context);
     } else if (mounted) {
-      final error = context.read<AdminProvider>().errorMessage;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? 'حدث خطأ أثناء تحديث الدرس')),
+        const SnackBar(content: Text('فشل في تحديث الدرس')),
       );
     }
   }

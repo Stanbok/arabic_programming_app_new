@@ -4,8 +4,6 @@ import '../../providers/admin_provider.dart';
 import '../../providers/lesson_provider.dart';
 import '../../models/lesson_model.dart';
 import '../../models/admin_model.dart';
-import '../../models/slide_upload_model.dart';
-import '../../models/quiz_upload_model.dart';
 
 class LessonEditScreen extends StatefulWidget {
   final String lessonId;

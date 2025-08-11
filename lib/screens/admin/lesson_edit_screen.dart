@@ -75,9 +75,9 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
     _xpRewardController.text = _lesson!.xpReward.toString();
     _gemsRewardController.text = _lesson!.gemsReward.toString();
     
-    _slides = _lesson!.slides.map((slide) => SlideUploadModel.fromSlideModel(slide)).toList();
+    _slides = _lesson!.slides.map<SlideUploadModel>((slide) => SlideUploadModel.fromSlideModel(slide)).toList();
     
-    _quiz = _lesson!.quiz.map((quiz) => QuizUploadModel.fromQuizQuestionModel(quiz)).toList();
+    _quiz = _lesson!.quiz.map<QuizUploadModel>((quiz) => QuizUploadModel.fromQuizQuestionModel(quiz)).toList();
   }
 
   @override

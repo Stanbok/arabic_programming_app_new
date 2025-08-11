@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'lesson_model.dart'; // إضافة import للنماذج الأساسية
 
 class AdminModel {
   final String id;
@@ -99,6 +100,16 @@ class SlideUploadModel {
     required this.order,
   });
 
+  factory SlideUploadModel.fromSlideModel(SlideModel slide) {
+    return SlideUploadModel(
+      title: slide.title,
+      content: slide.content,
+      imageUrl: slide.imageUrl,
+      codeExample: slide.codeExample,
+      order: slide.order,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'title': title,
@@ -122,6 +133,15 @@ class QuizUploadModel {
     required this.correctAnswerIndex,
     this.explanation,
   });
+
+  factory QuizUploadModel.fromQuizQuestionModel(QuizQuestionModel quiz) {
+    return QuizUploadModel(
+      question: quiz.question,
+      options: List<String>.from(quiz.options),
+      correctAnswerIndex: quiz.correctAnswerIndex,
+      explanation: quiz.explanation,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {

@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/admin_provider.dart';
+import '../../providers/lesson_provider.dart';
 import '../../models/lesson_model.dart';
 import '../../models/admin_model.dart';
+import '../../models/slide_upload_model.dart';
+import '../../models/quiz_upload_model.dart';
 
 class LessonEditScreen extends StatefulWidget {
-  final LessonModel lesson;
+  final String lessonId;
 
-  const LessonEditScreen({Key? key, required this.lesson}) : super(key: key);
+  const LessonEditScreen({Key? key, required this.lessonId}) : super(key: key);
 
   @override
   State<LessonEditScreen> createState() => _LessonEditScreenState();
@@ -26,38 +29,61 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
   List<SlideUploadModel> _slides = [];
   List<QuizUploadModel> _quiz = [];
 
+  LessonModel? _lesson;
+  bool _isLoadingLesson = true;
+
   @override
   void initState() {
     super.initState();
     _initializeControllers();
-    _loadLessonData();
+    _loadLesson();
   }
 
   void _initializeControllers() {
-    _titleController = TextEditingController(text: widget.lesson.title);
-    _descriptionController = TextEditingController(text: widget.lesson.description);
-    _imageUrlController = TextEditingController(text: widget.lesson.imageUrl ?? '');
-    _levelController = TextEditingController(text: widget.lesson.level.toString());
-    _orderController = TextEditingController(text: widget.lesson.order.toString());
-    _xpRewardController = TextEditingController(text: widget.lesson.xpReward.toString());
-    _gemsRewardController = TextEditingController(text: widget.lesson.gemsReward.toString());
+    _titleController = TextEditingController();
+    _descriptionController = TextEditingController();
+    _imageUrlController = TextEditingController();
+    _levelController = TextEditingController();
+    _orderController = TextEditingController();
+    _xpRewardController = TextEditingController();
+    _gemsRewardController = TextEditingController();
   }
 
-  void _loadLessonData() {
-    _slides = widget.lesson.slides.map((slide) => SlideUploadModel(
-      title: slide.title,
-      content: slide.content,
-      imageUrl: slide.imageUrl,
-      codeExample: slide.codeExample,
-      order: slide.order,
-    )).toList();
+  Future<void> _loadLesson() async {
+    try {
+      final lesson = await context.read<LessonProvider>().getLessonById(widget.lessonId);
+      if (lesson != null) {
+        setState(() {
+          _lesson = lesson;
+          _isLoadingLesson = false;
+        });
+        _populateFields();
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingLesson = false;
+      });
+    }
+  }
 
-    _quiz = widget.lesson.quiz.map((question) => QuizUploadModel(
-      question: question.question,
-      options: question.options,
-      correctAnswerIndex: question.correctAnswerIndex,
-      explanation: question.explanation,
-    )).toList();
+  void _populateFields() {
+    if (_lesson == null) return;
+    
+    _titleController.text = _lesson!.title;
+    _descriptionController.text = _lesson!.description;
+    _imageUrlController.text = _lesson!.imageUrl ?? '';
+    _levelController.text = _lesson!.level.toString();
+    _orderController.text = _lesson!.order.toString();
+    _xpRewardController.text = _lesson!.xpReward.toString();
+    _gemsRewardController.text = _lesson!.gemsReward.toString();
+    
+    // تحميل الشرائح
+    _slides = List.from(_lesson!.slides);
+    
+    // تحميل الاختبار
+    if (_lesson!.quiz != null) {
+      _quiz = _lesson!.quiz!;
+    }
   }
 
   @override
@@ -74,6 +100,22 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingLesson) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_lesson == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text('لم يتم العثور على الدرس'),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('تعديل الدرس'),
@@ -630,7 +672,7 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
                       _quiz[index] = newQuestion;
                     } else {
                       _quiz.add(newQuestion);
-                    });
+                    }
                   });
                   Navigator.pop(context);
                 }
@@ -667,7 +709,7 @@ class _LessonEditScreenState extends State<LessonEditScreen> {
       quiz: _quiz,
     );
 
-    final success = await context.read<AdminProvider>().updateLesson(widget.lesson.id, lessonData);
+    final success = await context.read<AdminProvider>().updateLesson(_lesson!.id, lessonData);
     
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

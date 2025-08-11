@@ -510,7 +510,7 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
     final questionController = TextEditingController(text: question?.question ?? '');
     final explanationController = TextEditingController(text: question?.explanation ?? '');
     final optionControllers = List.generate(4, (i) => 
-        TextEditingController(text: question?.options.length ?? 0 > i ? question!.options[i] : ''));
+        TextEditingController(text: (question?.options.length ?? 0) > i ? question!.options[i] : ''));
     int correctAnswer = question?.correctAnswerIndex ?? 0;
 
     showDialog(

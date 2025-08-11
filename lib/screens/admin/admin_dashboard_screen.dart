@@ -202,7 +202,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => LessonEditScreen(lesson: lesson),
+                            builder: (context) => LessonEditScreen(lessonId: lesson.id),
                           ),
                         );
                       },

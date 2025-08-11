@@ -152,6 +152,21 @@ class LessonProvider with ChangeNotifier {
     }).toList();
   }
 
+  Future<LessonModel?> getLessonById(String lessonId) async {
+    try {
+      _setLoading(true);
+      _clearError();
+      
+      final lesson = await FirebaseService.getLesson(lessonId);
+      return lesson;
+    } catch (e) {
+      _setError(e.toString());
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();

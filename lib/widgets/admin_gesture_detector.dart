@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/admin_provider.dart';
-import '../screens/admin/admin_dashboard_screen.dart';
+import 'package:go_router/go_router.dart';
+import '../providers/auth_provider.dart';
 
 class AdminGestureDetector extends StatefulWidget {
   final Widget child;
@@ -17,6 +17,7 @@ class _AdminGestureDetectorState extends State<AdminGestureDetector> {
   DateTime? _lastTapTime;
   static const Duration _tapTimeout = Duration(seconds: 2);
   static const int _requiredTaps = 7; // عدد النقرات المطلوبة
+  static const String _adminUID = 'FkRMLu7IC3WLSD6jzujnJ79elUO2'; // UID المصرح له
 
   void _handleTap() {
     final now = DateTime.now();
@@ -37,13 +38,42 @@ class _AdminGestureDetectorState extends State<AdminGestureDetector> {
   }
 
   void _checkAdminAccess() {
-    final adminProvider = context.read<AdminProvider>();
+    final authProvider = context.read<AuthProvider>();
     
-    if (adminProvider.isAuthorizedAdmin) {
+    // التحقق من أن المستخدم مسجل دخول وليس ضيف
+    if (authProvider.user == null || authProvider.isGuestUser) {
+      _showLoginRequiredDialog();
+      return;
+    }
+
+    // التحقق من UID المستخدم
+    if (authProvider.user!.uid == _adminUID) {
       _showAdminAccessDialog();
     } else {
       _showUnauthorizedDialog();
     }
+  }
+
+  void _showLoginRequiredDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.login, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('تسجيل الدخول مطلوب'),
+          ],
+        ),
+        content: const Text('يجب تسجيل الدخول بحساب مصرح له للوصول إلى لوحة التحكم الإدارية.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('موافق'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAdminAccessDialog() {
@@ -102,16 +132,8 @@ class _AdminGestureDetectorState extends State<AdminGestureDetector> {
   }
 
   void _openAdminDashboard() {
-    final adminProvider = context.read<AdminProvider>();
-    adminProvider.toggleAdminMode();
-    
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const AdminDashboardScreen(),
-        fullscreenDialog: true,
-      ),
-    );
+    // الانتقال إلى لوحة التحكم الإدارية
+    context.go('/admin/dashboard');
   }
 
   @override

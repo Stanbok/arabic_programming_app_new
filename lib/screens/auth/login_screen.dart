@@ -38,10 +38,73 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (success && mounted) {
-      // Load user data and start listening
-      await userProvider.loadUserData(authProvider.user!.uid);
-      userProvider.startListening(authProvider.user!.uid);
+      if (!authProvider.isGuestUser) {
+        // Load user data and start listening
+        await userProvider.loadUserData(authProvider.user!.uid);
+        userProvider.startListening(authProvider.user!.uid);
+      }
       
+      context.go('/home');
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authProvider.errorMessage ?? 'حدث خطأ في تسجيل الدخول'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+    final success = await authProvider.signInWithGoogle();
+
+    if (success && mounted) {
+      if (!authProvider.isGuestUser) {
+        await userProvider.loadUserData(authProvider.user!.uid);
+        userProvider.startListening(authProvider.user!.uid);
+      }
+      context.go('/home');
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authProvider.errorMessage ?? 'حدث خطأ في تسجيل الدخول'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _signInWithFacebook() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+    final success = await authProvider.signInWithFacebook();
+
+    if (success && mounted) {
+      if (!authProvider.isGuestUser) {
+        await userProvider.loadUserData(authProvider.user!.uid);
+        userProvider.startListening(authProvider.user!.uid);
+      }
+      context.go('/home');
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authProvider.errorMessage ?? 'حدث خطأ في تسجيل الدخول'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _signInAsGuest() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    final success = await authProvider.signInAsGuest();
+
+    if (success && mounted) {
       context.go('/home');
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -199,6 +262,84 @@ class _LoginScreenState extends State<LoginScreen> {
                       text: 'تسجيل الدخول',
                       onPressed: authProvider.isLoading ? null : _signIn,
                       isLoading: authProvider.isLoading,
+                    );
+                  },
+                ),
+                
+                const SizedBox(height: 16),
+                
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'أو',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Social Login Buttons
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: authProvider.isLoading ? null : _signInWithGoogle,
+                            icon: Image.asset(
+                              'assets/icons/google.png',
+                              width: 20,
+                              height: 20,
+                              errorBuilder: (context, error, stackTrace) => 
+                                  const Icon(Icons.g_mobiledata, size: 20),
+                            ),
+                            label: const Text('Google'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: authProvider.isLoading ? null : _signInWithFacebook,
+                            icon: Image.asset(
+                              'assets/icons/facebook.png',
+                              width: 20,
+                              height: 20,
+                              errorBuilder: (context, error, stackTrace) => 
+                                  const Icon(Icons.facebook, size: 20, color: Colors.blue),
+                            ),
+                            label: const Text('Facebook'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                
+                const SizedBox(height: 16),
+                
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    return TextButton.icon(
+                      onPressed: authProvider.isLoading ? null : _signInAsGuest,
+                      icon: const Icon(Icons.person_outline),
+                      label: const Text('الدخول كضيف'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
                     );
                   },
                 ),

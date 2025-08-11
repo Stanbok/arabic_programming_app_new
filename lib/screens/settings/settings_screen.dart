@@ -5,6 +5,7 @@ import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/admin_gesture_detector.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -291,38 +292,40 @@ class SettingsScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _buildSettingsTile(
-            context: context,
-            icon: Icons.info,
-            title: 'حول التطبيق',
-            subtitle: 'الإصدار 1.0.0',
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'Python in English',
-                applicationVersion: '1.0.0',
-                applicationIcon: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(12),
+          AdminGestureDetector(
+            child: _buildSettingsTile(
+              context: context,
+              icon: Icons.info,
+              title: 'حول التطبيق',
+              subtitle: 'الإصدار 1.0.0',
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                showAboutDialog(
+                  context: context,
+                  applicationName: 'Python in English',
+                  applicationVersion: '1.0.0',
+                  applicationIcon: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.code,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.code,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                children: [
-                  const Text(
-                    'تطبيق تفاعلي لتعلم البايثون بالعربية بطريقة ممتعة ومبسطة. '
-                    'يحتوي على دروس تفاعلية واختبارات ونظام نقاط وجواهر لتحفيز التعلم.',
-                  ),
-                ],
-              );
-            },
+                  children: [
+                    const Text(
+                      'تطبيق تفاعلي لتعلم البايثون بالعربية بطريقة ممتعة ومبسطة. '
+                      'يحتوي على دروس تفاعلية واختبارات ونظام نقاط وجواهر لتحفيز التعلم.',
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
           
           const Divider(height: 1),

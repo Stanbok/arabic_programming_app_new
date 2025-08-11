@@ -27,13 +27,17 @@ class _SplashScreenState extends State<SplashScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     
-    if (authProvider.isAuthenticated && authProvider.user != null) {
+    final hasSavedLogin = await authProvider.checkSavedLoginState();
+    
+    if (hasSavedLogin || (authProvider.isAuthenticated && authProvider.user != null)) {
       try {
-        // User is logged in, start listening and load user data
-        userProvider.startListening(authProvider.user!.uid);
-        
-        // Load initial data
-        await userProvider.loadUserData(authProvider.user!.uid);
+        if (!authProvider.isGuestUser) {
+          // User is logged in, start listening and load user data
+          userProvider.startListening(authProvider.user!.uid);
+          
+          // Load initial data
+          await userProvider.loadUserData(authProvider.user!.uid);
+        }
         
         if (mounted) {
           context.go('/home');
@@ -46,7 +50,6 @@ class _SplashScreenState extends State<SplashScreen> {
         }
       }
     } else {
-      // User is not logged in, go to login screen
       if (mounted) {
         context.go('/login');
       }

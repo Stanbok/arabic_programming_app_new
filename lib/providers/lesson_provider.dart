@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
 import '../services/local_service.dart';
+import '../services/cache_service.dart';
 import '../models/lesson_model.dart';
 import '../models/progress_model.dart';
 import '../models/quiz_result_model.dart';
@@ -14,6 +15,7 @@ class LessonProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   bool _hasNetworkConnection = true;
+  DateTime? _lastCacheUpdate;
 
   List<LessonModel> get lessons => _lessons;
   List<LessonModel> get localLessons => _localLessons;
@@ -23,48 +25,31 @@ class LessonProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get hasNetworkConnection => _hasNetworkConnection;
 
-  /// تحميل الدروس من كلا المصدرين (محلي وFirebase)
-  Future<void> loadLessons({int? level}) async {
+  /// تحميل الدروس مع نظام الكاش الذكي
+  Future<void> loadLessons({int? level, bool forceRefresh = false}) async {
     try {
       _setLoading(true);
       _clearError();
       
-      print('🔄 بدء تحميل الدروس من جميع المصادر...');
+      print('🔄 بدء تحميل الدروس الذكي...');
       print('📊 المستوى المطلوب: ${level ?? "جميع المستويات"}');
+      print('🔄 فرض التحديث: $forceRefresh');
+      
+      // المرحلة 1: تحميل من الكاش إذا متوفر وحديث
+      if (!forceRefresh && await _loadFromCache(level: level)) {
+        print('⚡ تم التحميل من الكاش');
+        notifyListeners();
+        return;
+      }
       
       _lessons.clear();
       
-      // تحميل الدروس المحلية أولاً (دائماً متوفرة)
-      await _loadLocalLessons(level: level);
+      // المرحلة 2: تحميل الدروس المحلية (فوري)
+      await _loadLocalLessonsAsync(level: level);
       
-      _lessons.addAll(_localLessons);
-      print('📚 تم إضافة ${_localLessons.length} درس محلي للقائمة الرئيسية');
-      notifyListeners(); // إشعار فوري لعرض الدروس المحلية
+      // المرحلة 3: تحميل من Firebase بشكل متوازي
+      _loadFirebaseLessonsAsync(level: level);
       
-      // محاولة تحميل دروس Firebase
-      await _loadFirebaseLessons(level: level);
-      
-      // ترتيب الدروس النهائية
-      _lessons.sort((a, b) {
-        if (a.level != b.level) {
-          return a.level.compareTo(b.level);
-        }
-        return a.order.compareTo(b.order);
-      });
-      
-      print('✅ إجمالي الدروس المحملة: ${_lessons.length}');
-      
-      if (_lessons.isEmpty) {
-        _setError('لا توجد دروس متاحة حالياً');
-      } else {
-        print('📋 الدروس المحملة:');
-        for (var lesson in _lessons) {
-          final source = _localLessons.any((l) => l.id == lesson.id) ? '🏠' : '☁️';
-          print('  $source ${lesson.title} (المستوى: ${lesson.level})');
-        }
-      }
-      
-      notifyListeners();
     } catch (e) {
       print('❌ خطأ عام في تحميل الدروس: $e');
       _setError('فشل في تحميل الدروس - حاول مرة أخرى لاحقاً');
@@ -73,30 +58,56 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// تحميل الدروس المحلية
-  Future<void> _loadLocalLessons({int? level}) async {
+  /// تحميل من الكاش
+  Future<bool> _loadFromCache({int? level}) async {
+    try {
+      final cachedLessons = await CacheService.getCachedLessons(level: level);
+      final cacheAge = await CacheService.getCacheAge();
+      
+      // استخدام الكاش إذا كان عمره أقل من 30 دقيقة
+      if (cachedLessons.isNotEmpty && cacheAge != null && 
+          DateTime.now().difference(cacheAge).inMinutes < 30) {
+        
+        _lessons = cachedLessons;
+        _lastCacheUpdate = cacheAge;
+        print('✅ تم تحميل ${_lessons.length} درس من الكاش');
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('⚠️ خطأ في تحميل الكاش: $e');
+      return false;
+    }
+  }
+
+  /// تحميل الدروس المحلية بشكل غير متزامن
+  Future<void> _loadLocalLessonsAsync({int? level}) async {
     try {
       print('🏠 تحميل الدروس المحلية...');
       _localLessons = await LocalService.getLocalLessons(level: level);
-      print('✅ تم تحميل ${_localLessons.length} درس محلي');
       
-      for (var lesson in _localLessons) {
-        print('  📖 ${lesson.title} - ID: ${lesson.id} - المستوى: ${lesson.level}');
-      }
+      // إضافة الدروس المحلية فوراً
+      _lessons.addAll(_localLessons);
+      print('✅ تم إضافة ${_localLessons.length} درس محلي');
+      
+      // إشعار فوري لعرض الدروس المحلية
+      notifyListeners();
+      
     } catch (e) {
       print('⚠️ خطأ في تحميل الدروس المحلية: $e');
       _localLessons = [];
     }
   }
 
-  /// تحميل دروس Firebase
-  Future<void> _loadFirebaseLessons({int? level}) async {
+  /// تحميل دروس Firebase بشكل غير متزامن
+  Future<void> _loadFirebaseLessonsAsync({int? level}) async {
     try {
-      print('☁️ تحميل دروس Firebase...');
+      print('☁️ تحميل دروس Firebase في الخلفية...');
       
       // التحقق من الاتصال
       _hasNetworkConnection = await FirebaseService.checkConnection()
-          .timeout(const Duration(seconds: 5), onTimeout: () => false);
+          .timeout(const Duration(seconds: 3), onTimeout: () => false);
       
       if (!_hasNetworkConnection) {
         print('❌ لا يوجد اتصال بالإنترنت - الاعتماد على الدروس المحلية');
@@ -105,18 +116,42 @@ class LessonProvider with ChangeNotifier {
       
       // تحميل دروس Firebase
       final firebaseLessons = await FirebaseService.getLessons(level: level)
-          .timeout(const Duration(seconds: 20), onTimeout: () {
+          .timeout(const Duration(seconds: 15), onTimeout: () {
         print('⏰ انتهت مهلة تحميل دروس Firebase');
         return <LessonModel>[];
       });
       
-      print('✅ تم تحميل ${firebaseLessons.length} درس من Firebase');
-      
-      // إضافة دروس Firebase للقائمة الرئيسية
-      for (var lesson in firebaseLessons) {
-        if (!_lessons.any((l) => l.id == lesson.id)) {
-          _lessons.add(lesson);
+      if (firebaseLessons.isNotEmpty) {
+        print('✅ تم تحميل ${firebaseLessons.length} درس من Firebase');
+        
+        // دمج دروس Firebase مع المحلية
+        final allLessons = <LessonModel>[];
+        allLessons.addAll(_localLessons);
+        
+        for (var lesson in firebaseLessons) {
+          if (!allLessons.any((l) => l.id == lesson.id)) {
+            allLessons.add(lesson);
+          }
         }
+        
+        // ترتيب الدروس
+        allLessons.sort((a, b) {
+          if (a.level != b.level) {
+            return a.level.compareTo(b.level);
+          }
+          return a.order.compareTo(b.order);
+        });
+        
+        _lessons = allLessons;
+        
+        // حفظ في الكاش
+        await CacheService.cacheLessons(_lessons);
+        _lastCacheUpdate = DateTime.now();
+        
+        print('💾 تم حفظ ${_lessons.length} درس في الكاش');
+        
+        // إشعار بالتحديث
+        notifyListeners();
       }
       
     } catch (e) {
@@ -125,13 +160,7 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// دمج الدروس المحلية والسحابية
-  void _mergeLessons() {
-    // الدروس المحلية تُضاف مباشرة والـ Firebase lessons تُضاف في _loadFirebaseLessons
-    print('🔄 الدروس تم دمجها بالفعل أثناء التحميل');
-  }
-
-  /// تحميل درس محدد (يبحث في المحلي أولاً ثم Firebase)
+  /// تحميل درس محدد مع الكاش
   Future<void> loadLesson(String lessonId, String userId) async {
     try {
       _setLoading(true);
@@ -139,28 +168,29 @@ class LessonProvider with ChangeNotifier {
       
       print('📖 تحميل الدرس: $lessonId');
       
-      // البحث في الدروس المحلية أولاً
-      _currentLesson = await LocalService.getLocalLesson(lessonId);
+      // البحث في الكاش أولاً
+      _currentLesson = await CacheService.getCachedLesson(lessonId);
+      
+      if (_currentLesson == null) {
+        // البحث في الدروس المحلية
+        _currentLesson = await LocalService.getLocalLesson(lessonId);
+      }
       
       if (_currentLesson == null && _hasNetworkConnection) {
-        // البحث في Firebase إذا لم يوجد محلياً
+        // البحث في Firebase
         print('🔍 البحث في Firebase...');
         _currentLesson = await FirebaseService.getLesson(lessonId)
             .timeout(const Duration(seconds: 10));
+        
+        // حفظ في الكاش
+        if (_currentLesson != null) {
+          await CacheService.cacheLesson(_currentLesson!);
+        }
       }
       
       if (_currentLesson != null) {
-        // تحميل التقدم من Firebase (إذا متوفر)
-        if (_hasNetworkConnection) {
-          try {
-            _currentProgress = await FirebaseService.getLessonProgress(userId, lessonId)
-                .timeout(const Duration(seconds: 10));
-          } catch (e) {
-            print('⚠️ فشل في تحميل التقدم: $e');
-            _currentProgress = null;
-          }
-        }
-        
+        // تحميل التقدم
+        await _loadLessonProgress(userId, lessonId);
         print('✅ تم تحميل الدرس: ${_currentLesson!.title}');
       } else {
         print('❌ لم يتم العثور على الدرس');
@@ -176,7 +206,20 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// البحث عن درس بالمعرف (يبحث في المحلي أولاً)
+  /// تحميل تقدم الدرس
+  Future<void> _loadLessonProgress(String userId, String lessonId) async {
+    if (_hasNetworkConnection) {
+      try {
+        _currentProgress = await FirebaseService.getLessonProgress(userId, lessonId)
+            .timeout(const Duration(seconds: 5));
+      } catch (e) {
+        print('⚠️ فشل في تحميل التقدم: $e');
+        _currentProgress = null;
+      }
+    }
+  }
+
+  /// البحث عن درس بالمعرف مع الكاش
   Future<LessonModel?> getLessonById(String lessonId) async {
     try {
       _setLoading(true);
@@ -184,13 +227,23 @@ class LessonProvider with ChangeNotifier {
       
       print('🔍 البحث عن الدرس: $lessonId');
       
-      // البحث في الدروس المحلية أولاً
-      var lesson = await LocalService.getLocalLesson(lessonId);
+      // البحث في الكاش أولاً
+      var lesson = await CacheService.getCachedLesson(lessonId);
+      
+      if (lesson == null) {
+        // البحث في الدروس المحلية
+        lesson = await LocalService.getLocalLesson(lessonId);
+      }
       
       if (lesson == null && _hasNetworkConnection) {
         // البحث في Firebase
         lesson = await FirebaseService.getLesson(lessonId)
             .timeout(const Duration(seconds: 10), onTimeout: () => null);
+        
+        // حفظ في الكاش
+        if (lesson != null) {
+          await CacheService.cacheLesson(lesson);
+        }
       }
       
       if (lesson != null) {
@@ -209,38 +262,7 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// إعادة تحميل الدروس
-  Future<void> retryLoadLessons({int? level}) async {
-    print('🔄 إعادة محاولة تحميل الدروس...');
-    await loadLessons(level: level);
-  }
-
-  /// تحميل الدروس المحلية فقط (للاستخدام الأوفلاين)
-  Future<void> loadOfflineLessons({int? level}) async {
-    try {
-      _setLoading(true);
-      _clearError();
-      
-      print('🏠 تحميل الدروس المحلية فقط...');
-      
-      _localLessons = await LocalService.getLocalLessons(level: level);
-      _lessons = List.from(_localLessons);
-      
-      print('✅ تم تحميل ${_lessons.length} درس محلي');
-      
-      if (_lessons.isEmpty) {
-        _setError('لا توجد دروس محلية متاحة');
-      }
-      
-      notifyListeners();
-    } catch (e) {
-      print('❌ خطأ في تحميل الدروس المحلية: $e');
-      _setError('فشل في تحميل الدروس المحلية');
-    } finally {
-      _setLoading(false);
-    }
-  }
-
+  /// إكمال شريحة مع تحديث فوري للـ XP والجواهر
   Future<void> completeSlide(String userId, String lessonId, String slideId) async {
     if (_currentProgress == null) {
       _currentProgress = ProgressModel(lessonId: lessonId);
@@ -255,21 +277,11 @@ class LessonProvider with ChangeNotifier {
           slidesCompleted: updatedSlidesCompleted,
         );
         
-        // حفظ التقدم في Firebase (إذا متوفر)
-        if (_hasNetworkConnection) {
-          try {
-            await FirebaseService.updateLessonProgress(userId, lessonId, _currentProgress!)
-                .timeout(const Duration(seconds: 10));
-            
-            await FirebaseService.addXPAndGems(userId, 10, 1, 'إكمال شريحة')
-                .timeout(const Duration(seconds: 5));
-          } catch (e) {
-            print('⚠️ فشل في حفظ التقدم أونلاين: $e');
-            // يمكن إضافة حفظ محلي هنا لاحقاً
-          }
-        }
-        
+        // إشعار فوري
         notifyListeners();
+        
+        // حفظ التقدم في Firebase (في الخلفية)
+        _saveSlideProgressAsync(userId, lessonId, slideId);
       }
     } catch (e) {
       print('❌ خطأ في حفظ تقدم الشريحة: $e');
@@ -277,6 +289,25 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
+  /// حفظ تقدم الشريحة بشكل غير متزامن
+  Future<void> _saveSlideProgressAsync(String userId, String lessonId, String slideId) async {
+    if (_hasNetworkConnection) {
+      try {
+        await FirebaseService.updateLessonProgress(userId, lessonId, _currentProgress!)
+            .timeout(const Duration(seconds: 10));
+        
+        await FirebaseService.addXPAndGems(userId, 10, 1, 'إكمال شريحة')
+            .timeout(const Duration(seconds: 5));
+        
+        print('✅ تم حفظ تقدم الشريحة أونلاين');
+      } catch (e) {
+        print('⚠️ فشل في حفظ التقدم أونلاين: $e');
+        // يمكن إضافة قائمة انتظار للمزامنة لاحقاً
+      }
+    }
+  }
+
+  /// إكمال درس مع تحديث فوري للـ XP والجواهر
   Future<void> completeLesson(String userId, String lessonId) async {
     if (_currentLesson == null) return;
 
@@ -290,72 +321,93 @@ class LessonProvider with ChangeNotifier {
         completedAt: DateTime.now(),
       );
 
-      // حفظ في Firebase (إذا متوفر)
-      if (_hasNetworkConnection) {
-        try {
-          await FirebaseService.updateLessonProgress(userId, lessonId, completedProgress)
-              .timeout(const Duration(seconds: 10));
-          
-          await FirebaseService.updateUserData(userId, {
-            'completedLessons': FieldValue.arrayUnion([lessonId]),
-          }).timeout(const Duration(seconds: 10));
-          
-          await FirebaseService.addXPAndGems(
-            userId, 
-            _currentLesson!.xpReward, 
-            _currentLesson!.gemsReward, 
-            'إكمال درس: ${_currentLesson!.title}'
-          ).timeout(const Duration(seconds: 10));
-        } catch (e) {
-          print('⚠️ فشل في حفظ إكمال الدرس أونلاين: $e');
-        }
-      }
-      
       _currentProgress = completedProgress;
+      
+      // إشعار فوري
       notifyListeners();
+      
+      // حفظ في Firebase (في الخلفية)
+      _saveLessonCompletionAsync(userId, lessonId);
+      
     } catch (e) {
       print('❌ خطأ في إكمال الدرس: $e');
       _setError('فشل في حفظ إكمال الدرس - حاول مرة أخرى');
     }
   }
 
+  /// حفظ إكمال الدرس بشكل غير متزامن
+  Future<void> _saveLessonCompletionAsync(String userId, String lessonId) async {
+    if (_hasNetworkConnection) {
+      try {
+        await FirebaseService.updateLessonProgress(userId, lessonId, _currentProgress!)
+            .timeout(const Duration(seconds: 10));
+        
+        await FirebaseService.updateUserData(userId, {
+          'completedLessons': FieldValue.arrayUnion([lessonId]),
+        }).timeout(const Duration(seconds: 10));
+        
+        await FirebaseService.addXPAndGems(
+          userId, 
+          _currentLesson!.xpReward, 
+          _currentLesson!.gemsReward, 
+          'إكمال درس: ${_currentLesson!.title}'
+        ).timeout(const Duration(seconds: 10));
+        
+        print('✅ تم حفظ إكمال الدرس أونلاين');
+      } catch (e) {
+        print('⚠️ فشل في حفظ إكمال الدرس أونلاين: $e');
+      }
+    }
+  }
+
+  /// حفظ نتيجة الاختبار مع تحديث فوري للـ XP والجواهر
   Future<void> saveQuizResult(String userId, String lessonId, QuizResultModel result) async {
     try {
-      // حفظ في Firebase (إذا متوفر)
-      if (_hasNetworkConnection) {
-        try {
-          await FirebaseService.saveQuizResult(userId, lessonId, result)
-              .timeout(const Duration(seconds: 10));
-          
-          int xpReward = 100;
-          int gemsReward = 5;
-          
-          if (result.score >= 90) {
-            xpReward += 50;
-            gemsReward += 3;
-          } else if (result.score >= 80) {
-            xpReward += 25;
-            gemsReward += 2;
-          }
-          
-          await FirebaseService.addXPAndGems(
-            userId, 
-            xpReward, 
-            gemsReward, 
-            'إكمال اختبار: ${result.score}%'
-          ).timeout(const Duration(seconds: 10));
-        } catch (e) {
-          print('⚠️ فشل في حفظ نتيجة الاختبار أونلاين: $e');
-        }
-      }
-      
+      // إشعار فوري
       notifyListeners();
+      
+      // حفظ في Firebase (في الخلفية)
+      _saveQuizResultAsync(userId, lessonId, result);
+      
     } catch (e) {
       print('❌ خطأ في حفظ نتيجة الاختبار: $e');
       _setError('فشل في حفظ نتيجة الاختبار - حاول مرة أخرى');
     }
   }
 
+  /// حفظ نتيجة الاختبار بشكل غير متزامن
+  Future<void> _saveQuizResultAsync(String userId, String lessonId, QuizResultModel result) async {
+    if (_hasNetworkConnection) {
+      try {
+        await FirebaseService.saveQuizResult(userId, lessonId, result)
+            .timeout(const Duration(seconds: 10));
+        
+        int xpReward = 100;
+        int gemsReward = 5;
+        
+        if (result.score >= 90) {
+          xpReward += 50;
+          gemsReward += 3;
+        } else if (result.score >= 80) {
+          xpReward += 25;
+          gemsReward += 2;
+        }
+        
+        await FirebaseService.addXPAndGems(
+          userId, 
+          xpReward, 
+          gemsReward, 
+          'إكمال اختبار: ${result.score}%'
+        ).timeout(const Duration(seconds: 10));
+        
+        print('✅ تم حفظ نتيجة الاختبار أونلاين');
+      } catch (e) {
+        print('⚠️ فشل في حفظ نتيجة الاختبار أونلاين: $e');
+      }
+    }
+  }
+
+  /// الحصول على الدروس المتاحة
   List<LessonModel> getAvailableLessons(List<String> completedLessons, int currentLevel) {
     print('🔍 البحث عن الدروس المتاحة...');
     print('📚 إجمالي الدروس: ${_lessons.length}');
@@ -392,6 +444,49 @@ class LessonProvider with ChangeNotifier {
     
     print('🎯 الدروس المتاحة: ${availableLessons.length}');
     return availableLessons;
+  }
+
+  /// إعادة تحميل الدروس
+  Future<void> retryLoadLessons({int? level}) async {
+    print('🔄 إعادة محاولة تحميل الدروس...');
+    await loadLessons(level: level, forceRefresh: true);
+  }
+
+  /// تحميل الدروس المحلية فقط
+  Future<void> loadOfflineLessons({int? level}) async {
+    try {
+      _setLoading(true);
+      _clearError();
+      
+      print('🏠 تحميل الدروس المحلية فقط...');
+      
+      _localLessons = await LocalService.getLocalLessons(level: level);
+      _lessons = List.from(_localLessons);
+      
+      print('✅ تم تحميل ${_lessons.length} درس محلي');
+      
+      if (_lessons.isEmpty) {
+        _setError('لا توجد دروس محلية متاحة');
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      print('❌ خطأ في تحميل الدروس المحلية: $e');
+      _setError('فشل في تحميل الدروس المحلية');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// مسح الكاش
+  Future<void> clearCache() async {
+    try {
+      await CacheService.clearCache();
+      _lastCacheUpdate = null;
+      print('🗑️ تم مسح الكاش');
+    } catch (e) {
+      print('⚠️ خطأ في مسح الكاش: $e');
+    }
   }
 
   void _setLoading(bool loading) {

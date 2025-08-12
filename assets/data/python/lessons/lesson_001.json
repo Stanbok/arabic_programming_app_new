@@ -1,0 +1,45 @@
+{
+  "id": "lesson_001",
+  "title": "مقدمة في البرمجة",
+  "description": "تعلم أساسيات البرمجة مع Python وفهم المفاهيم الأساسية",
+  "imageUrl": null,
+  "level": 1,
+  "order": 1,
+  "xpReward": 50,
+  "gemsReward": 2,
+  "isPublished": true,
+  "slides": [
+    {
+      "id": "slide_001_1",
+      "title": "ما هي البرمجة؟",
+      "content": "البرمجة هي عملية كتابة التعليمات للحاسوب باستخدام لغة يفهمها. Python هي إحدى أشهر لغات البرمجة في العالم.",
+      "imageUrl": null,
+      "codeExample": "print('مرحباً بالعالم!')",
+      "order": 1
+    },
+    {
+      "id": "slide_001_2",
+      "title": "لماذا Python؟",
+      "content": "Python لغة سهلة التعلم ومفيدة في مجالات كثيرة مثل تطوير المواقع، الذكاء الاصطناعي، وتحليل البيانات.",
+      "imageUrl": null,
+      "codeExample": "# هذا تعليق في Python\nname = 'أحمد'\nprint(f'مرحباً {name}!')",
+      "order": 2
+    }
+  ],
+  "quiz": [
+    {
+      "question": "ما هي لغة Python؟",
+      "options": ["لغة برمجة", "نوع من الثعابين", "برنامج تصميم", "نظام تشغيل"],
+      "correctAnswerIndex": 0,
+      "explanation": "Python هي لغة برمجة عالية المستوى وسهلة التعلم"
+    },
+    {
+      "question": "ما هو الأمر المستخدم لطباعة النص في Python؟",
+      "options": ["show()", "print()", "display()", "write()"],
+      "correctAnswerIndex": 1,
+      "explanation": "الأمر print() يستخدم لطباعة النص في Python"
+    }
+  ],
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}

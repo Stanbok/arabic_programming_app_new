@@ -66,9 +66,23 @@ class LessonModel {
       quiz: (map['quiz'] as List<dynamic>?)
           ?.map((question) => QuizQuestionModel.fromMap(question))
           .toList() ?? [],
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
-      updatedAt: (map['updatedAt'] as Timestamp).toDate(),
+      createdAt: _parseDateTime(map['createdAt']),
+      updatedAt: _parseDateTime(map['updatedAt']),
     );
+  }
+
+  static DateTime _parseDateTime(dynamic dateValue) {
+    if (dateValue == null) {
+      return DateTime.now();
+    } else if (dateValue is Timestamp) {
+      // من Firestore
+      return dateValue.toDate();
+    } else if (dateValue is String) {
+      // من JSON المحلي
+      return DateTime.parse(dateValue);
+    } else {
+      return DateTime.now();
+    }
   }
 }
 

@@ -39,6 +39,7 @@ class LessonProvider with ChangeNotifier {
       
       _lessons.addAll(_localLessons);
       print('📚 تم إضافة ${_localLessons.length} درس محلي للقائمة الرئيسية');
+      notifyListeners(); // إشعار فوري لعرض الدروس المحلية
       
       // محاولة تحميل دروس Firebase
       await _loadFirebaseLessons(level: level);
@@ -78,6 +79,10 @@ class LessonProvider with ChangeNotifier {
       print('🏠 تحميل الدروس المحلية...');
       _localLessons = await LocalService.getLocalLessons(level: level);
       print('✅ تم تحميل ${_localLessons.length} درس محلي');
+      
+      for (var lesson in _localLessons) {
+        print('  📖 ${lesson.title} - ID: ${lesson.id} - المستوى: ${lesson.level}');
+      }
     } catch (e) {
       print('⚠️ خطأ في تحميل الدروس المحلية: $e');
       _localLessons = [];
@@ -363,10 +368,13 @@ class LessonProvider with ChangeNotifier {
     }
     
     final availableLessons = _lessons.where((lesson) {
-      if (lesson.level == currentLevel) {
-        print('  ✓ درس متاح (المستوى الحالي): ${lesson.title}');
+      // إظهار دروس المستوى الحالي والمستوى الأول دائماً
+      if (lesson.level <= currentLevel || lesson.level == 1) {
+        print('  ✓ درس متاح: ${lesson.title} (المستوى: ${lesson.level})');
         return true;
       }
+      
+      // منطق المستويات المتقدمة
       if (lesson.level == currentLevel + 1) {
         final currentLevelLessons = _lessons.where((l) => l.level == currentLevel).toList();
         final completedCurrentLevel = currentLevelLessons.every((l) => completedLessons.contains(l.id));

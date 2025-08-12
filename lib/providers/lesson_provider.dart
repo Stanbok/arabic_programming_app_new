@@ -23,10 +23,21 @@ class LessonProvider with ChangeNotifier {
       _setLoading(true);
       _clearError();
       
+      print('🔄 بدء تحميل الدروس...');
+      print('📊 المستوى المطلوب: ${level ?? "جميع المستويات"}');
+      
       _lessons = await FirebaseService.getLessons(level: level);
+      
+      print('✅ تم تحميل ${_lessons.length} درس');
+      print('📋 الدروس المحملة:');
+      for (var lesson in _lessons) {
+        print('  - ${lesson.title} (المستوى: ${lesson.level}, منشور: ${lesson.isPublished})');
+      }
+      
       notifyListeners();
     } catch (e) {
-      _setError(e.toString());
+      print('❌ خطأ في تحميل الدروس: $e');
+      _setError('فشل في تحميل الدروس: ${e.toString()}');
     } finally {
       _setLoading(false);
     }
@@ -139,17 +150,35 @@ class LessonProvider with ChangeNotifier {
   }
 
   List<LessonModel> getAvailableLessons(List<String> completedLessons, int currentLevel) {
-    return _lessons.where((lesson) {
+    print('🔍 البحث عن الدروس المتاحة...');
+    print('📚 إجمالي الدروس: ${_lessons.length}');
+    print('🎯 المستوى الحالي: $currentLevel');
+    print('✅ الدروس المكتملة: ${completedLessons.length}');
+    
+    final availableLessons = _lessons.where((lesson) {
       // Show current level lessons and next level if current is completed
-      if (lesson.level == currentLevel) return true;
+      if (lesson.level == currentLevel) {
+        print('  ✓ درس متاح (المستوى الحالي): ${lesson.title}');
+        return true;
+      }
       if (lesson.level == currentLevel + 1) {
         // Check if current level is completed
         final currentLevelLessons = _lessons.where((l) => l.level == currentLevel).toList();
         final completedCurrentLevel = currentLevelLessons.every((l) => completedLessons.contains(l.id));
-        return completedCurrentLevel;
+        if (completedCurrentLevel) {
+          print('  ✓ درس متاح (المستوى التالي): ${lesson.title}');
+          return true;
+        } else {
+          print('  ⏳ درس مقفل (المستوى التالي): ${lesson.title}');
+        }
+      } else {
+        print('  🔒 درس غير متاح (مستوى ${lesson.level}): ${lesson.title}');
       }
       return false;
     }).toList();
+    
+    print('🎯 الدروس المتاحة: ${availableLessons.length}');
+    return availableLessons;
   }
 
   Future<LessonModel?> getLessonById(String lessonId) async {
@@ -160,7 +189,8 @@ class LessonProvider with ChangeNotifier {
       final lesson = await FirebaseService.getLesson(lessonId);
       return lesson;
     } catch (e) {
-      _setError(e.toString());
+      print('❌ خطأ في تحميل الدروس: $e');
+      _setError('فشل في تحميل الدروس: ${e.toString()}');
       return null;
     } finally {
       _setLoading(false);

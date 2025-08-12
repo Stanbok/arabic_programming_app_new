@@ -109,6 +109,8 @@ class FirebaseService {
   // Lesson Methods
   static Future<List<LessonModel>> getLessons({int? level}) async {
     try {
+      print('🔄 جلب الدروس من Firestore...');
+      
       Query query = _firestore
           .collection('lessons')
           .where('isPublished', isEqualTo: true)
@@ -117,14 +119,49 @@ class FirebaseService {
       
       if (level != null) {
         query = query.where('level', isEqualTo: level);
+        print('📊 تصفية حسب المستوى: $level');
       }
 
+      print('🔍 تنفيذ الاستعلام...');
       QuerySnapshot snapshot = await query.get();
-      return snapshot.docs
-          .map((doc) => LessonModel.fromMap(doc.data() as Map<String, dynamic>))
+      
+      print('📦 تم جلب ${snapshot.docs.length} مستند');
+      
+      if (snapshot.docs.isEmpty) {
+        print('⚠️ لا توجد دروس في قاعدة البيانات!');
+        print('💡 تأكد من:');
+        print('  - وجود مجموعة "lessons" في Firestore');
+        print('  - وجود دروس مع isPublished = true');
+        print('  - صحة قواعد الأمان في Firestore');
+      }
+      
+      final lessons = snapshot.docs
+          .map((doc) {
+            try {
+              final data = doc.data() as Map<String, dynamic>;
+              print('📄 معالجة الدرس: ${data['title'] ?? 'بدون عنوان'}');
+              return LessonModel.fromMap(data);
+            } catch (e) {
+              print('❌ خطأ في معالجة الدرس ${doc.id}: $e');
+              return null;
+            }
+          })
+          .where((lesson) => lesson != null)
+          .cast<LessonModel>()
           .toList();
+      
+      print('✅ تم معالجة ${lessons.length} درس بنجاح');
+      return lessons;
     } catch (e) {
-      throw Exception('خطأ في جلب الدروس: ${e.toString()}');
+      print('❌ خطأ في جلب الدروس: $e');
+      
+      if (e.toString().contains('permission-denied')) {
+        throw Exception('خطأ في الصلاحيات: تأكد من قواعد الأمان في Firestore');
+      } else if (e.toString().contains('unavailable')) {
+        throw Exception('خطأ في الاتصال: تأكد من اتصال الإنترنت');
+      } else {
+        throw Exception('خطأ في جلب الدروس: ${e.toString()}');
+      }
     }
   }
 

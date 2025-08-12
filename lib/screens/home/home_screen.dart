@@ -58,23 +58,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _isLoading = true;
       });
 
+      print('🚀 بدء تهيئة البيانات...');
+      print('👤 المستخدم: ${authProvider.user!.uid}');
+
       // بدء الاستماع لبيانات المستخدم
       userProvider.startListening(authProvider.user!.uid);
       
       // تحميل بيانات المستخدم إذا لم تكن محملة
       if (userProvider.user == null) {
+        print('📥 تحميل بيانات المستخدم...');
         await userProvider.loadUserData(authProvider.user!.uid);
       }
 
       // تحميل الدروس
+      print('📚 تحميل الدروس...');
       await lessonProvider.loadLessons();
+
+      if (lessonProvider.lessons.isEmpty) {
+        print('⚠️ لم يتم تحميل أي دروس!');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تحذير: لم يتم العثور على دروس في قاعدة البيانات'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+      }
 
       setState(() {
         _isInitialized = true;
         _isLoading = false;
       });
+      
+      print('✅ تم تهيئة البيانات بنجاح');
     } catch (e) {
-      print('خطأ في تحميل البيانات: $e');
+      print('❌ خطأ في تحميل البيانات: $e');
       setState(() {
         _isLoading = false;
       });
@@ -88,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               label: 'إعادة المحاولة',
               onPressed: _initializeData,
             ),
+            duration: const Duration(seconds: 10),
           ),
         );
       }
@@ -451,12 +472,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'أكمل الدروس الحالية لفتح دروس جديدة',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
-                  textAlign: TextAlign.center,
+                Consumer<LessonProvider>(
+                  builder: (context, lessonProvider, child) {
+                    if (lessonProvider.lessons.isEmpty) {
+                      return Column(
+                        children: [
+                          Text(
+                            'لم يتم العثور على دروس في قاعدة البيانات',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.red,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: _initializeData,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('إعادة تحميل'),
+                          ),
+                        ],
+                      );
+                    } else {
+                      return Text(
+                        'أكمل الدروس الحالية لفتح دروس جديدة\n(المستوى الحالي: ${user.currentLevel})',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                        textAlign: TextAlign.center,
+                      );
+                    }
+                  },
                 ),
               ],
             ),

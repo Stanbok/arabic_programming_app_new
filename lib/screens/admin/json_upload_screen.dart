@@ -27,7 +27,8 @@ class _JsonUploadScreenState extends State<JsonUploadScreen> {
         backgroundColor: Colors.red[600],
         foregroundColor: Colors.white,
       ),
-      body: Padding(
+      backgroundColor: Colors.white,
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -39,6 +40,7 @@ class _JsonUploadScreenState extends State<JsonUploadScreen> {
             if (_jsonData != null) _buildPreviewSection(),
             const SizedBox(height: 24),
             _buildUploadButton(),
+            const SizedBox(height: 32),
           ],
         ),
       ),
@@ -47,6 +49,8 @@ class _JsonUploadScreenState extends State<JsonUploadScreen> {
 
   Widget _buildInstructionsCard() {
     return Card(
+      color: Colors.white,
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -63,13 +67,16 @@ class _JsonUploadScreenState extends State<JsonUploadScreen> {
             ),
             const SizedBox(height: 8),
             Container(
+              height: 300,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[300]!),
               ),
-              child: const Text(
-                '''
+              child: const SingleChildScrollView(
+                child: Text(
+                  '''
 {
   "title": "عنوان الدرس",
   "description": "وصف الدرس",
@@ -96,9 +103,10 @@ class _JsonUploadScreenState extends State<JsonUploadScreen> {
     }
   ]
 }''',
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ),
@@ -233,21 +241,46 @@ class _JsonUploadScreenState extends State<JsonUploadScreen> {
   Widget _buildUploadButton() {
     return Consumer<AdminProvider>(
       builder: (context, adminProvider, child) {
-        return ElevatedButton(
-          onPressed: (_jsonData != null && !adminProvider.isLoading) 
-              ? _uploadFromJson 
-              : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red[600],
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 50),
+        return Container(
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          child: adminProvider.isLoading
-              ? const CircularProgressIndicator(color: Colors.white)
-              : const Text(
-                  'رفع الدرس',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+          child: ElevatedButton.icon(
+            onPressed: (_jsonData != null && !adminProvider.isLoading) 
+                ? _uploadFromJson 
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+            icon: adminProvider.isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.upload_file, size: 24),
+            label: Text(
+              adminProvider.isLoading ? 'جاري الرفع...' : 'رفع الدرس من JSON',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
         );
       },
     );

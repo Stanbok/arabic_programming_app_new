@@ -11,12 +11,14 @@ class LessonProvider with ChangeNotifier {
   ProgressModel? _currentProgress;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _hasNetworkConnection = true;
 
   List<LessonModel> get lessons => _lessons;
   LessonModel? get currentLesson => _currentLesson;
   ProgressModel? get currentProgress => _currentProgress;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get hasNetworkConnection => _hasNetworkConnection;
 
   Future<void> loadLessons({int? level}) async {
     try {
@@ -26,18 +28,55 @@ class LessonProvider with ChangeNotifier {
       print('🔄 بدء تحميل الدروس...');
       print('📊 المستوى المطلوب: ${level ?? "جميع المستويات"}');
       
-      _lessons = await FirebaseService.getLessons(level: level);
+      // التحقق من الاتصال أولاً
+      _hasNetworkConnection = await FirebaseService.checkConnection()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
+      
+      if (!_hasNetworkConnection) {
+        print('❌ لا يوجد اتصال بالإنترنت');
+        _setError('لا يوجد اتصال بالإنترنت - تحقق من اتصالك وحاول مرة أخرى');
+        return;
+      }
+      
+      // تحميل الدروس مع timeout
+      _lessons = await FirebaseService.getLessons(level: level)
+          .timeout(const Duration(seconds: 20), onTimeout: () {
+        throw Exception('انتهت مهلة تحميل الدروس - تحقق من اتصال الإنترنت');
+      });
       
       print('✅ تم تحميل ${_lessons.length} درس');
-      print('📋 الدروس المحملة:');
-      for (var lesson in _lessons) {
-        print('  - ${lesson.title} (المستوى: ${lesson.level}, منشور: ${lesson.isPublished})');
+      
+      if (_lessons.isEmpty) {
+        print('⚠️ لا توجد دروس متاحة');
+        print('💡 تحقق من:');
+        print('  - وجود مجموعة "lessons" في Firestore');
+        print('  - وجود دروس مع isPublished = true');
+        print('  - صحة قواعد الأمان في Firestore');
+        _setError('لا توجد دروس متاحة حالياً. تأكد من رفع الدروس في لوحة التحكم.');
+      } else {
+        print('📋 الدروس المحملة:');
+        for (var lesson in _lessons) {
+          print('  - ${lesson.title} (المستوى: ${lesson.level}, منشور: ${lesson.isPublished})');
+        }
       }
       
       notifyListeners();
     } catch (e) {
       print('❌ خطأ في تحميل الدروس: $e');
-      _setError('فشل في تحميل الدروس: ${e.toString()}');
+      
+      String errorMessage;
+      if (e.toString().contains('permission-denied')) {
+        errorMessage = 'خطأ في الصلاحيات - تحقق من إعدادات قاعدة البيانات';
+      } else if (e.toString().contains('unavailable') || e.toString().contains('انتهت مهلة')) {
+        errorMessage = 'خطأ في الاتصال - تحقق من اتصال الإنترنت وحاول مرة أخرى';
+        _hasNetworkConnection = false;
+      } else if (e.toString().contains('not-found')) {
+        errorMessage = 'لم يتم العثور على الدروس - تأكد من رفع الدروس في لوحة التحكم';
+      } else {
+        errorMessage = 'فشل في تحميل الدروس - حاول مرة أخرى لاحقاً';
+      }
+      
+      _setError(errorMessage);
     } finally {
       _setLoading(false);
     }
@@ -48,12 +87,24 @@ class LessonProvider with ChangeNotifier {
       _setLoading(true);
       _clearError();
       
-      _currentLesson = await FirebaseService.getLesson(lessonId);
-      _currentProgress = await FirebaseService.getLessonProgress(userId, lessonId);
+      print('📖 تحميل الدرس: $lessonId');
       
+      // تحميل الدرس والتقدم مع timeout
+      final lessonFuture = FirebaseService.getLesson(lessonId)
+          .timeout(const Duration(seconds: 10));
+      final progressFuture = FirebaseService.getLessonProgress(userId, lessonId)
+          .timeout(const Duration(seconds: 10));
+      
+      final results = await Future.wait([lessonFuture, progressFuture]);
+      
+      _currentLesson = results[0] as LessonModel?;
+      _currentProgress = results[1] as ProgressModel?;
+      
+      print('✅ تم تحميل الدرس بنجاح');
       notifyListeners();
     } catch (e) {
-      _setError(e.toString());
+      print('❌ خطأ في تحميل الدرس: $e');
+      _setError('فشل في تحميل الدرس - حاول مرة أخرى');
     } finally {
       _setLoading(false);
     }
@@ -73,15 +124,24 @@ class LessonProvider with ChangeNotifier {
           slidesCompleted: updatedSlidesCompleted,
         );
         
-        await FirebaseService.updateLessonProgress(userId, lessonId, _currentProgress!);
+        // حفظ التقدم مع timeout
+        await FirebaseService.updateLessonProgress(userId, lessonId, _currentProgress!)
+            .timeout(const Duration(seconds: 10));
         
-        // Award XP for completing slide
-        await FirebaseService.addXPAndGems(userId, 10, 1, 'إكمال شريحة');
+        // Award XP for completing slide with timeout
+        try {
+          await FirebaseService.addXPAndGems(userId, 10, 1, 'إكمال شريحة')
+              .timeout(const Duration(seconds: 5));
+        } catch (e) {
+          print('⚠️ فشل في منح المكافآت: $e');
+          // لا نفشل العملية بسبب هذا الخطأ
+        }
         
         notifyListeners();
       }
     } catch (e) {
-      _setError(e.toString());
+      print('❌ خطأ في حفظ تقدم الشريحة: $e');
+      _setError('فشل في حفظ التقدم - حاول مرة أخرى');
     }
   }
 
@@ -98,33 +158,43 @@ class LessonProvider with ChangeNotifier {
         completedAt: DateTime.now(),
       );
 
-      await FirebaseService.updateLessonProgress(userId, lessonId, completedProgress);
+      // حفظ التقدم مع timeout
+      await FirebaseService.updateLessonProgress(userId, lessonId, completedProgress)
+          .timeout(const Duration(seconds: 10));
       
-      // Update user's completed lessons
+      // Update user's completed lessons with timeout
       await FirebaseService.updateUserData(userId, {
         'completedLessons': FieldValue.arrayUnion([lessonId]),
-      });
+      }).timeout(const Duration(seconds: 10));
       
-      // Award XP and gems for completing lesson
-      await FirebaseService.addXPAndGems(
-        userId, 
-        _currentLesson!.xpReward, 
-        _currentLesson!.gemsReward, 
-        'إكمال درس: ${_currentLesson!.title}'
-      );
+      // Award XP and gems for completing lesson with timeout
+      try {
+        await FirebaseService.addXPAndGems(
+          userId, 
+          _currentLesson!.xpReward, 
+          _currentLesson!.gemsReward, 
+          'إكمال درس: ${_currentLesson!.title}'
+        ).timeout(const Duration(seconds: 10));
+      } catch (e) {
+        print('⚠️ فشل في منح مكافآت إكمال الدرس: $e');
+        // لا نفشل العملية بسبب هذا الخطأ
+      }
       
       _currentProgress = completedProgress;
       notifyListeners();
     } catch (e) {
-      _setError(e.toString());
+      print('❌ خطأ في إكمال الدرس: $e');
+      _setError('فشل في حفظ إكمال الدرس - حاول مرة أخرى');
     }
   }
 
   Future<void> saveQuizResult(String userId, String lessonId, QuizResultModel result) async {
     try {
-      await FirebaseService.saveQuizResult(userId, lessonId, result);
+      // حفظ نتيجة الاختبار مع timeout
+      await FirebaseService.saveQuizResult(userId, lessonId, result)
+          .timeout(const Duration(seconds: 10));
       
-      // Award XP and gems based on quiz performance
+      // Award XP and gems based on quiz performance with timeout
       int xpReward = 100;
       int gemsReward = 5;
       
@@ -136,16 +206,22 @@ class LessonProvider with ChangeNotifier {
         gemsReward += 2;
       }
       
-      await FirebaseService.addXPAndGems(
-        userId, 
-        xpReward, 
-        gemsReward, 
-        'إكمال اختبار: ${result.score}%'
-      );
+      try {
+        await FirebaseService.addXPAndGems(
+          userId, 
+          xpReward, 
+          gemsReward, 
+          'إكمال اختبار: ${result.score}%'
+        ).timeout(const Duration(seconds: 10));
+      } catch (e) {
+        print('⚠️ فشل في منح مكافآت الاختبار: $e');
+        // لا نفشل العملية بسبب هذا الخطأ
+      }
       
       notifyListeners();
     } catch (e) {
-      _setError(e.toString());
+      print('❌ خطأ في حفظ نتيجة الاختبار: $e');
+      _setError('فشل في حفظ نتيجة الاختبار - حاول مرة أخرى');
     }
   }
 
@@ -154,6 +230,11 @@ class LessonProvider with ChangeNotifier {
     print('📚 إجمالي الدروس: ${_lessons.length}');
     print('🎯 المستوى الحالي: $currentLevel');
     print('✅ الدروس المكتملة: ${completedLessons.length}');
+    
+    if (_lessons.isEmpty) {
+      print('⚠️ لا توجد دروس محملة - قم بتحديث القائمة');
+      return [];
+    }
     
     final availableLessons = _lessons.where((lesson) {
       // Show current level lessons and next level if current is completed
@@ -186,15 +267,32 @@ class LessonProvider with ChangeNotifier {
       _setLoading(true);
       _clearError();
       
-      final lesson = await FirebaseService.getLesson(lessonId);
+      print('🔍 البحث عن الدرس: $lessonId');
+      
+      final lesson = await FirebaseService.getLesson(lessonId)
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('انتهت مهلة تحميل الدرس');
+      });
+      
+      if (lesson != null) {
+        print('✅ تم العثور على الدرس: ${lesson.title}');
+      } else {
+        print('❌ لم يتم العثور على الدرس');
+      }
+      
       return lesson;
     } catch (e) {
-      print('❌ خطأ في تحميل الدروس: $e');
-      _setError('فشل في تحميل الدروس: ${e.toString()}');
+      print('❌ خطأ في تحميل الدرس: $e');
+      _setError('فشل في تحميل الدرس - تحقق من الاتصال وحاول مرة أخرى');
       return null;
     } finally {
       _setLoading(false);
     }
+  }
+
+  Future<void> retryLoadLessons({int? level}) async {
+    print('🔄 إعادة محاولة تحميل الدروس...');
+    await loadLessons(level: level);
   }
 
   void _setLoading(bool loading) {

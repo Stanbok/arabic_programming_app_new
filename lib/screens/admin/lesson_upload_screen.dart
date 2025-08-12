@@ -38,6 +38,12 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('رفع درس جديد'),
+        backgroundColor: Colors.red[600],
+        foregroundColor: Colors.white,
+      ),
+      backgroundColor: Colors.white,
       body: Form(
         key: _formKey,
         child: ListView(
@@ -50,6 +56,7 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
             _buildQuizSection(),
             const SizedBox(height: 32),
             _buildUploadButton(),
+            const SizedBox(height: 32),
           ],
         ),
       ),
@@ -283,6 +290,8 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
 
   Widget _buildQuizSection() {
     return Card(
+      color: Colors.white,
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -296,28 +305,47 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 ElevatedButton.icon(
-                  onPressed: _addQuizQuestion,
-                  icon: const Icon(Icons.add),
+                  onPressed: () => _showQuizQuestionDialog(),
+                  icon: const Icon(Icons.add, size: 20),
                   label: const Text('إضافة سؤال'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[600],
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
             if (_quiz.isEmpty)
-              const Center(
-                child: Text(
-                  'لم يتم إضافة أسئلة بعد',
-                  style: TextStyle(color: Colors.grey),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.quiz_outlined, size: 48, color: Colors.grey),
+                    SizedBox(height: 8),
+                    Text(
+                      'لم يتم إضافة أسئلة بعد',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  ],
                 ),
               )
             else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _quiz.length,
-                itemBuilder: (context, index) {
-                  return _buildQuizCard(index);
-                },
+              Container(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _quiz.length,
+                  itemBuilder: (context, index) {
+                    return _buildQuizQuestionCard(index);
+                  },
+                ),
               ),
           ],
         ),
@@ -325,7 +353,7 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
     );
   }
 
-  Widget _buildQuizCard(int index) {
+  Widget _buildQuizQuestionCard(int index) {
     final question = _quiz[index];
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -386,21 +414,43 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
   Widget _buildUploadButton() {
     return Consumer<AdminProvider>(
       builder: (context, adminProvider, child) {
-        return SizedBox(
+        return Container(
           width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
+          height: 56,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ElevatedButton.icon(
             onPressed: adminProvider.isLoading ? null : _uploadLesson,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red[600],
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
             ),
-            child: adminProvider.isLoading
-                ? const CircularProgressIndicator(color: Colors.white)
-                : const Text(
-                    'رفع الدرس',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+            icon: adminProvider.isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.cloud_upload, size: 24),
+            label: Text(
+              adminProvider.isLoading ? 'جاري الرفع...' : 'رفع الدرس',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ),
         );
       },
@@ -421,92 +471,7 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
     });
   }
 
-  void _addQuizQuestion() {
-    _showQuizDialog();
-  }
-
-  void _editQuizQuestion(int index) {
-    _showQuizDialog(question: _quiz[index], index: index);
-  }
-
-  void _removeQuizQuestion(int index) {
-    setState(() {
-      _quiz.removeAt(index);
-    });
-  }
-
-  void _showSlideDialog({SlideUploadModel? slide, int? index}) {
-    final titleController = TextEditingController(text: slide?.title ?? '');
-    final contentController = TextEditingController(text: slide?.content ?? '');
-    final imageUrlController = TextEditingController(text: slide?.imageUrl ?? '');
-    final codeController = TextEditingController(text: slide?.codeExample ?? '');
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(slide == null ? 'إضافة شريحة' : 'تعديل الشريحة'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: 'عنوان الشريحة'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: contentController,
-                decoration: const InputDecoration(labelText: 'محتوى الشريحة'),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: imageUrlController,
-                decoration: const InputDecoration(labelText: 'رابط الصورة (اختياري)'),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: codeController,
-                decoration: const InputDecoration(labelText: 'مثال الكود (اختياري)'),
-                maxLines: 3,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (titleController.text.isNotEmpty && contentController.text.isNotEmpty) {
-                final newSlide = SlideUploadModel(
-                  title: titleController.text,
-                  content: contentController.text,
-                  imageUrl: imageUrlController.text.isEmpty ? null : imageUrlController.text,
-                  codeExample: codeController.text.isEmpty ? null : codeController.text,
-                  order: index ?? _slides.length,
-                );
-
-                setState(() {
-                  if (index != null) {
-                    _slides[index] = newSlide;
-                  } else {
-                    _slides.add(newSlide);
-                  }
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: Text(slide == null ? 'إضافة' : 'تحديث'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showQuizDialog({QuizUploadModel? question, int? index}) {
+  void _showQuizQuestionDialog({QuizUploadModel? question, int? index}) {
     final questionController = TextEditingController(text: question?.question ?? '');
     final explanationController = TextEditingController(text: question?.explanation ?? '');
     final optionControllers = List.generate(4, (i) => 
@@ -589,6 +554,77 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showSlideDialog({SlideUploadModel? slide, int? index}) {
+    final titleController = TextEditingController(text: slide?.title ?? '');
+    final contentController = TextEditingController(text: slide?.content ?? '');
+    final imageUrlController = TextEditingController(text: slide?.imageUrl ?? '');
+    final codeController = TextEditingController(text: slide?.codeExample ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(slide == null ? 'إضافة شريحة' : 'تعديل الشريحة'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: 'عنوان الشريحة'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: contentController,
+                decoration: const InputDecoration(labelText: 'محتوى الشريحة'),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: imageUrlController,
+                decoration: const InputDecoration(labelText: 'رابط الصورة (اختياري)'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeController,
+                decoration: const InputDecoration(labelText: 'مثال الكود (اختياري)'),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (titleController.text.isNotEmpty && contentController.text.isNotEmpty) {
+                final newSlide = SlideUploadModel(
+                  title: titleController.text,
+                  content: contentController.text,
+                  imageUrl: imageUrlController.text.isEmpty ? null : imageUrlController.text,
+                  codeExample: codeController.text.isEmpty ? null : codeController.text,
+                  order: index ?? _slides.length,
+                );
+
+                setState(() {
+                  if (index != null) {
+                    _slides[index] = newSlide;
+                  } else {
+                    _slides.add(newSlide);
+                  }
+                });
+                Navigator.pop(context);
+              }
+            },
+            child: Text(slide == null ? 'إضافة' : 'تحديث'),
+          ),
+        ],
       ),
     );
   }

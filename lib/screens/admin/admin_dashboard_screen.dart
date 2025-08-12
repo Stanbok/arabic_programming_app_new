@@ -4,6 +4,7 @@ import '../../providers/admin_provider.dart';
 import '../../models/lesson_model.dart';
 import 'lesson_upload_screen.dart';
 import 'lesson_edit_screen.dart';
+import 'json_upload_screen.dart'; // Import the new JsonUploadScreen
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({Key? key}) : super(key: key);
@@ -20,6 +21,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
+    // Update the number of tabs to 3
     _tabController = TabController(length: 3, vsync: this);
     _scrollController.addListener(_onScroll);
   }
@@ -67,7 +69,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           tabs: const [
             Tab(icon: Icon(Icons.book), text: 'الدروس'),
             Tab(icon: Icon(Icons.upload), text: 'رفع درس'),
-            Tab(icon: Icon(Icons.analytics), text: 'الإحصائيات'),
+            // Add new tab for JSON upload
+            Tab(icon: Icon(Icons.file_upload), text: 'رفع JSON'),
           ],
         ),
       ),
@@ -76,7 +79,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         children: [
           _buildLessonsTab(),
           const LessonUploadScreen(),
-          _buildAnalyticsTab(),
+          // Add new screen for JSON upload
+          const JsonUploadScreen(),
         ],
       ),
     );

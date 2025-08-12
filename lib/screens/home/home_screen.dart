@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isInitialized = false;
   bool _isLoading = true;
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -135,81 +136,108 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('الرئيسية'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () => context.push('/profile'),
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('جاري تحميل البيانات...'),
-                ],
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('الرئيسية'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.person),
+                onPressed: () => context.push('/profile'),
               ),
-            )
-          : Consumer3<UserProvider, LessonProvider, AuthProvider>(
-              builder: (context, userProvider, lessonProvider, authProvider, child) {
-                final user = userProvider.user;
-                
-                // إذا لم تكن بيانات المستخدم محملة بعد
-                if (user == null) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('جاري تحميل بيانات المستخدم...'),
-                      ],
-                    ),
-                  );
-                }
-
-                final availableLessons = lessonProvider.getAvailableLessons(
-                  user.completedLessons,
-                  user.currentLevel,
-                );
-
-                return RefreshIndicator(
-                  onRefresh: _refreshData,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Top Section - Profile & XP
-                        _buildTopSection(user),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Welcome Message
-                        _buildWelcomeMessage(user),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Lessons Grid
-                        _buildLessonsSection(availableLessons, user, lessonProvider.isLoading),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Level Test Button
-                        _buildLevelTestSection(user, availableLessons),
-                      ],
-                    ),
+            ],
+          ),
+          body: _isLoading
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('جاري تحميل البيانات...'),
+                    ],
                   ),
-                );
-              },
-            ),
+                )
+              : Consumer3<UserProvider, LessonProvider, AuthProvider>(
+                  builder: (context, userProvider, lessonProvider, authProvider, child) {
+                    final user = userProvider.user;
+                    
+                    // إذا لم تكن بيانات المستخدم محملة بعد
+                    if (user == null && !authProvider.isGuestUser) {
+                      return const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('جاري تحميل بيانات المستخدم...'),
+                          ],
+                        ),
+                      );
+                    }
+
+                    final availableLessons = lessonProvider.getAvailableLessons(
+                      user?.completedLessons ?? [],
+                      user?.currentLevel ?? 1,
+                    );
+
+                    return RefreshIndicator(
+                      onRefresh: _refreshData,
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Top Section - Profile & XP
+                            if (!authProvider.isGuestUser) _buildTopSection(user!),
+                            if (authProvider.isGuestUser) _buildGuestSection(),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // Welcome Message
+                            _buildWelcomeMessage(user),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // Lessons Grid
+                            _buildLessonsSection(availableLessons, user, lessonProvider.isLoading),
+                            
+                            const SizedBox(height: 24),
+                            
+                            // Level Test Button
+                            if (!authProvider.isGuestUser) _buildLevelTestSection(user!, availableLessons),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+          bottomNavigationBar: authProvider.isAdmin ? BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+              if (index == 1) {
+                // Navigate to admin dashboard
+                context.push('/admin');
+              }
+            },
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home),
+                label: 'الرئيسية',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.admin_panel_settings),
+                label: 'لوحة التحكم',
+              ),
+            ],
+          ) : null,
+        );
+      },
     );
   }
 
@@ -393,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '$greeting، ${user.name}!',
+                  '$greeting، ${user?.name ?? "المستخدم"}!',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -405,7 +433,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 8),
           Text(
-            'أنت في المستوى ${user.level}. لديك ${user.completedLessons.length} درس مكتمل. استمر في التعلم لتصل إلى المستوى التالي!',
+            user != null
+                ? 'أنت في المستوى ${user.level}. لديك ${user.completedLessons.length} درس مكتمل. استمر في التعلم لتصل إلى المستوى التالي!'
+                : 'مرحباً! انضم إلى مجتمعنا لبدء تعلمك.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
               height: 1.4,
@@ -494,7 +524,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       );
                     } else {
                       return Text(
-                        'أكمل الدروس الحالية لفتح دروس جديدة\n(المستوى الحالي: ${user.currentLevel})',
+                        'أكمل الدروس الحالية لفتح دروس جديدة\n(المستوى الحالي: ${user?.currentLevel ?? 1})',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                         ),
@@ -519,7 +549,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             itemCount: availableLessons.length,
             itemBuilder: (context, index) {
               final lesson = availableLessons[index];
-              final isCompleted = user.completedLessons.contains(lesson.id);
+              final isCompleted = user?.completedLessons.contains(lesson.id) ?? false;
               
               return LessonCard(
                 lesson: lesson,
@@ -565,6 +595,53 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildGuestSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.person_outline, color: Colors.orange, size: 32),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'مرحباً أيها الضيف!',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'أنشئ حساباً لحفظ تقدمك والحصول على المزايا',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () => context.go('/register'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                  child: const Text('إنشاء حساب'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

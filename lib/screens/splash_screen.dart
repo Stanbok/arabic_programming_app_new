@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 
@@ -26,6 +27,17 @@ class _SplashScreenState extends State<SplashScreen> {
     
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
+    
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstTime = prefs.getBool('is_first_time') ?? true;
+    
+    if (isFirstTime) {
+      await prefs.setBool('is_first_time', false);
+      if (mounted) {
+        context.go('/welcome');
+      }
+      return;
+    }
     
     final hasSavedLogin = await authProvider.checkSavedLoginState();
     

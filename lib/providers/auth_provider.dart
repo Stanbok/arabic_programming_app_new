@@ -13,6 +13,10 @@ class AuthProvider with ChangeNotifier {
   String? _errorMessage;
   bool _isGuestUser = false;
 
+  static const String ADMIN_UID = 'FkRMLu7IC3WLSD6jzujnJ79elUO2';
+  
+  bool get isAdmin => _user?.uid == ADMIN_UID && !_isGuestUser;
+
   User? get user => _user;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;

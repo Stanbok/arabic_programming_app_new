@@ -268,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ],
                 );
               }
-              return null;
+              return const SizedBox.shrink();
             },
           ),
         );

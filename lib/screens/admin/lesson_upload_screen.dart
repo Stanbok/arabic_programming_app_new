@@ -471,6 +471,16 @@ class _LessonUploadScreenState extends State<LessonUploadScreen> {
     });
   }
 
+  void _editQuizQuestion(int index) {
+    _showQuizQuestionDialog(question: _quiz[index], index: index);
+  }
+
+  void _removeQuizQuestion(int index) {
+    setState(() {
+      _quiz.removeAt(index);
+    });
+  }
+
   void _showQuizQuestionDialog({QuizUploadModel? question, int? index}) {
     final questionController = TextEditingController(text: question?.question ?? '');
     final explanationController = TextEditingController(text: question?.explanation ?? '');

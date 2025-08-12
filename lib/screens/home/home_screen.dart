@@ -141,12 +141,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return Scaffold(
           appBar: AppBar(
             title: const Text('الرئيسية'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.person),
-                onPressed: () => context.push('/profile'),
-              ),
-            ],
           ),
           body: _isLoading
               ? const Center(
@@ -214,28 +208,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     );
                   },
                 ),
-          bottomNavigationBar: authProvider.isAdmin ? BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
-              if (index == 1) {
-                // Navigate to admin dashboard
-                context.push('/admin');
+          bottomNavigationBar: Consumer<AuthProvider>(
+            builder: (context, authProvider, child) {
+              if (authProvider.isAdmin) {
+                return BottomNavigationBar(
+                  type: BottomNavigationBarType.fixed,
+                  currentIndex: _currentIndex,
+                  onTap: (index) {
+                    setState(() {
+                      _currentIndex = index;
+                    });
+                    switch (index) {
+                      case 0:
+                        // الرئيسية - لا حاجة للتنقل
+                        break;
+                      case 1:
+                        context.push('/profile');
+                        break;
+                      case 2:
+                        context.push('/admin');
+                        break;
+                    }
+                  },
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.home),
+                      label: 'الرئيسية',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person),
+                      label: 'البروفايل',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.admin_panel_settings),
+                      label: 'لوحة التحكم',
+                    ),
+                  ],
+                );
+              } else if (!authProvider.isGuestUser) {
+                return BottomNavigationBar(
+                  currentIndex: _currentIndex,
+                  onTap: (index) {
+                    setState(() {
+                      _currentIndex = index;
+                    });
+                    if (index == 1) {
+                      context.push('/profile');
+                    }
+                  },
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.home),
+                      label: 'الرئيسية',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person),
+                      label: 'البروفايل',
+                    ),
+                  ],
+                );
               }
+              return null;
             },
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home),
-                label: 'الرئيسية',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.admin_panel_settings),
-                label: 'لوحة التحكم',
-              ),
-            ],
-          ) : null,
+          ),
         );
       },
     );
@@ -421,7 +456,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '$greeting، ${user?.name ?? "المستخدم"}!',
+                  user != null
+                      ? '$greeting، ${user.name}!'
+                      : 'مرحباً! انضم إلى مجتمعنا لبدء تعلمك.',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),

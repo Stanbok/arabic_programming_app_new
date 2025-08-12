@@ -32,19 +32,35 @@ class LessonProvider with ChangeNotifier {
       print('🔄 بدء تحميل الدروس من جميع المصادر...');
       print('📊 المستوى المطلوب: ${level ?? "جميع المستويات"}');
       
+      _lessons.clear();
+      
       // تحميل الدروس المحلية أولاً (دائماً متوفرة)
       await _loadLocalLessons(level: level);
+      
+      _lessons.addAll(_localLessons);
+      print('📚 تم إضافة ${_localLessons.length} درس محلي للقائمة الرئيسية');
       
       // محاولة تحميل دروس Firebase
       await _loadFirebaseLessons(level: level);
       
-      // دمج الدروس وإزالة المكررات
-      _mergeLessons();
+      // ترتيب الدروس النهائية
+      _lessons.sort((a, b) {
+        if (a.level != b.level) {
+          return a.level.compareTo(b.level);
+        }
+        return a.order.compareTo(b.order);
+      });
       
       print('✅ إجمالي الدروس المحملة: ${_lessons.length}');
       
       if (_lessons.isEmpty) {
         _setError('لا توجد دروس متاحة حالياً');
+      } else {
+        print('📋 الدروس المحملة:');
+        for (var lesson in _lessons) {
+          final source = _localLessons.any((l) => l.id == lesson.id) ? '🏠' : '☁️';
+          print('  $source ${lesson.title} (المستوى: ${lesson.level})');
+        }
       }
       
       notifyListeners();
@@ -106,25 +122,8 @@ class LessonProvider with ChangeNotifier {
 
   /// دمج الدروس المحلية والسحابية
   void _mergeLessons() {
-    print('🔄 دمج الدروس من جميع المصادر...');
-    
-    // إضافة الدروس المحلية أولاً
-    _lessons.clear();
-    _lessons.addAll(_localLessons);
-    
-    // ترتيب الدروس حسب المستوى والترتيب
-    _lessons.sort((a, b) {
-      if (a.level != b.level) {
-        return a.level.compareTo(b.level);
-      }
-      return a.order.compareTo(b.order);
-    });
-    
-    print('📋 الدروس النهائية:');
-    for (var lesson in _lessons) {
-      final source = _localLessons.any((l) => l.id == lesson.id) ? '🏠' : '☁️';
-      print('  $source ${lesson.title} (المستوى: ${lesson.level})');
-    }
+    // الدروس المحلية تُضاف مباشرة والـ Firebase lessons تُضاف في _loadFirebaseLessons
+    print('🔄 الدروس تم دمجها بالفعل أثناء التحميل');
   }
 
   /// تحميل درس محدد (يبحث في المحلي أولاً ثم Firebase)
@@ -237,8 +236,6 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  // ... باقي الدوال تبقى كما هي ...
-  
   Future<void> completeSlide(String userId, String lessonId, String slideId) async {
     if (_currentProgress == null) {
       _currentProgress = ProgressModel(lessonId: lessonId);

@@ -33,7 +33,7 @@ android {
 
         // نحدد المعمارية المدعومة (OPPO A7 بيشتغل arm64-v8a)
         ndk {
-            abiFilters "arm64-v8a"
+            abiFilters += "arm64-v8a"
         }
     }
 

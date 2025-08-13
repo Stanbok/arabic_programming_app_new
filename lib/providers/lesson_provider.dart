@@ -309,7 +309,7 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// الحصول على الدروس المتاحة مع دعم التقدم المحلي
+  /// الحصول على الدروس المتاحة مع دعم التقدم المحلي - متاح لجميع المستخدمين
   List<LessonModel> getAvailableLessons(List<String> completedLessons, int currentLevel) {
     if (_lessons.isEmpty) {
       return [];
@@ -321,14 +321,22 @@ class LessonProvider with ChangeNotifier {
     allCompletedLessons.addAll(_localCompletedLessons);
     
     final availableLessons = _lessons.where((lesson) {
-      // إظهار دروس المستوى الحالي والأول دائماً
-      if (lesson.level <= currentLevel || lesson.level == 1) {
+      // عرض دروس المستوى الأول دائماً لجميع المستخدمين
+      if (lesson.level == 1) {
         return true;
       }
       
-      // منطق المستويات المتقدمة
+      // عرض دروس المستوى الحالي والمستويات السابقة
+      if (lesson.level <= currentLevel) {
+        return true;
+      }
+      
+      // عرض المستوى التالي إذا تم إكمال المستوى الحالي
       if (lesson.level == currentLevel + 1) {
         final currentLevelLessons = _lessons.where((l) => l.level == currentLevel).toList();
+        if (currentLevelLessons.isEmpty) {
+          return true; // إذا لم توجد دروس للمستوى الحالي، اعرض المستوى التالي
+        }
         final completedCurrentLevel = currentLevelLessons.every((l) => allCompletedLessons.contains(l.id));
         return completedCurrentLevel;
       }

@@ -322,7 +322,7 @@ class LessonProvider with ChangeNotifier {
       
       // تحديث التقدم المحلي
       if (_currentProgress != null) {
-        _currentProgress!.completedSlides.add(slideId);
+        _currentProgress!.addCompletedSlide(slideId);
         notifyListeners();
       }
     } catch (e) {

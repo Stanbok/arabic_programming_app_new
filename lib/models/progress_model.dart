@@ -53,6 +53,14 @@ class ProgressModel {
     );
   }
 
+  List<String> get completedSlides => slidesCompleted;
+
+  void addCompletedSlide(String slideId) {
+    if (!slidesCompleted.contains(slideId)) {
+      slidesCompleted.add(slideId);
+    }
+  }
+
   double get progressPercentage {
     // This would be calculated based on total slides in lesson
     // For now, return a simple calculation

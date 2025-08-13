@@ -68,16 +68,21 @@ class CodeBlockWidget extends StatelessWidget {
           ),
           
           // Code Content
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              code,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurface,
-                height: 1.4,
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                code,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.left,
+                textDirection: TextDirection.ltr,
               ),
             ),
           ),

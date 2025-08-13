@@ -10,6 +10,7 @@ import '../../models/lesson_model.dart';
 import '../../services/firebase_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/code_block_widget.dart';
+import '../../widgets/mixed_text_widget.dart';
 
 class LessonScreen extends StatefulWidget {
   final String lessonId;
@@ -246,8 +247,8 @@ class _LessonScreenState extends State<LessonScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Slide Title
-          Text(
-            slide.title,
+          MixedTextWidget(
+            text: slide.title,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -289,8 +290,8 @@ class _LessonScreenState extends State<LessonScreen> {
             ),
           
           // Slide Content
-          Text(
-            slide.content,
+          MixedTextWidget(
+            text: slide.content,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               height: 1.6,
             ),

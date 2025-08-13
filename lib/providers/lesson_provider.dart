@@ -5,27 +5,25 @@ import '../services/firebase_service.dart';
 import '../services/local_service.dart';
 import '../services/cache_service.dart';
 import '../models/lesson_model.dart';
-import '../models/progress_model.dart';
 import '../models/quiz_result_model.dart';
 
 class LessonProvider with ChangeNotifier {
   List<LessonModel> _lessons = [];
   List<LessonModel> _localLessons = [];
   LessonModel? _currentLesson;
-  ProgressModel? _currentProgress;
   bool _isLoading = false;
   String? _errorMessage;
   bool _hasNetworkConnection = true;
   DateTime? _lastCacheUpdate;
   
-  Set<String> _localCompletedLessons = {};
-  Map<String, int> _localLessonXP = {};
-  Map<String, int> _localLessonGems = {};
+  // تتبع محلي للاختبارات المكتملة فقط
+  Set<String> _localCompletedQuizzes = {};
+  Map<String, int> _localQuizXP = {};
+  Map<String, int> _localQuizGems = {};
 
   List<LessonModel> get lessons => _lessons;
   List<LessonModel> get localLessons => _localLessons;
   LessonModel? get currentLesson => _currentLesson;
-  ProgressModel? get currentProgress => _currentProgress;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get hasNetworkConnection => _hasNetworkConnection;
@@ -146,18 +144,18 @@ class LessonProvider with ChangeNotifier {
   }
 
   /// الحصول على الدروس المتاحة بناءً على نظام الوحدات - متاح لجميع المستخدمين
-  List<LessonModel> getAvailableLessons(List<String> completedLessons, int currentUnit) {
+  List<LessonModel> getAvailableLessons(List<String> completedQuizzes, int currentUnit) {
     if (_lessons.isEmpty) {
       return [];
     }
     
-    // دمج الدروس المكتملة مع التقدم المحلي
-    final allCompletedLessons = <String>{};
-    allCompletedLessons.addAll(completedLessons);
-    allCompletedLessons.addAll(_localCompletedLessons);
+    // دمج الاختبارات المكتملة مع التقدم المحلي
+    final allCompletedQuizzes = <String>{};
+    allCompletedQuizzes.addAll(completedQuizzes);
+    allCompletedQuizzes.addAll(_localCompletedQuizzes);
     
     // الحصول على الوحدة الحالية للمستخدم
-    int userCurrentUnit = _getUserCurrentUnit(allCompletedLessons);
+    int userCurrentUnit = _getUserCurrentUnit(allCompletedQuizzes);
     
     final availableLessons = _lessons.where((lesson) {
       // عرض دروس الوحدة الحالية فقط
@@ -171,7 +169,7 @@ class LessonProvider with ChangeNotifier {
   }
 
   /// تحديد الوحدة الحالية للمستخدم
-  int _getUserCurrentUnit(Set<String> completedLessons) {
+  int _getUserCurrentUnit(Set<String> completedQuizzes) {
     if (_lessons.isEmpty) return 1;
     
     // الحصول على جميع الوحدات المتاحة
@@ -181,8 +179,8 @@ class LessonProvider with ChangeNotifier {
       // الحصول على دروس هذه الوحدة
       final unitLessons = _lessons.where((l) => l.unit == unit).toList();
       
-      // التحقق من إكمال جميع دروس الوحدة
-      final completedInUnit = unitLessons.where((l) => completedLessons.contains(l.id)).length;
+      // التحقق من إكمال جميع اختبارات الوحدة
+      final completedInUnit = unitLessons.where((l) => completedQuizzes.contains(l.id)).length;
       
       // إذا لم تكتمل الوحدة، فهي الوحدة الحالية
       if (completedInUnit < unitLessons.length) {
@@ -195,22 +193,44 @@ class LessonProvider with ChangeNotifier {
     return maxUnit + 1;
   }
 
-  /// الحصول على معلومات الوحدات للعرض مع الانيميشن
-  List<UnitInfo> getUnitsInfo(List<String> completedLessons) {
+  /// الحصول على معلومات الوحدات للعرض
+  List<UnitInfo> getUnitsInfo(List<String> completedQuizzes) {
     if (_lessons.isEmpty) return [];
     
-    final allCompletedLessons = <String>{};
-    allCompletedLessons.addAll(completedLessons);
-    allCompletedLessons.addAll(_localCompletedLessons);
+    final allCompletedQuizzes = <String>{};
+    allCompletedQuizzes.addAll(completedQuizzes);
+    allCompletedQuizzes.addAll(_localCompletedQuizzes);
     
     final availableUnits = _lessons.map((l) => l.unit).toSet().toList()..sort();
     final unitsInfo = <UnitInfo>[];
     
     for (int unit in availableUnits) {
       final unitLessons = _lessons.where((l) => l.unit == unit).toList();
-      final completedCount = unitLessons.where((l) => allCompletedLessons.contains(l.id)).length;
+      final completedCount = unitLessons.where((l) => allCompletedQuizzes.contains(l.id)).length;
       final isCompleted = completedCount == unitLessons.length;
       final isUnlocked = unit == 1 || (unit > 1 && unitsInfo.isNotEmpty && unitsInfo.last.isCompleted);
+      
+      // تحديد حالة كل درس
+      final lessonsWithStatus = unitLessons.map((lesson) {
+        LessonStatus status;
+        if (lesson.unit == 1 && lesson.order == 1) {
+          // الدرس الأول دائماً مفتوح
+          status = LessonStatus.open;
+        } else if (allCompletedQuizzes.contains(lesson.id)) {
+          // الدرس مكتمل
+          status = LessonStatus.completed;
+        } else {
+          // فحص إذا كان الدرس السابق مكتمل
+          final previousLesson = _getPreviousLesson(lesson);
+          if (previousLesson == null || allCompletedQuizzes.contains(previousLesson.id)) {
+            status = LessonStatus.open;
+          } else {
+            status = LessonStatus.locked;
+          }
+        }
+        
+        return LessonWithStatus(lesson: lesson, status: status);
+      }).toList();
       
       unitsInfo.add(UnitInfo(
         unit: unit,
@@ -219,11 +239,34 @@ class LessonProvider with ChangeNotifier {
         completedLessons: completedCount,
         isCompleted: isCompleted,
         isUnlocked: isUnlocked,
-        lessons: isUnlocked ? unitLessons : [],
+        lessons: unitLessons,
+        lessonsWithStatus: lessonsWithStatus,
       ));
     }
     
     return unitsInfo;
+  }
+
+  /// الحصول على الدرس السابق
+  LessonModel? _getPreviousLesson(LessonModel lesson) {
+    final unitLessons = _lessons.where((l) => l.unit == lesson.unit).toList();
+    unitLessons.sort((a, b) => a.order.compareTo(b.order));
+    
+    final currentIndex = unitLessons.indexWhere((l) => l.id == lesson.id);
+    if (currentIndex > 0) {
+      return unitLessons[currentIndex - 1];
+    }
+    
+    // إذا كان أول درس في الوحدة، فحص آخر درس في الوحدة السابقة
+    if (lesson.unit > 1) {
+      final previousUnitLessons = _lessons.where((l) => l.unit == lesson.unit - 1).toList();
+      if (previousUnitLessons.isNotEmpty) {
+        previousUnitLessons.sort((a, b) => a.order.compareTo(b.order));
+        return previousUnitLessons.last;
+      }
+    }
+    
+    return null;
   }
 
   /// الحصول على عنوان الوحدة
@@ -237,24 +280,6 @@ class LessonProvider with ChangeNotifier {
         return 'المشاريع العملية';
       default:
         return 'الوحدة $unit';
-    }
-  }
-
-  /// إكمال درس محلياً مع تحديث فوري للـ XP والجواهر
-  Future<void> completeLessonLocally(String userId, String lessonId, int xpReward, int gemsReward, Function(int, int, String) addXPCallback) async {
-    try {
-      _localCompletedLessons.add(lessonId);
-      _localLessonXP[lessonId] = xpReward;
-      _localLessonGems[lessonId] = gemsReward;
-      
-      await _saveLocalProgress();
-      await addXPCallback(xpReward, gemsReward, 'إكمال درس محلي');
-      
-      notifyListeners();
-      _syncLessonCompletionWithFirebase(userId, lessonId, xpReward, gemsReward);
-      
-    } catch (e) {
-      print('خطأ في إكمال الدرس محلياً: $e');
     }
   }
 
@@ -272,31 +297,18 @@ class LessonProvider with ChangeNotifier {
         gemsReward += 2;
       }
       
-      final quizKey = '${lessonId}_quiz';
-      _localLessonXP[quizKey] = xpReward;
-      _localLessonGems[quizKey] = gemsReward;
+      _localCompletedQuizzes.add(lessonId);
+      _localQuizXP[lessonId] = xpReward;
+      _localQuizGems[lessonId] = gemsReward;
       
       await _saveLocalProgress();
-      await addXPCallback(xpReward, gemsReward, 'إكمال اختبار محلي: $score%');
+      await addXPCallback(xpReward, gemsReward, 'إكمال اختبار: $score%');
       
       notifyListeners();
       _syncQuizCompletionWithFirebase(userId, lessonId, score, xpReward, gemsReward);
       
     } catch (e) {
       print('خطأ في إكمال الاختبار محلياً: $e');
-    }
-  }
-
-  /// إكمال درس محلياً مع تحديث فوري للـ XP والجواهر
-  Future<void> completeLesson(String userId, String lessonId) async {
-    try {
-      final lesson = _lessons.firstWhere((l) => l.id == lessonId);
-      await completeLessonLocally(userId, lessonId, lesson.xpReward, lesson.gemsReward, 
-        (xp, gems, reason) async {
-          // سيتم التعامل مع هذا في UserProvider
-        });
-    } catch (e) {
-      print('خطأ في إكمال الدرس: $e');
     }
   }
 
@@ -315,21 +327,6 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// إكمال الشريحة محلياً وتسجيلها في Firebase
-  Future<void> completeSlide(String userId, String lessonId, String slideId) async {
-    try {
-      await FirebaseService.logSlideCompletion(userId, lessonId, slideId);
-      
-      // تحديث التقدم المحلي
-      if (_currentProgress != null) {
-        _currentProgress!.addCompletedSlide(slideId);
-        notifyListeners();
-      }
-    } catch (e) {
-      print('خطأ في إكمال الشريحة: $e');
-    }
-  }
-
   /// تحميل درس معين مع أولوية للمحتوى المحلي
   Future<void> loadLesson(String lessonId, String userId) async {
     try {
@@ -344,11 +341,6 @@ class LessonProvider with ChangeNotifier {
         _currentLesson = await FirebaseService.getLesson(lessonId);
       }
       
-      if (_currentLesson != null) {
-        // تحميل التقدم
-        _currentProgress = await FirebaseService.getLessonProgress(userId, lessonId);
-      }
-      
       notifyListeners();
     } catch (e) {
       _setError('فشل في تحميل الدرس');
@@ -360,13 +352,13 @@ class LessonProvider with ChangeNotifier {
   Future<void> _saveLocalProgress() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList('local_completed_lessons', _localCompletedLessons.toList());
+      await prefs.setStringList('local_completed_quizzes', _localCompletedQuizzes.toList());
       
-      final xpEntries = _localLessonXP.entries.map((e) => '${e.key}:${e.value}').toList();
-      await prefs.setStringList('local_lesson_xp', xpEntries);
+      final xpEntries = _localQuizXP.entries.map((e) => '${e.key}:${e.value}').toList();
+      await prefs.setStringList('local_quiz_xp', xpEntries);
       
-      final gemsEntries = _localLessonGems.entries.map((e) => '${e.key}:${e.value}').toList();
-      await prefs.setStringList('local_lesson_gems', gemsEntries);
+      final gemsEntries = _localQuizGems.entries.map((e) => '${e.key}:${e.value}').toList();
+      await prefs.setStringList('local_quiz_gems', gemsEntries);
     } catch (e) {
       // تجاهل أخطاء الحفظ
     }
@@ -376,48 +368,28 @@ class LessonProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       
-      final completedLessons = prefs.getStringList('local_completed_lessons') ?? [];
-      _localCompletedLessons = completedLessons.toSet();
+      final completedQuizzes = prefs.getStringList('local_completed_quizzes') ?? [];
+      _localCompletedQuizzes = completedQuizzes.toSet();
       
-      final xpEntries = prefs.getStringList('local_lesson_xp') ?? [];
-      _localLessonXP.clear();
+      final xpEntries = prefs.getStringList('local_quiz_xp') ?? [];
+      _localQuizXP.clear();
       for (var entry in xpEntries) {
         final parts = entry.split(':');
         if (parts.length == 2) {
-          _localLessonXP[parts[0]] = int.tryParse(parts[1]) ?? 0;
+          _localQuizXP[parts[0]] = int.tryParse(parts[1]) ?? 0;
         }
       }
       
-      final gemsEntries = prefs.getStringList('local_lesson_gems') ?? [];
-      _localLessonGems.clear();
+      final gemsEntries = prefs.getStringList('local_quiz_gems') ?? [];
+      _localQuizGems.clear();
       for (var entry in gemsEntries) {
         final parts = entry.split(':');
         if (parts.length == 2) {
-          _localLessonGems[parts[0]] = int.tryParse(parts[1]) ?? 0;
+          _localQuizGems[parts[0]] = int.tryParse(parts[1]) ?? 0;
         }
       }
     } catch (e) {
       // تجاهل أخطاء التحميل
-    }
-  }
-
-  Future<void> _syncLessonCompletionWithFirebase(String userId, String lessonId, int xpReward, int gemsReward) async {
-    if (!_hasNetworkConnection) return;
-    
-    try {
-      await FirebaseService.updateUserData(userId, {
-        'completedLessons': FieldValue.arrayUnion([lessonId]),
-      }).timeout(const Duration(seconds: 10));
-      
-      await FirebaseService.addXPAndGems(userId, xpReward, gemsReward, 'إكمال درس محلي')
-          .timeout(const Duration(seconds: 10));
-      
-      _localCompletedLessons.remove(lessonId);
-      _localLessonXP.remove(lessonId);
-      _localLessonGems.remove(lessonId);
-      await _saveLocalProgress();
-    } catch (e) {
-      // تجاهل أخطاء المزامنة
     }
   }
 
@@ -437,20 +409,25 @@ class LessonProvider with ChangeNotifier {
       await FirebaseService.saveQuizResult(userId, lessonId, quizResult)
           .timeout(const Duration(seconds: 10));
       
-      await FirebaseService.addXPAndGems(userId, xpReward, gemsReward, 'إكمال اختبار محلي: $score%')
+      await FirebaseService.addXPAndGems(userId, xpReward, gemsReward, 'إكمال اختبار: $score%')
           .timeout(const Duration(seconds: 10));
       
-      final quizKey = '${lessonId}_quiz';
-      _localLessonXP.remove(quizKey);
-      _localLessonGems.remove(quizKey);
+      // تحديث قائمة الدروس المكتملة
+      await FirebaseService.updateUserData(userId, {
+        'completedLessons': FieldValue.arrayUnion([lessonId]),
+      }).timeout(const Duration(seconds: 10));
+      
+      _localCompletedQuizzes.remove(lessonId);
+      _localQuizXP.remove(lessonId);
+      _localQuizGems.remove(lessonId);
       await _saveLocalProgress();
     } catch (e) {
       // تجاهل أخطاء المزامنة
     }
   }
 
-  int get totalLocalXP => _localLessonXP.values.fold(0, (sum, xp) => sum + xp);
-  int get totalLocalGems => _localLessonGems.values.fold(0, (sum, gems) => sum + gems);
+  int get totalLocalXP => _localQuizXP.values.fold(0, (sum, xp) => sum + xp);
+  int get totalLocalGems => _localQuizGems.values.fold(0, (sum, gems) => sum + gems);
 
   void _setLoading(bool loading) {
     _isLoading = loading;
@@ -477,6 +454,7 @@ class UnitInfo {
   final bool isCompleted;
   final bool isUnlocked;
   final List<LessonModel> lessons;
+  final List<LessonWithStatus> lessonsWithStatus;
 
   UnitInfo({
     required this.unit,
@@ -486,7 +464,26 @@ class UnitInfo {
     required this.isCompleted,
     required this.isUnlocked,
     required this.lessons,
+    required this.lessonsWithStatus,
   });
 
   double get progress => totalLessons > 0 ? completedLessons / totalLessons : 0.0;
+}
+
+/// حالة الدرس
+enum LessonStatus {
+  open,      // مفتوح
+  completed, // مكتمل
+  locked,    // مغلق
+}
+
+/// درس مع حالته
+class LessonWithStatus {
+  final LessonModel lesson;
+  final LessonStatus status;
+
+  LessonWithStatus({
+    required this.lesson,
+    required this.status,
+  });
 }

@@ -4,7 +4,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../models/user_model.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
-import '../models/progress_model.dart';
 
 import 'dart:io';
 
@@ -176,39 +175,6 @@ class FirebaseService {
     }
   }
 
-  // Progress Methods
-  static Future<void> updateLessonProgress(
-      String userId, String lessonId, ProgressModel progress) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('progress')
-          .doc(lessonId)
-          .set(progress.toMap(), SetOptions(merge: true));
-    } catch (e) {
-      throw Exception('خطأ في حفظ التقدم: ${e.toString()}');
-    }
-  }
-
-  static Future<ProgressModel?> getLessonProgress(String userId, String lessonId) async {
-    try {
-      DocumentSnapshot doc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('progress')
-          .doc(lessonId)
-          .get();
-      
-      if (doc.exists) {
-        return ProgressModel.fromMap(doc.data() as Map<String, dynamic>);
-      }
-      return null;
-    } catch (e) {
-      throw Exception('خطأ في جلب التقدم: ${e.toString()}');
-    }
-  }
-
   // Quiz Methods
   static Future<void> saveQuizResult(
       String userId, String lessonId, QuizResultModel result) async {
@@ -343,17 +309,6 @@ class FirebaseService {
         'completedLessons': [],
       });
       
-      // Delete progress subcollection
-      final progressSnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('progress')
-          .get();
-      
-      for (var doc in progressSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-      
       // Delete quiz results subcollection
       final quizSnapshot = await _firestore
           .collection('users')
@@ -368,38 +323,6 @@ class FirebaseService {
       await batch.commit();
     } catch (e) {
       throw Exception('خطأ في إعادة تعيين الحساب: ${e.toString()}');
-    }
-  }
-
-  // Analytics and Time Tracking
-  static Future<void> logSlideCompletion(String userId, String lessonId, String slideId) async {
-    try {
-      // Log analytics event
-      await _firestore.collection('analytics').add({
-        'userId': userId,
-        'lessonId': lessonId,
-        'slideId': slideId,
-        'event': 'slide_completed',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      // Analytics logging shouldn't break the app
-      print('Analytics logging failed: $e');
-    }
-  }
-
-  static Future<void> updateTimeSpent(String userId, String lessonId, int timeSpent) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('progress')
-          .doc(lessonId)
-          .update({
-        'timeSpent': FieldValue.increment(timeSpent),
-      });
-    } catch (e) {
-      throw Exception('خطأ في تحديث الوقت المستغرق: ${e.toString()}');
     }
   }
 

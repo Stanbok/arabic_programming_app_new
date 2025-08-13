@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/lesson_model.dart';
-import '../providers/lesson_provider.dart'; // استيراد UnitInfo من هنا
+import '../providers/lesson_provider.dart';
 
 class UnitCard extends StatelessWidget {
   final UnitInfo unitInfo;
@@ -121,8 +121,8 @@ class UnitCard extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
-                // Lessons List
-                if (unitInfo.lessons.isNotEmpty) ...[
+                // Lessons List with Status
+                if (unitInfo.lessonsWithStatus.isNotEmpty) ...[
                   Text(
                     'الدروس:',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -130,43 +130,52 @@ class UnitCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ...unitInfo.lessons.take(3).map((lesson) => Padding(
+                  ...unitInfo.lessonsWithStatus.take(3).map((lessonWithStatus) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: InkWell(
-                      onTap: () => onLessonTap(lesson),
+                      onTap: lessonWithStatus.status != LessonStatus.locked 
+                          ? () => onLessonTap(lessonWithStatus.lesson)
+                          : null,
                       borderRadius: BorderRadius.circular(8),
-                      child: Padding(
+                      child: Container(
                         padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: lessonWithStatus.status == LessonStatus.locked
+                              ? Colors.grey[100]
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.play_circle_outline,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                            _buildLessonStatusIcon(lessonWithStatus.status, context),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                lesson.title,
-                                style: Theme.of(context).textTheme.bodyMedium,
+                                lessonWithStatus.lesson.title,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: lessonWithStatus.status == LessonStatus.locked
+                                      ? Colors.grey[600]
+                                      : null,
+                                ),
                               ),
                             ),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              size: 16,
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                            ),
+                            if (lessonWithStatus.status != LessonStatus.locked)
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                              ),
                           ],
                         ),
                       ),
                     ),
                   )).toList(),
 
-                  if (unitInfo.lessons.length > 3)
+                  if (unitInfo.lessonsWithStatus.length > 3)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        'و ${unitInfo.lessons.length - 3} دروس أخرى...',
+                        'و ${unitInfo.lessonsWithStatus.length - 3} دروس أخرى...',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                         ),
@@ -205,5 +214,35 @@ class UnitCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildLessonStatusIcon(LessonStatus status, BuildContext context) {
+    switch (status) {
+      case LessonStatus.completed:
+        return Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: Colors.green,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.check,
+            size: 16,
+            color: Colors.white,
+          ),
+        );
+      case LessonStatus.open:
+        return Icon(
+          Icons.play_circle_outline,
+          size: 20,
+          color: Theme.of(context).colorScheme.primary,
+        );
+      case LessonStatus.locked:
+        return Icon(
+          Icons.lock_outline,
+          size: 20,
+          color: Colors.grey[600],
+        );
+    }
   }
 }

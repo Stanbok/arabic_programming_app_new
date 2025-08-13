@@ -7,7 +7,6 @@ import '../../providers/lesson_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/lesson_model.dart';
-import '../../services/firebase_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/code_block_widget.dart';
 import '../../widgets/mixed_text_widget.dart';
@@ -42,7 +41,6 @@ class _LessonScreenState extends State<LessonScreen> {
   void dispose() {
     _timer?.cancel();
     _pageController.dispose();
-    _saveTimeSpent();
     super.dispose();
   }
 
@@ -60,62 +58,15 @@ class _LessonScreenState extends State<LessonScreen> {
     
     if (authProvider.user != null) {
       await lessonProvider.loadLesson(widget.lessonId, authProvider.user!.uid);
-    }
-  }
-
-  Future<void> _saveTimeSpent() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (authProvider.user != null && _timeSpent > 0) {
-      try {
-        await FirebaseService.updateTimeSpent(
-          authProvider.user!.uid,
-          widget.lessonId,
-          _timeSpent,
-        );
-      } catch (e) {
-        // Handle error silently for time tracking
-      }
-    }
-  }
-
-  Future<void> _completeSlide(String slideId) async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
-    
-    if (authProvider.user != null) {
-      await lessonProvider.completeSlide(
-        authProvider.user!.uid,
-        widget.lessonId,
-        slideId,
-      );
-      
-      // Log analytics
-      await FirebaseService.logSlideCompletion(
-        authProvider.user!.uid,
-        widget.lessonId,
-        slideId,
-      );
-    }
-  }
-
-  Future<void> _completeLesson() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
-    
-    if (authProvider.user != null) {
-      await lessonProvider.completeLesson(authProvider.user!.uid, widget.lessonId);
-      
-      // Check and update level
-      await FirebaseService.checkAndUpdateLevel(authProvider.user!.uid);
-      
-      setState(() {
-        _isCompleted = true;
-      });
+    } else {
+      // للضيوف - تحميل الدرس فقط
+      await lessonProvider.loadLesson(widget.lessonId, 'guest');
     }
   }
 
   void _nextSlide() {
-    if (_currentSlideIndex < _getCurrentLesson()!.slides.length - 1) {
+    final lesson = _getCurrentLesson();
+    if (lesson != null && _currentSlideIndex < lesson.slides.length - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -132,8 +83,62 @@ class _LessonScreenState extends State<LessonScreen> {
     }
   }
 
+  void _finishLesson() {
+    final lesson = _getCurrentLesson();
+    if (lesson != null) {
+      setState(() {
+        _isCompleted = true;
+      });
+    }
+  }
+
   LessonModel? _getCurrentLesson() {
     return Provider.of<LessonProvider>(context, listen: false).currentLesson;
+  }
+
+  Widget _buildImage(String imagePath) {
+    // التحقق من نوع المسار
+    if (imagePath.startsWith('assets/')) {
+      // صورة محلية
+      return Image.asset(
+        imagePath,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+            child: Icon(
+              Icons.image_not_supported,
+              size: 40,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          );
+        },
+      );
+    } else if (imagePath.startsWith('http')) {
+      // صورة من الإنترنت
+      return CachedNetworkImage(
+        imageUrl: imagePath,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => Container(
+          color: Theme.of(context).colorScheme.surface,
+          child: const Center(child: CircularProgressIndicator()),
+        ),
+        errorWidget: (context, url, error) => Container(
+          color: Theme.of(context).colorScheme.surface,
+          child: const Icon(Icons.error),
+        ),
+      );
+    } else {
+      // مسار غير معروف
+      return Container(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        child: Icon(
+          Icons.image,
+          size: 40,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    }
   }
 
   @override
@@ -160,7 +165,6 @@ class _LessonScreenState extends State<LessonScreen> {
           }
 
           final lesson = lessonProvider.currentLesson;
-          final progress = lessonProvider.currentProgress;
 
           if (lesson == null) {
             return const Center(
@@ -175,7 +179,7 @@ class _LessonScreenState extends State<LessonScreen> {
           return Column(
             children: [
               // Progress Bar
-              _buildProgressBar(lesson, progress?.slidesCompleted ?? []),
+              _buildProgressBar(lesson),
               
               // Slide Content
               Expanded(
@@ -202,8 +206,8 @@ class _LessonScreenState extends State<LessonScreen> {
     );
   }
 
-  Widget _buildProgressBar(LessonModel lesson, List<String> completedSlides) {
-    final progress = completedSlides.length / lesson.slides.length;
+  Widget _buildProgressBar(LessonModel lesson) {
+    final progress = (_currentSlideIndex + 1) / lesson.slides.length;
     
     return Container(
       padding: const EdgeInsets.all(16),
@@ -274,18 +278,7 @@ class _LessonScreenState extends State<LessonScreen> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: CachedNetworkImage(
-                  imageUrl: slide.imageUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Theme.of(context).colorScheme.surface,
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: Theme.of(context).colorScheme.surface,
-                    child: const Icon(Icons.error),
-                  ),
-                ),
+                child: _buildImage(slide.imageUrl!),
               ),
             ),
           
@@ -312,9 +305,6 @@ class _LessonScreenState extends State<LessonScreen> {
 
   Widget _buildNavigationControls(LessonModel lesson) {
     final isLastSlide = _currentSlideIndex == lesson.slides.length - 1;
-    final currentSlide = lesson.slides[_currentSlideIndex];
-    final progress = Provider.of<LessonProvider>(context).currentProgress;
-    final isSlideCompleted = progress?.slidesCompleted.contains(currentSlide.id) ?? false;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -343,26 +333,20 @@ class _LessonScreenState extends State<LessonScreen> {
           
           if (_currentSlideIndex > 0) const SizedBox(width: 12),
           
-          // Complete Slide / Next Button
+          // Next/Finish Button
           Expanded(
             flex: 2,
-            child: !isSlideCompleted
+            child: isLastSlide
                 ? CustomButton(
-                    text: 'إكمال الشريحة',
-                    onPressed: () => _completeSlide(currentSlide.id),
-                    icon: Icons.check,
+                    text: 'إنهاء الدرس',
+                    onPressed: _finishLesson,
+                    icon: Icons.flag,
                   )
-                : isLastSlide
-                    ? CustomButton(
-                        text: 'إنهاء الدرس',
-                        onPressed: _completeLesson,
-                        icon: Icons.flag,
-                      )
-                    : CustomButton(
-                        text: 'التالي',
-                        onPressed: _nextSlide,
-                        icon: Icons.arrow_forward_ios,
-                      ),
+                : CustomButton(
+                    text: 'التالي',
+                    onPressed: _nextSlide,
+                    icon: Icons.arrow_forward_ios,
+                  ),
           ),
         ],
       ),
@@ -380,11 +364,11 @@ class _LessonScreenState extends State<LessonScreen> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Colors.green,
+              color: Colors.blue,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.green.withOpacity(0.3),
+                  color: Colors.blue.withOpacity(0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -400,17 +384,17 @@ class _LessonScreenState extends State<LessonScreen> {
           const SizedBox(height: 32),
           
           Text(
-            'تهانينا! 🎉',
+            'أحسنت! 👏',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: Colors.green,
+              color: Colors.blue,
             ),
           ),
           
           const SizedBox(height: 16),
           
           Text(
-            'لقد أكملت درس "${lesson.title}" بنجاح',
+            'لقد أنهيت درس "${lesson.title}" بنجاح',
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
@@ -448,14 +432,9 @@ class _LessonScreenState extends State<LessonScreen> {
                       value: '${(_timeSpent / 60).ceil()} دقيقة',
                     ),
                     _buildSummaryItem(
-                      icon: Icons.star,
-                      label: 'النقاط المكتسبة',
-                      value: '${lesson.xpReward} XP',
-                    ),
-                    _buildSummaryItem(
-                      icon: Icons.diamond,
-                      label: 'الجواهر',
-                      value: '${lesson.gemsReward}',
+                      icon: Icons.slideshow,
+                      label: 'الشرائح',
+                      value: '${lesson.slides.length}',
                     ),
                   ],
                 ),

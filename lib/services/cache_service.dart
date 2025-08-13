@@ -14,14 +14,13 @@ class CacheService {
       final lessonsJson = lessons.map((lesson) => lesson.toMap()).toList();
       await prefs.setString(_lessonsKey, jsonEncode(lessonsJson));
       await prefs.setInt(_cacheTimeKey, DateTime.now().millisecondsSinceEpoch);
-      print('💾 تم حفظ ${lessons.length} درس في الكاش');
     } catch (e) {
       print('❌ خطأ في حفظ الدروس في الكاش: $e');
     }
   }
 
   /// استرجاع قائمة الدروس من الكاش
-  static Future<List<LessonModel>> getCachedLessons({int? level}) async {
+  static Future<List<LessonModel>> getCachedLessons({int? unit}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final lessonsString = prefs.getString(_lessonsKey);
@@ -33,8 +32,8 @@ class CacheService {
           .map((json) => LessonModel.fromMap(json as Map<String, dynamic>))
           .toList();
       
-      if (level != null) {
-        return lessons.where((lesson) => lesson.level == level).toList();
+      if (unit != null) {
+        return lessons.where((lesson) => lesson.unit == unit).toList();
       }
       
       return lessons;
@@ -49,7 +48,6 @@ class CacheService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('$_lessonPrefix${lesson.id}', jsonEncode(lesson.toMap()));
-      print('💾 تم حفظ الدرس ${lesson.title} في الكاش');
     } catch (e) {
       print('❌ خطأ في حفظ الدرس في الكاش: $e');
     }
@@ -81,7 +79,6 @@ class CacheService {
       
       return DateTime.fromMillisecondsSinceEpoch(timestamp);
     } catch (e) {
-      print('❌ خطأ في الحصول على عمر الكاش: $e');
       return null;
     }
   }
@@ -99,8 +96,6 @@ class CacheService {
           await prefs.remove(key);
         }
       }
-      
-      print('🗑️ تم مسح جميع بيانات الكاش');
     } catch (e) {
       print('❌ خطأ في مسح الكاش: $e');
     }
@@ -115,7 +110,6 @@ class CacheService {
       final age = DateTime.now().difference(cacheAge).inMinutes;
       return age < maxAgeMinutes;
     } catch (e) {
-      print('❌ خطأ في التحقق من صحة الكاش: $e');
       return false;
     }
   }

@@ -240,8 +240,6 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  // ... باقي الدوال تبقى كما هي مع تغيير level إلى unit حيث لزم الأمر ...
-
   /// إكمال درس محلياً مع تحديث فوري للـ XP والجواهر
   Future<void> completeLessonLocally(String userId, String lessonId, int xpReward, int gemsReward, Function(int, int, String) addXPCallback) async {
     try {
@@ -289,7 +287,75 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  // ... باقي الدوال المساعدة تبقى كما هي ...
+  /// إكمال درس محلياً مع تحديث فوري للـ XP والجواهر
+  Future<void> completeLesson(String userId, String lessonId) async {
+    try {
+      final lesson = _lessons.firstWhere((l) => l.id == lessonId);
+      await completeLessonLocally(userId, lessonId, lesson.xpReward, lesson.gemsReward, 
+        (xp, gems, reason) async {
+          // سيتم التعامل مع هذا في UserProvider
+        });
+    } catch (e) {
+      print('خطأ في إكمال الدرس: $e');
+    }
+  }
+
+  /// حفظ نتيجة الاختبار في Firebase مع تحديث XP والجواهر محلياً
+  Future<void> saveQuizResult(String userId, String lessonId, QuizResultModel result) async {
+    try {
+      await FirebaseService.saveQuizResult(userId, lessonId, result);
+      
+      // حساب النقاط بناءً على النتيجة
+      await completeQuizLocally(userId, lessonId, result.score, 
+        (xp, gems, reason) async {
+          // سيتم التعامل مع هذا في UserProvider
+        });
+    } catch (e) {
+      print('خطأ في حفظ نتيجة الاختبار: $e');
+    }
+  }
+
+  /// إكمال الشريحة محلياً وتسجيلها في Firebase
+  Future<void> completeSlide(String userId, String lessonId, String slideId) async {
+    try {
+      await FirebaseService.logSlideCompletion(userId, lessonId, slideId);
+      
+      // تحديث التقدم المحلي
+      if (_currentProgress != null) {
+        _currentProgress!.completedSlides.add(slideId);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('خطأ في إكمال الشريحة: $e');
+    }
+  }
+
+  /// تحميل درس معين مع أولوية للمحتوى المحلي
+  Future<void> loadLesson(String lessonId, String userId) async {
+    try {
+      _setLoading(true);
+      _clearError();
+      
+      // البحث في الدروس المحلية أولاً
+      _currentLesson = await LocalService.getLocalLesson(lessonId);
+      
+      if (_currentLesson == null) {
+        // البحث في Firebase
+        _currentLesson = await FirebaseService.getLesson(lessonId);
+      }
+      
+      if (_currentLesson != null) {
+        // تحميل التقدم
+        _currentProgress = await FirebaseService.getLessonProgress(userId, lessonId);
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      _setError('فشل في تحميل الدرس');
+    } finally {
+      _setLoading(false);
+    }
+  }
 
   Future<void> _saveLocalProgress() async {
     try {

@@ -107,19 +107,18 @@ class FirebaseService {
   }
 
   // Lesson Methods
-  static Future<List<LessonModel>> getLessons({int? level}) async {
+  static Future<List<LessonModel>> getLessons({int? unit}) async {
     try {
       print('🔄 جلب الدروس من Firestore...');
       
       Query query = _firestore
           .collection('lessons')
           .where('isPublished', isEqualTo: true)
-          .orderBy('level')
+          .orderBy('unit')
           .orderBy('order');
       
-      if (level != null) {
-        query = query.where('level', isEqualTo: level);
-        print('📊 تصفية حسب المستوى: $level');
+      if (unit != null) {
+        query = query.where('unit', isEqualTo: unit);
       }
 
       print('🔍 تنفيذ الاستعلام...');

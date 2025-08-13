@@ -9,39 +9,35 @@ class LocalService {
   static const List<String> _localLessonFiles = [
     'lesson_001.json',
     'lesson_002.json',
+    'lesson_003.json',
+    'lesson_004.json',
   ];
 
   /// تحميل جميع الدروس المحلية
-  static Future<List<LessonModel>> getLocalLessons({int? level}) async {
+  static Future<List<LessonModel>> getLocalLessons({int? unit}) async {
     try {
-      print('🏠 تحميل الدروس المحلية...');
-      
       List<LessonModel> lessons = [];
       
       for (String fileName in _localLessonFiles) {
         try {
           final lessonData = await _loadLessonFromAssets(fileName);
           if (lessonData != null) {
-            // تصفية حسب المستوى إذا تم تحديده
-            if (level == null || lessonData.level == level) {
+            if (unit == null || lessonData.unit == unit) {
               lessons.add(lessonData);
             }
           }
         } catch (e) {
           print('⚠️ خطأ في تحميل الدرس $fileName: $e');
-          // نتجاهل الدرس المعطوب ونكمل مع الباقي
         }
       }
       
-      // ترتيب الدروس حسب المستوى والترتيب
       lessons.sort((a, b) {
-        if (a.level != b.level) {
-          return a.level.compareTo(b.level);
+        if (a.unit != b.unit) {
+          return a.unit.compareTo(b.unit);
         }
         return a.order.compareTo(b.order);
       });
       
-      print('✅ تم تحميل ${lessons.length} درس محلي');
       return lessons;
     } catch (e) {
       print('❌ خطأ في تحميل الدروس المحلية: $e');
@@ -52,14 +48,10 @@ class LocalService {
   /// تحميل درس محدد بالمعرف
   static Future<LessonModel?> getLocalLesson(String lessonId) async {
     try {
-      print('🔍 البحث عن الدرس المحلي: $lessonId');
-      
-      // البحث في قائمة الملفات
       for (String fileName in _localLessonFiles) {
         try {
           final lessonData = await _loadLessonFromAssets(fileName);
           if (lessonData != null && lessonData.id == lessonId) {
-            print('✅ تم العثور على الدرس المحلي: ${lessonData.title}');
             return lessonData;
           }
         } catch (e) {
@@ -67,7 +59,6 @@ class LocalService {
         }
       }
       
-      print('❌ لم يتم العثور على الدرس المحلي: $lessonId');
       return null;
     } catch (e) {
       print('❌ خطأ في البحث عن الدرس المحلي: $e');
@@ -116,8 +107,8 @@ class LocalService {
     }
   }
 
-  /// الحصول على الدروس المحلية حسب المستوى
-  static Future<List<LessonModel>> getLocalLessonsByLevel(int level) async {
-    return await getLocalLessons(level: level);
+  /// الحصول على الدروس المحلية حسب الوحدة
+  static Future<List<LessonModel>> getLocalLessonsByUnit(int unit) async {
+    return await getLocalLessons(unit: unit);
   }
 }

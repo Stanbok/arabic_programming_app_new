@@ -90,7 +90,6 @@ class LessonCard extends StatelessWidget {
                         ),
                       ),
                     
-                    // Level Badge
                     Positioned(
                       top: 8,
                       left: 8,
@@ -101,7 +100,7 @@ class LessonCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'المستوى ${lesson.level}',
+                          'الوحدة ${lesson.unit}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,

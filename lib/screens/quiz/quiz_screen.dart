@@ -9,6 +9,7 @@ import '../../models/lesson_model.dart';
 import '../../models/quiz_result_model.dart';
 import '../../services/firebase_service.dart';
 import '../../widgets/custom_button.dart';
+import '../../models/progress_model.dart';
 
 class QuizScreen extends StatefulWidget {
   final String lessonId;
@@ -108,12 +109,12 @@ class _QuizScreenState extends State<QuizScreen> {
     // Calculate results
     int correctAnswers = 0;
     for (int i = 0; i < lesson.quiz.length; i++) {
-      if (_selectedAnswers[i] == lesson.quiz[i].correctAnswerIndex) {
+      if (i < _selectedAnswers.length && _selectedAnswers[i] == lesson.quiz[i].correctAnswerIndex) {
         correctAnswers++;
       }
     }
 
-    final score = ((correctAnswers / lesson.quiz.length) * 100).round();
+    final score = lesson.quiz.isNotEmpty ? ((correctAnswers / lesson.quiz.length) * 100).round() : 0;
     
     _result = QuizResultModel(
       lessonId: widget.lessonId,
@@ -124,19 +125,26 @@ class _QuizScreenState extends State<QuizScreen> {
       completedAt: DateTime.now(),
     );
 
-    // Save result to Firebase
+    // Save result
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
     
-    if (authProvider.user != null) {
+    if (authProvider.user != null && !authProvider.isGuestUser) {
       await lessonProvider.saveQuizResult(
         authProvider.user!.uid,
         widget.lessonId,
         _result!,
       );
       
-      // Check and update level
-      await FirebaseService.checkAndUpdateLevel(authProvider.user!.uid);
+      // Add XP and gems if passed
+      if (_result!.isPassed) {
+        await userProvider.addXPAndGemsLocally(
+          _result!.score >= 90 ? 150 : _result!.score >= 80 ? 125 : 100,
+          _result!.score >= 90 ? 8 : _result!.score >= 80 ? 7 : 5,
+          'إكمال اختبار: ${_result!.score}%'
+        );
+      }
     }
 
     setState(() {

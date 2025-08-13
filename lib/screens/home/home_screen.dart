@@ -5,9 +5,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/lesson_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/xp_bar.dart';
-import '../../widgets/lesson_card.dart';
-import '../../widgets/unit_card.dart';
+import '../../widgets/world_map_lesson_card.dart';
+import '../../models/lesson_model.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -117,11 +116,48 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: const Color(0xFFF8F9FA),
           appBar: AppBar(
-            title: const Text('الرئيسية'),
-            backgroundColor: Colors.white,
+            title: const Text('رحلة التعلم'),
+            backgroundColor: const Color(0xFFF8F9FA),
             elevation: 0,
+            automaticallyImplyLeading: false,
+            actions: [
+              if (!authProvider.isGuestUser)
+                Consumer<UserProvider>(
+                  builder: (context, userProvider, child) {
+                    final user = userProvider.user;
+                    return Container(
+                      margin: const EdgeInsets.only(left: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.diamond,
+                            color: Colors.amber,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${userProvider.totalGems}',
+                            style: const TextStyle(
+                              color: Colors.amber,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+            ],
           ),
           body: _isLoading
               ? const Center(
@@ -144,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                       return RefreshIndicator(
                         onRefresh: _refreshData,
                         child: Container(
-                          color: Colors.white,
+                          color: const Color(0xFFF8F9FA),
                           child: SingleChildScrollView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.all(16),
@@ -159,13 +195,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                                 
                                 const SizedBox(height: 24),
                                 
-                                // Welcome Message
-                                _buildWelcomeMessage(user),
-                                
-                                const SizedBox(height: 24),
-                                
-                                // Units Section - نظام الوحدات الجديد
-                                _buildUnitsSection(unitsInfo, user, lessonProvider.isLoading),
+                                // World Map Lessons
+                                _buildWorldMapSection(unitsInfo, lessonProvider.isLoading),
                                 
                                 const SizedBox(height: 100),
                               ],
@@ -176,34 +207,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     },
                   ),
                 ),
-          bottomNavigationBar: Consumer<AuthProvider>(
-            builder: (context, authProvider, child) {
-              if (!authProvider.isGuestUser) {
-                return BottomNavigationBar(
-                  currentIndex: _currentIndex,
-                  backgroundColor: Colors.white,
-                  onTap: (index) {
-                    setState(() {
-                      _currentIndex = index;
-                    });
-                    if (index == 1) {
-                      context.push('/profile');
-                    }
-                  },
-                  items: const [
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home),
-                      label: 'الرئيسية',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.person),
-                      label: 'البروفايل',
-                    ),
-                  ],
-                );
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            backgroundColor: Colors.white,
+            selectedItemColor: Theme.of(context).colorScheme.primary,
+            unselectedItemColor: Colors.grey,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+              if (index == 1) {
+                context.push('/profile');
               }
-              return const SizedBox.shrink();
             },
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.map),
+                label: 'الخريطة',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person),
+                label: 'البروفايل',
+              ),
+            ],
           ),
         );
       },
@@ -235,39 +261,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         children: [
           Row(
             children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    backgroundImage: user.profileImageUrl != null
-                        ? CachedNetworkImageProvider(user.profileImageUrl!)
-                        : null,
-                    child: user.profileImageUrl == null
-                        ? Text(
-                            user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          )
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 2,
-                    right: 2,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                    ),
-                  ),
-                ],
+              CircleAvatar(
+                radius: 25,
+                backgroundColor: Colors.white.withOpacity(0.2),
+                backgroundImage: user.profileImageUrl != null
+                    ? CachedNetworkImageProvider(user.profileImageUrl!)
+                    : null,
+                child: user.profileImageUrl == null
+                    ? Text(
+                        user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      )
+                    : null,
               ),
               
               const SizedBox(width: 16),
@@ -279,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     Text(
                       user.name,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -288,269 +297,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'المستوى ${user.level}',
+                      'المستوى ${user.level} • ${userProvider.totalXP} XP',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 12,
                         color: Colors.white.withOpacity(0.8),
                       ),
                     ),
                   ],
                 ),
               ),
-              
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.diamond,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${userProvider.totalGems}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
           
           const SizedBox(height: 16),
           
-          XPBar(
-            currentXP: user.currentLevelProgress + (userProvider.totalXP - user.xp),
-            maxXP: user.xpForNextLevel,
-            level: user.level,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWelcomeMessage(user) {
-    final timeOfDay = DateTime.now().hour;
-    String greeting;
-    String emoji;
-    
-    if (timeOfDay < 12) {
-      greeting = 'صباح الخير';
-      emoji = '🌅';
-    } else if (timeOfDay < 17) {
-      greeting = 'مساء الخير';
-      emoji = '☀️';
-    } else {
-      greeting = 'مساء الخير';
-      emoji = '🌙';
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                emoji,
-                style: const TextStyle(fontSize: 24),
+          // Progress Bar
+          Container(
+            height: 6,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: user.xpForNextLevel > 0 ? user.currentLevelProgress / user.xpForNextLevel : 0.0,
+                backgroundColor: Colors.transparent,
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  user != null
-                      ? '$greeting، ${user.name}!'
-                      : 'مرحباً! ابدأ تعلمك الآن.',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            user != null
-                ? 'أنت في المستوى ${user.level}. لديك ${user.completedLessons.length} درس مكتمل. استمر في التعلم!'
-                : 'ابدأ رحلتك التعليمية مع الدروس المحلية المتاحة.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              height: 1.4,
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildUnitsSection(List<UnitInfo> unitsInfo, user, bool isLessonsLoading) {
-    return Container(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'الوحدات التعليمية',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (isLessonsLoading)
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
-          ),
-          
-          const SizedBox(height: 16),
-          
-          if (isLessonsLoading)
-            Container(
-              color: Colors.white,
-              child: const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-            )
-          else if (unitsInfo.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.school_outlined,
-                    size: 48,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'لا توجد وحدات متاحة حالياً',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: _initializeDataInstantly,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('إعادة تحميل'),
-                  ),
-                ],
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: unitsInfo.length,
-              separatorBuilder: (context, index) {
-                final currentUnit = unitsInfo[index];
-                final nextUnit = index + 1 < unitsInfo.length ? unitsInfo[index + 1] : null;
-                
-                // عرض انيميشن الاجتياز بين الوحدات
-                if (currentUnit.isCompleted && nextUnit != null) {
-                  return _buildUnitCompletionAnimation();
-                }
-                
-                return const SizedBox(height: 16);
-              },
-              itemBuilder: (context, index) {
-                final unitInfo = unitsInfo[index];
-                return UnitCard(
-                  unitInfo: unitInfo,
-                  onLessonTap: (lesson) => context.push('/lesson/${lesson.id}'),
-                );
-              },
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUnitCompletionAnimation() {
-    return Container(
-      height: 80,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // خط متصل
-            Container(
-              width: 2,
-              height: 20,
-              color: Colors.green,
-            ),
-            // نجمة ذهبية
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.amber,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.amber.withOpacity(0.3),
-                    blurRadius: 8,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.star,
-                color: Colors.white,
-                size: 16,
-              ),
-            ),
-            // خط متصل
-            Container(
-              width: 2,
-              height: 20,
-              color: Colors.green,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -574,15 +351,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 const Text(
                   'مرحباً أيها الضيف!',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.orange,
                   ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'يمكنك تصفح الدروس المحلية. أنشئ حساباً لحفظ تقدمك!',
-                  style: TextStyle(fontSize: 14),
+                  'أنشئ حساباً لحفظ تقدمك!',
+                  style: TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton(
@@ -590,14 +367,212 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    minimumSize: const Size(0, 32),
                   ),
-                  child: const Text('إنشاء حساب'),
+                  child: const Text('إنشاء حساب', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWorldMapSection(List<UnitInfo> unitsInfo, bool isLessonsLoading) {
+    if (isLessonsLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (unitsInfo.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.school_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'لا توجد وحدات متاحة حالياً',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _initializeDataInstantly,
+              icon: const Icon(Icons.refresh),
+              label: const Text('إعادة تحميل'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: unitsInfo.map((unitInfo) => _buildUnitSection(unitInfo)).toList(),
+    );
+  }
+
+  Widget _buildUnitSection(UnitInfo unitInfo) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Unit Header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: unitInfo.isUnlocked ? Colors.white : Colors.grey[200],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: unitInfo.isUnlocked 
+                    ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
+                    : Colors.grey.withOpacity(0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: unitInfo.isUnlocked
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${unitInfo.unit}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        unitInfo.title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: unitInfo.isUnlocked ? null : Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: unitInfo.progress,
+                        backgroundColor: Colors.grey.withOpacity(0.2),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          unitInfo.isCompleted ? Colors.green : Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (unitInfo.isCompleted)
+                  const Icon(Icons.check_circle, color: Colors.green, size: 24)
+                else if (!unitInfo.isUnlocked)
+                  const Icon(Icons.lock, color: Colors.grey, size: 24),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Lessons in spiral pattern
+          if (unitInfo.isUnlocked && unitInfo.lessonsWithStatus.isNotEmpty)
+            ...unitInfo.lessonsWithStatus.asMap().entries.map((entry) {
+              final index = entry.key;
+              final lessonWithStatus = entry.value;
+              final isLeft = index % 2 == 0;
+              
+              return Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                child: Row(
+                  children: [
+                    if (!isLeft) const Expanded(child: SizedBox()),
+                    if (!isLeft) _buildConnectionLine(),
+                    Expanded(
+                      flex: 2,
+                      child: WorldMapLessonCard(
+                        lesson: lessonWithStatus.lesson,
+                        status: lessonWithStatus.status,
+                        onTap: () {
+                          if (lessonWithStatus.status != LessonStatus.locked) {
+                            context.push('/lesson/${lessonWithStatus.lesson.id}');
+                          }
+                        },
+                      ),
+                    ),
+                    if (isLeft) _buildConnectionLine(),
+                    if (isLeft) const Expanded(child: SizedBox()),
+                  ],
+                ),
+              );
+            }).toList()
+          else if (!unitInfo.isUnlocked)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.lock_outline,
+                    size: 32,
+                    color: Colors.grey[600],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'أكمل الوحدة السابقة لفتح هذه الوحدة',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionLine() {
+    return Container(
+      width: 40,
+      height: 2,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(1),
       ),
     );
   }

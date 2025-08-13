@@ -19,6 +19,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
+  int _currentIndex = 1;
 
   Future<void> _changeProfileImage() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
@@ -93,10 +94,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _shareApp() async {
     try {
       await Share.share(
-        'تعلم البايثون بالعربية مع تطبيق Python in English! 🐍\n'
+        'تعلم البايثون بالعربية مع تطبيق Python in Arabic! 🐍\n'
         'تطبيق تفاعلي ممتع لتعلم البرمجة بطريقة سهلة ومبسطة.\n'
         'حمل التطبيق الآن واستمتع بالتعلم!',
-        subject: 'Python in English - تعلم البايثون بالعربية',
+        subject: 'Python in Arabic - تعلم البايثون بالعربية',
       );
 
       // Grant share reward
@@ -128,8 +129,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text('الملف الشخصي'),
+        backgroundColor: const Color(0xFFF8F9FA),
+        elevation: 0,
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -152,7 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               children: [
                 // Profile Header
-                _buildProfileHeader(user),
+                _buildProfileHeader(user, userProvider),
                 
                 const SizedBox(height: 24),
                 
@@ -173,10 +178,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         },
       ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        backgroundColor: Colors.white,
+        selectedItemColor: Theme.of(context).colorScheme.primary,
+        unselectedItemColor: Colors.grey,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+          if (index == 0) {
+            context.go('/home');
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.map),
+            label: 'الخريطة',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'البروفايل',
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildProfileHeader(user) {
+  Widget _buildProfileHeader(user, UserProvider userProvider) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -281,7 +310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildStatItem(
                 icon: Icons.star,
                 label: 'نقاط الخبرة',
-                value: '${user.xp}',
+                value: '${userProvider.totalXP}',
                 color: Colors.white,
               ),
               Container(
@@ -292,7 +321,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildStatItem(
                 icon: Icons.diamond,
                 label: 'الجواهر',
-                value: '${user.gems}',
+                value: '${userProvider.totalGems}',
                 color: Colors.white,
               ),
             ],
@@ -572,7 +601,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           
-          Icon(
+          const Icon(
             Icons.emoji_events,
             color: Colors.amber,
             size: 24,

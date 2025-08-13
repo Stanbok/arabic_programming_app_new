@@ -48,17 +48,27 @@ class LocalService {
   /// تحميل درس محدد بالمعرف
   static Future<LessonModel?> getLocalLesson(String lessonId) async {
     try {
+      print('🔍 البحث عن الدرس المحلي: $lessonId');
+      
       for (String fileName in _localLessonFiles) {
         try {
+          print('📁 فحص الملف: $fileName');
           final lessonData = await _loadLessonFromAssets(fileName);
-          if (lessonData != null && lessonData.id == lessonId) {
-            return lessonData;
+          if (lessonData != null) {
+            print('📚 تم تحميل الدرس: ${lessonData.id} - ${lessonData.title}');
+            print('❓ عدد أسئلة الاختبار: ${lessonData.quiz.length}');
+            
+            if (lessonData.id == lessonId) {
+              print('✅ تم العثور على الدرس المطلوب: ${lessonData.title}');
+              return lessonData;
+            }
           }
         } catch (e) {
           print('⚠️ خطأ في فحص الملف $fileName: $e');
         }
       }
       
+      print('❌ لم يتم العثور على الدرس المحلي: $lessonId');
       return null;
     } catch (e) {
       print('❌ خطأ في البحث عن الدرس المحلي: $e');
@@ -69,8 +79,12 @@ class LocalService {
   /// تحميل درس من ملف assets
   static Future<LessonModel?> _loadLessonFromAssets(String fileName) async {
     try {
+      print('📖 تحميل الملف: $_lessonsPath/$fileName');
       final String jsonString = await rootBundle.loadString('$_lessonsPath/$fileName');
+      print('📄 تم قراءة المحتوى، الطول: ${jsonString.length} حرف');
+      
       final Map<String, dynamic> jsonData = json.decode(jsonString);
+      print('🔧 تم تحليل JSON، المفاتيح: ${jsonData.keys.toList()}');
       
       // تحويل التواريخ من String إلى DateTime
       if (jsonData['createdAt'] is String) {
@@ -80,7 +94,11 @@ class LocalService {
         jsonData['updatedAt'] = DateTime.parse(jsonData['updatedAt']);
       }
       
-      return LessonModel.fromMap(jsonData);
+      final lesson = LessonModel.fromMap(jsonData);
+      print('✅ تم إنشاء نموذج الدرس: ${lesson.title}');
+      print('❓ عدد الأسئلة: ${lesson.quiz.length}');
+      
+      return lesson;
     } catch (e) {
       print('❌ خطأ في تحميل الملف $fileName: $e');
       return null;

@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../models/lesson_model.dart';
 import '../../models/quiz_result_model.dart';
 import '../../services/firebase_service.dart';
+import '../../services/reward_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../models/progress_model.dart';
 
@@ -31,10 +32,12 @@ class _QuizScreenState extends State<QuizScreen> {
   int _timeRemaining = 300; // 5 minutes
   bool _isCompleted = false;
   QuizResultModel? _result;
+  bool _alreadyCompleted = false;
 
   @override
   void initState() {
     super.initState();
+    _checkIfAlreadyCompleted();
     _loadLesson();
     _startTimer();
   }
@@ -46,19 +49,50 @@ class _QuizScreenState extends State<QuizScreen> {
     super.dispose();
   }
 
+  /// التحقق من إكمال الاختبار مسبقاً
+  Future<void> _checkIfAlreadyCompleted() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.uid ?? 'guest';
+    
+    _alreadyCompleted = await RewardService.isQuizCompleted(widget.lessonId, userId);
+    
+    if (_alreadyCompleted) {
+      print('⚠️ تم إكمال هذا الاختبار مسبقاً');
+    }
+  }
+
   Future<void> _loadLesson() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
     
-    if (authProvider.user != null) {
-      await lessonProvider.loadLesson(widget.lessonId, authProvider.user!.uid);
+    print('🔍 بدء تحميل الدرس: ${widget.lessonId}');
+    
+    try {
+      // تحميل الدرس للمستخدمين المسجلين والضيوف
+      String userId = authProvider.user?.uid ?? 'guest';
+      await lessonProvider.loadLesson(widget.lessonId, userId);
       
-      // Initialize selected answers
       final lesson = lessonProvider.currentLesson;
-      if (lesson != null) {
+      print('📚 تم تحميل الدرس: ${lesson?.title}');
+      print('❓ عدد أسئلة الاختبار: ${lesson?.quiz.length ?? 0}');
+      
+      if (lesson != null && lesson.quiz.isNotEmpty) {
         setState(() {
           _selectedAnswers = List.filled(lesson.quiz.length, -1);
         });
+        print('✅ تم تهيئة الإجابات: ${_selectedAnswers.length} سؤال');
+      } else {
+        print('⚠️ لا توجد أسئلة اختبار في الدرس');
+      }
+    } catch (e) {
+      print('❌ خطأ في تحميل الدرس: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل الاختبار: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -106,7 +140,35 @@ class _QuizScreenState extends State<QuizScreen> {
     final lesson = _getCurrentLesson();
     if (lesson == null) return;
 
-    // Calculate results
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.uid ?? 'guest';
+
+    // التحقق من عدم إكمال الاختبار مسبقاً
+    if (await RewardService.isQuizCompleted(widget.lessonId, userId)) {
+      setState(() {
+        _isCompleted = true;
+        _result = QuizResultModel(
+          lessonId: widget.lessonId,
+          score: 0,
+          correctAnswers: 0,
+          totalQuestions: lesson.quiz.length,
+          answers: _selectedAnswers,
+          completedAt: DateTime.now(),
+        );
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم إكمال هذا الاختبار مسبقاً'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // حساب النتائج
     int correctAnswers = 0;
     for (int i = 0; i < lesson.quiz.length; i++) {
       if (i < _selectedAnswers.length && _selectedAnswers[i] == lesson.quiz[i].correctAnswerIndex) {
@@ -114,8 +176,14 @@ class _QuizScreenState extends State<QuizScreen> {
       }
     }
 
-    final score = lesson.quiz.isNotEmpty ? ((correctAnswers / lesson.quiz.length) * 100).round() : 0;
+    final score = RewardService.calculateScore(correctAnswers, lesson.quiz.length);
     
+    // التحقق من صحة النتيجة
+    if (!RewardService.isValidScore(score, lesson.quiz.length)) {
+      print('❌ نتيجة غير صحيحة: $score');
+      return;
+    }
+
     _result = QuizResultModel(
       lessonId: widget.lessonId,
       score: score,
@@ -125,26 +193,36 @@ class _QuizScreenState extends State<QuizScreen> {
       completedAt: DateTime.now(),
     );
 
-    // Save result
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    
-    if (authProvider.user != null && !authProvider.isGuestUser) {
-      await lessonProvider.saveQuizResult(
-        authProvider.user!.uid,
-        widget.lessonId,
-        _result!,
-      );
-      
-      // Add XP and gems if passed
-      if (_result!.isPassed) {
-        await userProvider.addXPAndGemsLocally(
-          _result!.score >= 90 ? 150 : _result!.score >= 80 ? 125 : 100,
-          _result!.score >= 90 ? 8 : _result!.score >= 80 ? 7 : 5,
-          'إكمال اختبار: ${_result!.score}%'
-        );
+    print('📊 نتيجة الاختبار: $score% (${correctAnswers}/${lesson.quiz.length})');
+
+    // حفظ النتيجة وإضافة المكافآت
+    if (!authProvider.isGuestUser && authProvider.user != null) {
+      try {
+        // حفظ نتيجة الاختبار
+        await FirebaseService.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
+        
+        // تسجيل إكمال الاختبار
+        await RewardService.markQuizCompleted(widget.lessonId, userId, score);
+        
+        // إضافة المكافآت إذا نجح
+        if (_result!.isPassed) {
+          final rewardInfo = RewardService.getLessonRewards(lesson, score);
+          final userProvider = Provider.of<UserProvider>(context, listen: false);
+          
+          final success = await userProvider.addReward(rewardInfo, authProvider.user!.uid);
+          
+          if (success) {
+            print('✅ تم إضافة المكافآت: $rewardInfo');
+          } else {
+            print('❌ فشل في إضافة المكافآت');
+          }
+        }
+      } catch (e) {
+        print('❌ خطأ في حفظ النتيجة: $e');
       }
+    } else {
+      // للضيوف - تسجيل الإكمال محلياً فقط
+      await RewardService.markQuizCompleted(widget.lessonId, userId, score);
     }
 
     setState(() {
@@ -202,13 +280,78 @@ class _QuizScreenState extends State<QuizScreen> {
       body: Consumer<LessonProvider>(
         builder: (context, lessonProvider, child) {
           if (lessonProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('جاري تحميل الاختبار...'),
+                ],
+              ),
+            );
           }
 
           final lesson = lessonProvider.currentLesson;
-          if (lesson == null || lesson.quiz.isEmpty) {
-            return const Center(
-              child: Text('لا يوجد اختبار لهذا الدرس'),
+          
+          // التحقق من وجود الدرس
+          if (lesson == null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text('لم يتم العثور على الدرس'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => context.pop(),
+                    child: const Text('العودة'),
+                  ),
+                ],
+              ),
+            );
+          }
+          
+          // التحقق من وجود أسئلة الاختبار
+          if (lesson.quiz.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.quiz_outlined, size: 64, color: Colors.orange),
+                  const SizedBox(height: 16),
+                  const Text('لا يوجد اختبار لهذا الدرس'),
+                  const SizedBox(height: 8),
+                  Text('الدرس: ${lesson.title}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => context.pop(),
+                    child: const Text('العودة'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // عرض تحذير إذا تم إكمال الاختبار مسبقاً
+          if (_alreadyCompleted && !_isCompleted) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.check_circle, size: 64, color: Colors.green),
+                  const SizedBox(height: 16),
+                  const Text('تم إكمال هذا الاختبار مسبقاً'),
+                  const SizedBox(height: 8),
+                  const Text('لا يمكن إعادة الاختبار للحصول على مكافآت إضافية'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => context.pop(),
+                    child: const Text('العودة'),
+                  ),
+                ],
+              ),
             );
           }
 
@@ -434,6 +577,8 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildResultScreen(LessonModel lesson, QuizResultModel result) {
+    final rewardInfo = result.isPassed ? RewardService.getLessonRewards(lesson, result.score) : null;
+    
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -548,12 +693,13 @@ class _QuizScreenState extends State<QuizScreen> {
                       value: '${result.totalQuestions - result.correctAnswers}',
                       color: Colors.red,
                     ),
-                    _buildResultItem(
-                      icon: Icons.star,
-                      label: 'النقاط المكتسبة',
-                      value: result.isPassed ? '100 XP' : '0 XP',
-                      color: Colors.amber,
-                    ),
+                    if (rewardInfo != null)
+                      _buildResultItem(
+                        icon: Icons.star,
+                        label: 'XP مكتسب',
+                        value: '${rewardInfo.xp}',
+                        color: Colors.amber,
+                      ),
                   ],
                 ),
               ],
@@ -563,7 +709,7 @@ class _QuizScreenState extends State<QuizScreen> {
           const SizedBox(height: 32),
           
           // Rewards (if passed)
-          if (result.isPassed)
+          if (result.isPassed && rewardInfo != null)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -595,7 +741,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '100 نقطة خبرة + 5 جواهر',
+                    '${rewardInfo.xp} نقطة خبرة + ${rewardInfo.gems} جوهرة',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Colors.amber[700],
                       fontWeight: FontWeight.w600,
@@ -623,18 +769,9 @@ class _QuizScreenState extends State<QuizScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
-                    text: 'إعادة المحاولة',
-                    onPressed: () {
-                      setState(() {
-                        _isCompleted = false;
-                        _result = null;
-                        _currentQuestionIndex = 0;
-                        _selectedAnswers = List.filled(lesson.quiz.length, -1);
-                        _timeRemaining = 300;
-                      });
-                      _startTimer();
-                    },
-                    icon: Icons.refresh,
+                    text: 'العودة للدرس',
+                    onPressed: () => context.pop(),
+                    icon: Icons.school,
                   ),
                 ),
               

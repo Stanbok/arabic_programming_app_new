@@ -8,6 +8,7 @@ import 'dart:io';
 import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firebase_service.dart';
+import '../../services/reward_service.dart';
 import '../../widgets/custom_button.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -28,7 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user == null) return;
     
     // Check if user has enough gems
-    if (user.gems < 100) {
+    if (userProvider.totalGems < 100) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('تحتاج إلى 100 جوهرة لتغيير صورة الملف الشخصي'),
@@ -92,24 +93,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _shareApp() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    
+    if (authProvider.isGuestUser) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول للحصول على مكافأة المشاركة'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
     try {
-      await Share.share(
+      // التحقق من إمكانية الحصول على المكافأة
+      final userId = authProvider.user?.uid ?? 'guest';
+      final canClaim = await RewardService.canClaimShareReward(userId);
+      
+      if (!canClaim && !authProvider.isGuestUser) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم الحصول على مكافأة المشاركة مسبقاً (مرة واحدة كل 24 ساعة)'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // تنفيذ المشاركة الفعلية
+      final result = await Share.shareWithResult(
         'تعلم البايثون بالعربية مع تطبيق Python in Arabic! 🐍\n'
         'تطبيق تفاعلي ممتع لتعلم البرمجة بطريقة سهلة ومبسطة.\n'
         'حمل التطبيق الآن واستمتع بالتعلم!',
         subject: 'Python in Arabic - تعلم البايثون بالعربية',
       );
 
-      // Grant share reward
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (authProvider.user != null) {
-        await FirebaseService.grantShareReward(authProvider.user!.uid);
+      // التحقق من المشاركة الفعلية
+      bool actuallyShared = result.status == ShareResultStatus.success;
+      
+      if (actuallyShared && !authProvider.isGuestUser) {
+        // منح المكافأة
+        final rewardInfo = await RewardService.claimShareReward(userId, true);
         
+        if (rewardInfo != null) {
+          final success = await userProvider.addReward(rewardInfo, userId);
+          
+          if (success && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('شكراً لمشاركة التطبيق! حصلت على ${rewardInfo.gems} جوهرة 💎'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else if (!actuallyShared) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('شكراً لمشاركة التطبيق! حصلت على 50 جوهرة 💎'),
-              backgroundColor: Colors.green,
+              content: Text('لم يتم إكمال المشاركة'),
+              backgroundColor: Colors.orange,
             ),
           );
         }
@@ -160,6 +203,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildProfileHeader(user, userProvider),
                 
                 const SizedBox(height: 24),
+                
+                // Pending Rewards Indicator
+                if (userProvider.hasPendingRewards)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sync, color: Colors.blue),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'يتم مزامنة المكافآت مع الخادم...',
+                            style: TextStyle(color: Colors.blue),
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ],
+                    ),
+                  ),
                 
                 // Stats Cards
                 _buildStatsSection(user, stats),
@@ -293,7 +366,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              'المستوى ${user.level}',
+              'المستوى ${userProvider.currentLevel}',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,

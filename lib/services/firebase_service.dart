@@ -207,9 +207,11 @@ class FirebaseService {
     }
   }
 
-  // XP and Gems Methods
+  // XP and Gems Methods - المصدر الوحيد لتحديث المكافآت في Firebase
   static Future<void> addXPAndGems(String userId, int xp, int gems, String reason) async {
     try {
+      print('🔄 إضافة مكافآت Firebase: +$xp XP, +$gems Gems ($reason)');
+      
       final batch = _firestore.batch();
       
       // جلب بيانات المستخدم الحالية
@@ -229,10 +231,10 @@ class FirebaseService {
         batch.update(userRef, {
           'xp': FieldValue.increment(xp),
           'gems': FieldValue.increment(gems),
-          'currentLevel': newLevel, // تحديث المستوى
+          'currentLevel': newLevel,
         });
         
-        // إضافة مكافأة ترقية المستوى
+        // إضافة مكافأة ترقية المستوى (مرة واحدة فقط)
         if (newLevel > currentLevel) {
           batch.update(userRef, {
             'gems': FieldValue.increment(20), // مكافأة 20 جوهرة للترقية
@@ -252,6 +254,8 @@ class FirebaseService {
             'reason': 'ترقية للمستوى $newLevel',
             'timestamp': FieldValue.serverTimestamp(),
           });
+          
+          print('🎉 ترقية للمستوى $newLevel! مكافأة إضافية: +20 جوهرة');
         }
       } else {
         // إذا لم توجد بيانات المستخدم، أنشئ مستخدم جديد
@@ -271,7 +275,7 @@ class FirebaseService {
           .doc();
       
       batch.set(transactionRef, {
-        'type': xp > 0 ? 'xp_gain' : 'gems_spent',
+        'type': xp > 0 ? 'reward' : 'expense',
         'xpAmount': xp,
         'gemsAmount': gems,
         'reason': reason,
@@ -279,7 +283,9 @@ class FirebaseService {
       });
       
       await batch.commit();
+      print('✅ تم تحديث المكافآت في Firebase بنجاح');
     } catch (e) {
+      print('❌ خطأ في تحديث النقاط: $e');
       throw Exception('خطأ في تحديث النقاط: ${e.toString()}');
     }
   }
@@ -320,6 +326,17 @@ class FirebaseService {
         batch.delete(doc.reference);
       }
       
+      // Delete transactions subcollection
+      final transactionSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('transactions')
+          .get();
+      
+      for (var doc in transactionSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      
       await batch.commit();
     } catch (e) {
       throw Exception('خطأ في إعادة تعيين الحساب: ${e.toString()}');
@@ -342,7 +359,7 @@ class FirebaseService {
           'currentLevel': newLevel,
         });
         
-        // Award bonus gems for level up
+        // Award bonus gems for level up (handled in addXPAndGems now)
         await addXPAndGems(userId, 0, 20, 'مكافأة الوصول للمستوى $newLevel');
       }
     } catch (e) {
@@ -356,20 +373,6 @@ class FirebaseService {
     if (xp < 600) return 3;
     if (xp < 1000) return 4;
     return (xp / 500).floor() + 1;
-  }
-
-  // Share functionality
-  static Future<void> grantShareReward(String userId) async {
-    try {
-      await addXPAndGems(userId, 0, 50, 'مشاركة التطبيق');
-      
-      // Save share timestamp
-      await _firestore.collection('users').doc(userId).update({
-        'lastShareAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      throw Exception('خطأ في منح مكافأة المشاركة: ${e.toString()}');
-    }
   }
 
   // التحقق من اتصال الشبكة

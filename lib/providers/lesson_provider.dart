@@ -330,20 +330,40 @@ class LessonProvider with ChangeNotifier {
   /// تحميل درس معين مع أولوية للمحتوى المحلي
   Future<void> loadLesson(String lessonId, String userId) async {
     try {
+      print('🚀 بدء تحميل الدرس: $lessonId للمستخدم: $userId');
       _setLoading(true);
       _clearError();
       
       // البحث في الدروس المحلية أولاً
+      print('🔍 البحث في الدروس المحلية...');
       _currentLesson = await LocalService.getLocalLesson(lessonId);
       
-      if (_currentLesson == null) {
+      if (_currentLesson != null) {
+        print('✅ تم العثور على الدرس محلياً: ${_currentLesson!.title}');
+        print('❓ عدد أسئلة الاختبار: ${_currentLesson!.quiz.length}');
+        
+        // طباعة تفاصيل الأسئلة للتأكد
+        for (int i = 0; i < _currentLesson!.quiz.length; i++) {
+          final question = _currentLesson!.quiz[i];
+          print('❓ السؤال ${i + 1}: ${question.question}');
+          print('   الخيارات: ${question.options.length}');
+        }
+      } else {
+        print('⚠️ لم يتم العثور على الدرس محلياً، البحث في Firebase...');
         // البحث في Firebase
         _currentLesson = await FirebaseService.getLesson(lessonId);
+        
+        if (_currentLesson != null) {
+          print('✅ تم العثور على الدرس في Firebase: ${_currentLesson!.title}');
+        } else {
+          print('❌ لم يتم العثور على الدرس في أي مكان');
+        }
       }
       
       notifyListeners();
     } catch (e) {
-      _setError('فشل في تحميل الدرس');
+      print('❌ خطأ في تحميل الدرس: $e');
+      _setError('فشل في تحميل الدرس: $e');
     } finally {
       _setLoading(false);
     }

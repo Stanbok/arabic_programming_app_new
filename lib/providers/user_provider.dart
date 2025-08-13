@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../services/firebase_service.dart';
+import '../services/reward_service.dart';
 import '../models/user_model.dart';
 import '../models/quiz_result_model.dart';
 
@@ -14,26 +15,33 @@ class UserProvider with ChangeNotifier {
   StreamSubscription<UserModel?>? _userSubscription;
   bool _isListening = false;
   
-  // تتبع محلي للـ XP والجواهر
-  int _localXP = 0;
-  int _localGems = 0;
-  bool _hasLocalProgress = false;
+  // تتبع محلي للمكافآت المعلقة (في انتظار المزامنة)
+  List<RewardInfo> _pendingRewards = [];
+  bool _hasPendingRewards = false;
 
   UserModel? get user => _user;
   List<QuizResultModel> get quizResults => _quizResults;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isListening => _isListening;
-  int get totalXP => (_user?.xp ?? 0) + _localXP;
-  int get totalGems => (_user?.gems ?? 0) + _localGems;
+  bool get hasPendingRewards => _hasPendingRewards;
+  
+  // حساب إجمالي XP والجواهر مع المكافآت المعلقة
+  int get totalXP {
+    int baseXP = _user?.xp ?? 0;
+    int pendingXP = _pendingRewards.fold(0, (sum, reward) => sum + reward.xp);
+    return baseXP + pendingXP;
+  }
+  
+  int get totalGems {
+    int baseGems = _user?.gems ?? 0;
+    int pendingGems = _pendingRewards.fold(0, (sum, reward) => sum + reward.gems);
+    return baseGems + pendingGems;
+  }
+  
   int get currentLevel {
     if (_user == null) return 1;
-    
-    final totalXP = (_user!.xp) + _localXP;
-    final calculatedLevel = _calculateLevelFromXP(totalXP);
-    
-    // استخدام أعلى قيمة بين المستوى المحفوظ والمحسوب
-    return calculatedLevel > _user!.currentLevel ? calculatedLevel : _user!.currentLevel;
+    return _calculateLevelFromXP(totalXP);
   }
 
   // تحميل فوري لبيانات المستخدم
@@ -42,8 +50,8 @@ class UserProvider with ChangeNotifier {
       _setLoading(true);
       _clearError();
       
-      // تحميل التقدم المحلي فوراً
-      await _loadLocalProgress();
+      // تحميل المكافآت المعلقة فوراً
+      await _loadPendingRewards();
       notifyListeners();
       
       // تحميل بيانات Firebase في الخلفية
@@ -73,8 +81,8 @@ class UserProvider with ChangeNotifier {
         await _createNewUser(userId);
       }
       
-      // مزامنة التقدم المحلي مع Firebase
-      await _syncLocalProgressWithFirebase();
+      // مزامنة المكافآت المعلقة مع Firebase
+      await _syncPendingRewardsWithFirebase(userId);
       
       notifyListeners();
     } catch (e) {
@@ -107,74 +115,91 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // إضافة XP وجواهر محلياً (فوري)
-  Future<void> addXPAndGemsLocally(int xp, int gems, String reason) async {
-    _localXP += xp;
-    _localGems += gems;
-    _hasLocalProgress = true;
-    
-    await _saveLocalProgress();
-    notifyListeners();
-    
-    print('💎 تم إضافة محلياً: +$xp XP, +$gems جوهرة ($reason)');
-    
-    // مزامنة مع Firebase في الخلفية
-    _syncWithFirebaseInBackground(xp, gems, reason);
-  }
-
-  // مزامنة مع Firebase في الخلفية
-  Future<void> _syncWithFirebaseInBackground(int xp, int gems, String reason) async {
-    if (_user == null) return;
-    
+  /// إضافة مكافأة - المصدر الوحيد لإضافة XP والجواهر
+  Future<bool> addReward(RewardInfo rewardInfo, String userId) async {
     try {
-      await FirebaseService.addXPAndGems(_user!.id, xp, gems, reason)
-          .timeout(const Duration(seconds: 10));
+      print('💎 إضافة مكافأة: $rewardInfo');
       
-      print('🔄 تم مزامنة التقدم مع Firebase');
+      // التحقق من صحة المكافأة
+      if (!_isValidReward(rewardInfo)) {
+        print('❌ مكافأة غير صحيحة: $rewardInfo');
+        return false;
+      }
+      
+      // إضافة المكافأة للقائمة المعلقة
+      _pendingRewards.add(rewardInfo);
+      _hasPendingRewards = true;
+      
+      // حفظ محلياً
+      await _savePendingRewards();
+      
+      // تحديث الواجهة فوراً
+      notifyListeners();
+      
+      // مزامنة مع Firebase في الخلفية
+      _syncRewardWithFirebaseInBackground(rewardInfo, userId);
+      
+      return true;
+    } catch (e) {
+      print('❌ خطأ في إضافة المكافأة: $e');
+      return false;
+    }
+  }
+  
+  /// مزامنة مكافأة واحدة مع Firebase في الخلفية
+  Future<void> _syncRewardWithFirebaseInBackground(RewardInfo rewardInfo, String userId) async {
+    try {
+      await FirebaseService.addXPAndGems(
+        userId, 
+        rewardInfo.xp, 
+        rewardInfo.gems, 
+        _getRewardDescription(rewardInfo)
+      ).timeout(const Duration(seconds: 10));
+      
+      // إزالة المكافأة من القائمة المعلقة بعد المزامنة الناجحة
+      _pendingRewards.removeWhere((r) => 
+        r.xp == rewardInfo.xp && 
+        r.gems == rewardInfo.gems && 
+        r.source == rewardInfo.source &&
+        r.lessonId == rewardInfo.lessonId
+      );
+      
+      _hasPendingRewards = _pendingRewards.isNotEmpty;
+      await _savePendingRewards();
+      
+      print('🔄 تم مزامنة المكافأة مع Firebase: $rewardInfo');
+      notifyListeners();
     } catch (e) {
       print('⚠️ فشل في المزامنة مع Firebase: $e');
     }
   }
 
-  // حفظ التقدم المحلي
-  Future<void> _saveLocalProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('local_xp', _localXP);
-    await prefs.setInt('local_gems', _localGems);
-    await prefs.setBool('has_local_progress', _hasLocalProgress);
-  }
-
-  // تحميل التقدم المحلي
-  Future<void> _loadLocalProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    _localXP = prefs.getInt('local_xp') ?? 0;
-    _localGems = prefs.getInt('local_gems') ?? 0;
-    _hasLocalProgress = prefs.getBool('has_local_progress') ?? false;
-  }
-
-  // مزامنة التقدم المحلي مع Firebase
-  Future<void> _syncLocalProgressWithFirebase() async {
-    if (!_hasLocalProgress || _user == null) return;
+  /// مزامنة جميع المكافآت المعلقة مع Firebase
+  Future<void> _syncPendingRewardsWithFirebase(String userId) async {
+    if (_pendingRewards.isEmpty) return;
     
     try {
-      if (_localXP > 0 || _localGems > 0) {
+      print('🔄 مزامنة ${_pendingRewards.length} مكافأة معلقة...');
+      
+      for (RewardInfo reward in List.from(_pendingRewards)) {
         await FirebaseService.addXPAndGems(
-          _user!.id, 
-          _localXP, 
-          _localGems, 
-          'مزامنة التقدم المحلي'
+          userId, 
+          reward.xp, 
+          reward.gems, 
+          _getRewardDescription(reward)
         ).timeout(const Duration(seconds: 10));
         
-        // مسح التقدم المحلي بعد المزامنة
-        _localXP = 0;
-        _localGems = 0;
-        _hasLocalProgress = false;
-        await _saveLocalProgress();
-        
-        print('🔄 تم مزامنة التقدم المحلي مع Firebase');
+        // إزالة المكافأة بعد المزامنة الناجحة
+        _pendingRewards.remove(reward);
       }
+      
+      _hasPendingRewards = false;
+      await _savePendingRewards();
+      
+      print('✅ تم مزامنة جميع المكافآت المعلقة');
+      notifyListeners();
     } catch (e) {
-      print('⚠️ فشل في مزامنة التقدم المحلي: $e');
+      print('⚠️ فشل في مزامنة المكافآت المعلقة: $e');
     }
   }
 
@@ -237,17 +262,6 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  Future<void> addXPAndGems(int xp, int gems, String reason) async {
-    if (_user == null) return;
-    
-    try {
-      await FirebaseService.addXPAndGems(_user!.id, xp, gems, reason);
-      // The stream listener will automatically update the user data
-    } catch (e) {
-      _setError(e.toString());
-    }
-  }
-
   Future<String?> uploadProfileImage(String imagePath) async {
     if (_user == null) return null;
     
@@ -255,7 +269,7 @@ class UserProvider with ChangeNotifier {
       _setLoading(true);
       
       // Deduct 100 gems for profile image upload
-      if (_user!.gems < 100) {
+      if (totalGems < 100) {
         throw Exception('تحتاج إلى 100 جوهرة لتغيير صورة الملف الشخصي');
       }
       
@@ -284,8 +298,17 @@ class UserProvider with ChangeNotifier {
     
     try {
       _setLoading(true);
+      
+      // إعادة تعيين المكافآت المحلية
+      await RewardService.resetAllRewards(_user!.id);
+      _pendingRewards.clear();
+      _hasPendingRewards = false;
+      await _savePendingRewards();
+      
+      // إعادة تعيين البيانات في Firebase
       await FirebaseService.resetUserProgress(_user!.id);
-      // The stream listener will automatically update the user data
+      
+      notifyListeners();
     } catch (e) {
       _setError(e.toString());
     } finally {
@@ -313,6 +336,68 @@ class UserProvider with ChangeNotifier {
       'totalTimeSpent': 0, // Would need to calculate from progress data
       'completionRate': completionRate,
     };
+  }
+
+  /// حفظ المكافآت المعلقة محلياً
+  Future<void> _savePendingRewards() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rewardsJson = _pendingRewards.map((r) => r.toMap()).toList();
+      await prefs.setString('pending_rewards', rewardsJson.toString());
+      await prefs.setBool('has_pending_rewards', _hasPendingRewards);
+    } catch (e) {
+      print('❌ خطأ في حفظ المكافآت المعلقة: $e');
+    }
+  }
+
+  /// تحميل المكافآت المعلقة محلياً
+  Future<void> _loadPendingRewards() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _hasPendingRewards = prefs.getBool('has_pending_rewards') ?? false;
+      
+      // يمكن تحسين هذا لاحقاً لتحميل المكافآت الفعلية
+      // حالياً نعتمد على النظام الجديد
+      _pendingRewards = [];
+    } catch (e) {
+      print('❌ خطأ في تحميل المكافآت المعلقة: $e');
+      _pendingRewards = [];
+      _hasPendingRewards = false;
+    }
+  }
+
+  /// التحقق من صحة المكافأة
+  bool _isValidReward(RewardInfo rewardInfo) {
+    // التحقق من القيم الأساسية
+    if (rewardInfo.xp < 0 || rewardInfo.gems < 0) {
+      return false;
+    }
+    
+    // التحقق من المصدر
+    if (rewardInfo.source.isEmpty) {
+      return false;
+    }
+    
+    // التحقق من النتيجة إذا كانت من اختبار
+    if (rewardInfo.source == 'lesson_completion' && rewardInfo.score != null) {
+      if (rewardInfo.score! < 0 || rewardInfo.score! > 100) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  /// الحصول على وصف المكافأة
+  String _getRewardDescription(RewardInfo rewardInfo) {
+    switch (rewardInfo.source) {
+      case 'lesson_completion':
+        return 'إكمال درس: ${rewardInfo.lessonId} (${rewardInfo.score}%)';
+      case 'app_share':
+        return 'مشاركة التطبيق';
+      default:
+        return 'مكافأة: ${rewardInfo.source}';
+    }
   }
 
   void _setLoading(bool loading) {

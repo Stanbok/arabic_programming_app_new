@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initializeData();
+    _initializeDataInstantly();
   }
 
   @override
@@ -41,51 +41,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _initializeData() async {
+  Future<void> _initializeDataInstantly() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
-
-    if (authProvider.user == null) {
-      // إذا لم يكن المستخدم مسجل دخول، انتقل لصفحة تسجيل الدخول
-      if (mounted) {
-        context.go('/login');
-      }
-      return;
-    }
 
     try {
       setState(() {
         _isLoading = true;
       });
 
-      print('🚀 بدء تهيئة البيانات...');
-      print('👤 المستخدم: ${authProvider.user!.uid}');
+      print('🚀 بدء التحميل الفوري...');
 
-      // بدء الاستماع لبيانات المستخدم
-      userProvider.startListening(authProvider.user!.uid);
-      
-      // تحميل بيانات المستخدم إذا لم تكن محملة
-      if (userProvider.user == null) {
-        print('📥 تحميل بيانات المستخدم...');
-        await userProvider.loadUserData(authProvider.user!.uid);
-      }
-
-      // تحميل الدروس
-      print('📚 تحميل الدروس...');
+      // المرحلة 1: تحميل الدروس المحلية فوراً (أولوية قصوى)
       await lessonProvider.loadLessons();
-
-      if (lessonProvider.lessons.isEmpty) {
-        print('⚠️ لم يتم تحميل أي دروس!');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('تحذير: لم يتم العثور على دروس في قاعدة البيانات'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 5),
-            ),
-          );
-        }
+      
+      // المرحلة 2: تحميل بيانات المستخدم إذا كان مسجل دخول
+      if (authProvider.user != null && !authProvider.isGuestUser) {
+        print('👤 المستخدم: ${authProvider.user!.uid}');
+        
+        // تحميل فوري لبيانات المستخدم
+        await userProvider.loadUserDataInstantly(authProvider.user!.uid);
       }
 
       setState(() {
@@ -93,23 +69,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _isLoading = false;
       });
       
-      print('✅ تم تهيئة البيانات بنجاح');
+      print('✅ تم التحميل الفوري بنجاح');
+      
     } catch (e) {
-      print('❌ خطأ في تحميل البيانات: $e');
+      print('❌ خطأ في التحميل الفوري: $e');
       setState(() {
         _isLoading = false;
       });
       
+      // عرض رسالة خطأ مبسطة
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('خطأ في تحميل البيانات: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            content: const Text('تم تحميل المحتوى المحلي - بعض الميزات قد تحتاج اتصال إنترنت'),
+            backgroundColor: Colors.orange,
             action: SnackBarAction(
               label: 'إعادة المحاولة',
-              onPressed: _initializeData,
+              onPressed: _initializeDataInstantly,
             ),
-            duration: const Duration(seconds: 10),
           ),
         );
       }
@@ -121,16 +98,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
 
-    if (authProvider.user == null) return;
-
     try {
-      // إعادة تحميل بيانات المستخدم
-      await userProvider.loadUserData(authProvider.user!.uid);
-      
       // إعادة تحميل الدروس
-      await lessonProvider.loadLessons();
+      await lessonProvider.loadLessons(forceRefresh: true);
+      
+      // إعادة تحميل بيانات المستخدم إذا كان مسجل دخول
+      if (authProvider.user != null && !authProvider.isGuestUser) {
+        await userProvider.loadUserDataInstantly(authProvider.user!.uid);
+      }
     } catch (e) {
-      print('خطأ في تحديث البيانات: $e');
+      print('⚠️ خطأ في تحديث البيانات: $e');
     }
   }
 
@@ -139,8 +116,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         return Scaffold(
+          backgroundColor: Colors.white, // خلفية بيضاء ثابتة
           appBar: AppBar(
             title: const Text('الرئيسية'),
+            backgroundColor: Colors.white,
+            elevation: 0,
           ),
           body: _isLoading
               ? const Center(
@@ -149,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       CircularProgressIndicator(),
                       SizedBox(height: 16),
-                      Text('جاري تحميل البيانات...'),
+                      Text('جاري التحميل الفوري...'),
                     ],
                   ),
                 )
@@ -157,20 +137,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   builder: (context, userProvider, lessonProvider, authProvider, child) {
                     final user = userProvider.user;
                     
-                    // إذا لم تكن بيانات المستخدم محملة بعد
-                    if (user == null && !authProvider.isGuestUser) {
-                      return const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('جاري تحميل بيانات المستخدم...'),
-                          ],
-                        ),
-                      );
-                    }
-
                     final availableLessons = lessonProvider.getAvailableLessons(
                       user?.completedLessons ?? [],
                       user?.currentLevel ?? 1,
@@ -178,31 +144,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                     return RefreshIndicator(
                       onRefresh: _refreshData,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Top Section - Profile & XP
-                            if (!authProvider.isGuestUser) _buildTopSection(user!),
-                            if (authProvider.isGuestUser) _buildGuestSection(),
-                            
-                            const SizedBox(height: 24),
-                            
-                            // Welcome Message
-                            _buildWelcomeMessage(user),
-                            
-                            const SizedBox(height: 24),
-                            
-                            // Lessons Grid
-                            _buildLessonsSection(availableLessons, user, lessonProvider.isLoading),
-                            
-                            const SizedBox(height: 24),
-                            
-                            // Level Test Button
-                            if (!authProvider.isGuestUser) _buildLevelTestSection(user!, availableLessons),
-                          ],
+                      child: Container(
+                        color: Colors.white, // خلفية بيضاء
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Top Section - Profile & XP
+                              if (!authProvider.isGuestUser && user != null) 
+                                _buildTopSection(user, userProvider),
+                              if (authProvider.isGuestUser) 
+                                _buildGuestSection(),
+                              
+                              const SizedBox(height: 24),
+                              
+                              // Welcome Message
+                              _buildWelcomeMessage(user),
+                              
+                              const SizedBox(height: 24),
+                              
+                              // Lessons Grid - متاح لجميع المستخدمين
+                              _buildLessonsSection(availableLessons, user, lessonProvider.isLoading),
+                              
+                              const SizedBox(height: 24),
+                              
+                              // Level Test Button
+                              if (!authProvider.isGuestUser && user != null) 
+                                _buildLevelTestSection(user, availableLessons),
+                              
+                              const SizedBox(height: 100),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -214,6 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 return BottomNavigationBar(
                   type: BottomNavigationBarType.fixed,
                   currentIndex: _currentIndex,
+                  backgroundColor: Colors.white,
                   onTap: (index) {
                     setState(() {
                       _currentIndex = index;
@@ -248,6 +223,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               } else if (!authProvider.isGuestUser) {
                 return BottomNavigationBar(
                   currentIndex: _currentIndex,
+                  backgroundColor: Colors.white,
                   onTap: (index) {
                     setState(() {
                       _currentIndex = index;
@@ -276,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTopSection(user) {
+  Widget _buildTopSection(user, UserProvider userProvider) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -367,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               
-              // Gems
+              // Gems (including local gems)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -385,7 +361,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${user.gems}',
+                      '${userProvider.totalGems}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -400,9 +376,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           
           const SizedBox(height: 16),
           
-          // XP Bar
+          // XP Bar (including local XP)
           XPBar(
-            currentXP: user.currentLevelProgress,
+            currentXP: user.currentLevelProgress + (userProvider.totalXP - user.xp),
             maxXP: user.xpForNextLevel,
             level: user.level,
           ),
@@ -431,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
@@ -458,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: Text(
                   user != null
                       ? '$greeting، ${user.name}!'
-                      : 'مرحباً! انضم إلى مجتمعنا لبدء تعلمك.',
+                      : 'مرحباً! ابدأ تعلمك الآن.',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -471,8 +447,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           const SizedBox(height: 8),
           Text(
             user != null
-                ? 'أنت في المستوى ${user.level}. لديك ${user.completedLessons.length} درس مكتمل. استمر في التعلم لتصل إلى المستوى التالي!'
-                : 'مرحباً! انضم إلى مجتمعنا لبدء تعلمك.',
+                ? 'أنت في المستوى ${user.level}. لديك ${user.completedLessons.length} درس مكتمل. استمر في التعلم!'
+                : 'ابدأ رحلتك التعليمية مع الدروس المحلية المتاحة.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
               height: 1.4,
@@ -484,118 +460,127 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildLessonsSection(List availableLessons, user, bool isLessonsLoading) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'الدروس المتاحة',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            if (isLessonsLoading)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-          ],
-        ),
-        
-        const SizedBox(height: 16),
-        
-        if (isLessonsLoading)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: CircularProgressIndicator(),
-            ),
-          )
-        else if (availableLessons.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              ),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.school_outlined,
-                  size: 48,
-                  color: Theme.of(context).colorScheme.primary,
+    return Container(
+      color: Colors.white, // خلفية بيضاء
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'الدروس المتاحة',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'لا توجد دروس متاحة حالياً',
-                  style: Theme.of(context).textTheme.titleMedium,
-                  textAlign: TextAlign.center,
+              ),
+              if (isLessonsLoading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                const SizedBox(height: 8),
-                Consumer<LessonProvider>(
-                  builder: (context, lessonProvider, child) {
-                    if (lessonProvider.lessons.isEmpty) {
-                      return Column(
-                        children: [
-                          Text(
-                            'لم يتم العثور على دروس في قاعدة البيانات',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.red,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            onPressed: _initializeData,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('إعادة تحميل'),
-                          ),
-                        ],
-                      );
-                    } else {
-                      return Text(
-                        'أكمل الدروس الحالية لفتح دروس جديدة\n(المستوى الحالي: ${user?.currentLevel ?? 1})',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                        ),
-                        textAlign: TextAlign.center,
-                      );
-                    }
-                  },
-                ),
-              ],
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.8,
-            ),
-            itemCount: availableLessons.length,
-            itemBuilder: (context, index) {
-              final lesson = availableLessons[index];
-              final isCompleted = user?.completedLessons.contains(lesson.id) ?? false;
-              
-              return LessonCard(
-                lesson: lesson,
-                isCompleted: isCompleted,
-                onTap: () => context.push('/lesson/${lesson.id}'),
-              );
-            },
+            ],
           ),
-      ],
+          
+          const SizedBox(height: 16),
+          
+          if (isLessonsLoading)
+            Container(
+              color: Colors.white,
+              child: const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            )
+          else if (availableLessons.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.school_outlined,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'لا توجد دروس متاحة حالياً',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Consumer<LessonProvider>(
+                    builder: (context, lessonProvider, child) {
+                      if (lessonProvider.lessons.isEmpty) {
+                        return Column(
+                          children: [
+                            Text(
+                              'جاري تحميل الدروس المحلية...',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.orange,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton.icon(
+                              onPressed: _initializeDataInstantly,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('إعادة تحميل'),
+                            ),
+                          ],
+                        );
+                      } else {
+                        return Text(
+                          'أكمل الدروس الحالية لفتح دروس جديدة\n(المستوى الحالي: ${user?.currentLevel ?? 1})',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                          textAlign: TextAlign.center,
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              color: Colors.white, // خلفية بيضاء
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.8,
+                ),
+                itemCount: availableLessons.length,
+                itemBuilder: (context, index) {
+                  final lesson = availableLessons[index];
+                  final isCompleted = user?.completedLessons.contains(lesson.id) ?? false;
+                  
+                  return LessonCard(
+                    lesson: lesson,
+                    isCompleted: isCompleted,
+                    onTap: () => context.push('/lesson/${lesson.id}'),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -607,31 +592,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     
     if (!isLevelCompleted) return const SizedBox.shrink();
     
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'اختبار المستوى',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
+    return Container(
+      color: Colors.white, // خلفية بيضاء
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'اختبار المستوى',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        
-        const SizedBox(height: 16),
-        
-        LevelTestButton(
-          level: user.currentLevel,
-          onPressed: () {
-            // Navigate to level test
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('اختبار المستوى قريباً...'),
-                backgroundColor: Colors.blue,
-              ),
-            );
-          },
-        ),
-      ],
+          
+          const SizedBox(height: 16),
+          
+          LevelTestButton(
+            level: user.currentLevel,
+            onPressed: () {
+              // Navigate to level test
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('اختبار المستوى قريباً...'),
+                  backgroundColor: Colors.blue,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -661,7 +649,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'أنشئ حساباً لحفظ تقدمك والحصول على المزايا',
+                  'يمكنك تصفح الدروس المحلية. أنشئ حساباً لحفظ تقدمك!',
                   style: TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 8),

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../services/firebase_service.dart';
 import '../models/user_model.dart';
 import '../models/quiz_result_model.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserProvider with ChangeNotifier {
   UserModel? _user;
@@ -13,16 +13,165 @@ class UserProvider with ChangeNotifier {
   String? _errorMessage;
   StreamSubscription<UserModel?>? _userSubscription;
   bool _isListening = false;
+  
+  // تتبع محلي للـ XP والجواهر
+  int _localXP = 0;
+  int _localGems = 0;
+  bool _hasLocalProgress = false;
 
   UserModel? get user => _user;
   List<QuizResultModel> get quizResults => _quizResults;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isListening => _isListening;
+  int get totalXP => (_user?.xp ?? 0) + _localXP;
+  int get totalGems => (_user?.gems ?? 0) + _localGems;
+
+  // تحميل فوري لبيانات المستخدم
+  Future<void> loadUserDataInstantly(String userId) async {
+    try {
+      _setLoading(true);
+      _clearError();
+      
+      // تحميل التقدم المحلي فوراً
+      await _loadLocalProgress();
+      notifyListeners();
+      
+      // تحميل بيانات Firebase في الخلفية
+      _loadFirebaseUserDataInBackground(userId);
+      
+    } catch (e) {
+      _setError(e.toString());
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // تحميل بيانات Firebase في الخلفية
+  Future<void> _loadFirebaseUserDataInBackground(String userId) async {
+    try {
+      // بدء الاستماع للتحديثات
+      if (!_isListening) {
+        startListening(userId);
+      }
+      
+      // جلب البيانات مرة واحدة مع timeout قصير
+      _user = await FirebaseService.getUserData(userId)
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
+      
+      if (_user == null) {
+        // إنشاء مستخدم جديد بالقيم الافتراضية
+        await _createNewUser(userId);
+      }
+      
+      // مزامنة التقدم المحلي مع Firebase
+      await _syncLocalProgressWithFirebase();
+      
+      notifyListeners();
+    } catch (e) {
+      print('⚠️ فشل تحميل بيانات Firebase (سيتم المتابعة بالبيانات المحلية): $e');
+    }
+  }
+
+  // إنشاء مستخدم جديد بالقيم الافتراضية
+  Future<void> _createNewUser(String userId) async {
+    try {
+      final newUser = UserModel(
+        id: userId,
+        name: 'مستخدم جديد',
+        email: '',
+        xp: 0,
+        gems: 0,
+        currentLevel: 1,
+        completedLessons: [],
+        createdAt: DateTime.now(),
+        lastLoginAt: DateTime.now(),
+      );
+      
+      await FirebaseService.createUserDocument(newUser)
+          .timeout(const Duration(seconds: 10));
+      
+      _user = newUser;
+      print('✅ تم إنشاء مستخدم جديد بالقيم الافتراضية');
+    } catch (e) {
+      print('⚠️ فشل في إنشاء المستخدم الجديد: $e');
+    }
+  }
+
+  // إضافة XP وجواهر محلياً (فوري)
+  Future<void> addXPAndGemsLocally(int xp, int gems, String reason) async {
+    _localXP += xp;
+    _localGems += gems;
+    _hasLocalProgress = true;
+    
+    await _saveLocalProgress();
+    notifyListeners();
+    
+    print('💎 تم إضافة محلياً: +$xp XP, +$gems جوهرة ($reason)');
+    
+    // مزامنة مع Firebase في الخلفية
+    _syncWithFirebaseInBackground(xp, gems, reason);
+  }
+
+  // مزامنة مع Firebase في الخلفية
+  Future<void> _syncWithFirebaseInBackground(int xp, int gems, String reason) async {
+    if (_user == null) return;
+    
+    try {
+      await FirebaseService.addXPAndGems(_user!.id, xp, gems, reason)
+          .timeout(const Duration(seconds: 10));
+      
+      print('🔄 تم مزامنة التقدم مع Firebase');
+    } catch (e) {
+      print('⚠️ فشل في المزامنة مع Firebase: $e');
+    }
+  }
+
+  // حفظ التقدم المحلي
+  Future<void> _saveLocalProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('local_xp', _localXP);
+    await prefs.setInt('local_gems', _localGems);
+    await prefs.setBool('has_local_progress', _hasLocalProgress);
+  }
+
+  // تحميل التقدم المحلي
+  Future<void> _loadLocalProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    _localXP = prefs.getInt('local_xp') ?? 0;
+    _localGems = prefs.getInt('local_gems') ?? 0;
+    _hasLocalProgress = prefs.getBool('has_local_progress') ?? false;
+  }
+
+  // مزامنة التقدم المحلي مع Firebase
+  Future<void> _syncLocalProgressWithFirebase() async {
+    if (!_hasLocalProgress || _user == null) return;
+    
+    try {
+      if (_localXP > 0 || _localGems > 0) {
+        await FirebaseService.addXPAndGems(
+          _user!.id, 
+          _localXP, 
+          _localGems, 
+          'مزامنة التقدم المحلي'
+        ).timeout(const Duration(seconds: 10));
+        
+        // مسح التقدم المحلي بعد المزامنة
+        _localXP = 0;
+        _localGems = 0;
+        _hasLocalProgress = false;
+        await _saveLocalProgress();
+        
+        print('🔄 تم مزامنة التقدم المحلي مع Firebase');
+      }
+    } catch (e) {
+      print('⚠️ فشل في مزامنة التقدم المحلي: $e');
+    }
+  }
 
   void startListening(String userId) {
     if (_isListening && _userSubscription != null) {
-      return; // Already listening
+      return;
     }
     
     _userSubscription?.cancel();
@@ -34,8 +183,7 @@ class UserProvider with ChangeNotifier {
         notifyListeners();
       },
       onError: (error) {
-        print('خطأ في الاستماع لبيانات المستخدم: $error');
-        _setError(error.toString());
+        print('⚠️ خطأ في الاستماع لبيانات المستخدم: $error');
         _isListening = false;
       },
     );

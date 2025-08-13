@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:async';
 import 'dart:io';
 import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -18,9 +19,40 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserver {
   final ImagePicker _imagePicker = ImagePicker();
   int _currentIndex = 1;
+  bool _isSharing = false;
+  DateTime? _shareStartTime;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // التحقق من العودة للتطبيق بعد المشاركة
+    if (state == AppLifecycleState.resumed && _isSharing && _shareStartTime != null) {
+      final timeDifference = DateTime.now().difference(_shareStartTime!).inSeconds;
+      
+      // إذا كان المستخدم خارج التطبيق لأكثر من 3 ثوانٍ، نعتبر أنه شارك
+      if (timeDifference > 3) {
+        _handleShareReturn(true);
+      } else {
+        _handleShareReturn(false);
+      }
+    }
+  }
 
   Future<void> _changeProfileImage() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
@@ -120,18 +152,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      // تنفيذ المشاركة الفعلية
-      final result = await Share.shareWithResult(
+      // بدء عملية المشاركة
+      setState(() {
+        _isSharing = true;
+        _shareStartTime = DateTime.now();
+      });
+
+      // تنفيذ المشاركة
+      await Share.share(
         'تعلم البايثون بالعربية مع تطبيق Python in Arabic! 🐍\n'
         'تطبيق تفاعلي ممتع لتعلم البرمجة بطريقة سهلة ومبسطة.\n'
         'حمل التطبيق الآن واستمتع بالتعلم!',
         subject: 'Python in Arabic - تعلم البايثون بالعربية',
       );
 
-      // التحقق من المشاركة الفعلية
-      bool actuallyShared = result.status == ShareResultStatus.success;
+      // إعطاء وقت للمشاركة
+      Timer(const Duration(seconds: 1), () {
+        if (_isSharing) {
+          // إذا لم يتم استدعاء didChangeAppLifecycleState، نعتبر أنه لم يشارك
+          _handleShareReturn(false);
+        }
+      });
+
+    } catch (e) {
+      setState(() {
+        _isSharing = false;
+        _shareStartTime = null;
+      });
       
-      if (actuallyShared && !authProvider.isGuestUser) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('حدث خطأ في المشاركة'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleShareReturn(bool actuallyShared) async {
+    if (!_isSharing) return;
+    
+    setState(() {
+      _isSharing = false;
+      _shareStartTime = null;
+    });
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final userId = authProvider.user?.uid ?? 'guest';
+
+    if (actuallyShared && !authProvider.isGuestUser) {
+      try {
         // منح المكافأة
         final rewardInfo = await RewardService.claimShareReward(userId, true);
         
@@ -147,25 +220,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             );
           }
         }
-      } else if (!actuallyShared) {
+      } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('لم يتم إكمال المشاركة'),
-              backgroundColor: Colors.orange,
+              content: Text('حدث خطأ في منح المكافأة'),
+              backgroundColor: Colors.red,
             ),
           );
         }
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('حدث خطأ في المشاركة'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    } else if (!actuallyShared && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لم يتم إكمال المشاركة'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -472,9 +543,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Expanded(
               child: CustomButton(
-                text: 'مشاركة التطبيق',
-                onPressed: _shareApp,
-                icon: Icons.share,
+                text: _isSharing ? 'جاري المشاركة...' : 'مشاركة التطبيق',
+                onPressed: _isSharing ? null : _shareApp,
+                icon: _isSharing ? Icons.hourglass_empty : Icons.share,
                 isOutlined: true,
               ),
             ),

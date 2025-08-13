@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 import '../services/local_service.dart';
 import '../services/cache_service.dart';
+import '../services/reward_service.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
 
@@ -16,10 +17,8 @@ class LessonProvider with ChangeNotifier {
   bool _hasNetworkConnection = true;
   DateTime? _lastCacheUpdate;
   
-  // تتبع محلي للاختبارات المكتملة فقط
+  // تتبع محلي للاختبارات المكتملة فقط (بدون XP/Gems منفصلة)
   Set<String> _localCompletedQuizzes = {};
-  Map<String, int> _localQuizXP = {};
-  Map<String, int> _localQuizGems = {};
 
   List<LessonModel> get lessons => _lessons;
   List<LessonModel> get localLessons => _localLessons;
@@ -283,47 +282,31 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// إكمال اختبار محلياً مع تحديث فوري للـ XP والجواهر
-  Future<void> completeQuizLocally(String userId, String lessonId, int score, Function(int, int, String) addXPCallback) async {
+  /// تسجيل إكمال الاختبار محلياً (بدون حساب مكافآت)
+  Future<void> markQuizCompletedLocally(String lessonId) async {
     try {
-      int xpReward = 100;
-      int gemsReward = 5;
-      
-      if (score >= 90) {
-        xpReward += 50;
-        gemsReward += 3;
-      } else if (score >= 80) {
-        xpReward += 25;
-        gemsReward += 2;
-      }
-      
       _localCompletedQuizzes.add(lessonId);
-      _localQuizXP[lessonId] = xpReward;
-      _localQuizGems[lessonId] = gemsReward;
-      
       await _saveLocalProgress();
-      await addXPCallback(xpReward, gemsReward, 'إكمال اختبار: $score%');
-      
       notifyListeners();
-      _syncQuizCompletionWithFirebase(userId, lessonId, score, xpReward, gemsReward);
       
+      print('✅ تم تسجيل إكمال الاختبار محلياً: $lessonId');
     } catch (e) {
-      print('خطأ في إكمال الاختبار محلياً: $e');
+      print('❌ خطأ في تسجيل إكمال الاختبار محلياً: $e');
     }
   }
 
-  /// حفظ نتيجة الاختبار في Firebase مع تحديث XP والجواهر محلياً
+  /// حفظ نتيجة الاختبار في Firebase
   Future<void> saveQuizResult(String userId, String lessonId, QuizResultModel result) async {
     try {
       await FirebaseService.saveQuizResult(userId, lessonId, result);
       
-      // حساب النقاط بناءً على النتيجة
-      await completeQuizLocally(userId, lessonId, result.score, 
-        (xp, gems, reason) async {
-          // سيتم التعامل مع هذا في UserProvider
-        });
+      // تسجيل الإكمال محلياً
+      await markQuizCompletedLocally(lessonId);
+      
+      // مزامنة مع Firebase في الخلفية
+      _syncQuizCompletionWithFirebase(userId, lessonId);
     } catch (e) {
-      print('خطأ في حفظ نتيجة الاختبار: $e');
+      print('❌ خطأ في حفظ نتيجة الاختبار: $e');
     }
   }
 
@@ -369,85 +352,47 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
+  /// حفظ التقدم المحلي (الاختبارات المكتملة فقط)
   Future<void> _saveLocalProgress() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('local_completed_quizzes', _localCompletedQuizzes.toList());
-      
-      final xpEntries = _localQuizXP.entries.map((e) => '${e.key}:${e.value}').toList();
-      await prefs.setStringList('local_quiz_xp', xpEntries);
-      
-      final gemsEntries = _localQuizGems.entries.map((e) => '${e.key}:${e.value}').toList();
-      await prefs.setStringList('local_quiz_gems', gemsEntries);
     } catch (e) {
-      // تجاهل أخطاء الحفظ
+      print('❌ خطأ في حفظ التقدم المحلي: $e');
     }
   }
 
+  /// تحميل التقدم المحلي (الاختبارات المكتملة فقط)
   Future<void> _loadLocalProgress() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
       final completedQuizzes = prefs.getStringList('local_completed_quizzes') ?? [];
       _localCompletedQuizzes = completedQuizzes.toSet();
-      
-      final xpEntries = prefs.getStringList('local_quiz_xp') ?? [];
-      _localQuizXP.clear();
-      for (var entry in xpEntries) {
-        final parts = entry.split(':');
-        if (parts.length == 2) {
-          _localQuizXP[parts[0]] = int.tryParse(parts[1]) ?? 0;
-        }
-      }
-      
-      final gemsEntries = prefs.getStringList('local_quiz_gems') ?? [];
-      _localQuizGems.clear();
-      for (var entry in gemsEntries) {
-        final parts = entry.split(':');
-        if (parts.length == 2) {
-          _localQuizGems[parts[0]] = int.tryParse(parts[1]) ?? 0;
-        }
-      }
     } catch (e) {
-      // تجاهل أخطاء التحميل
+      print('❌ خطأ في تحميل التقدم المحلي: $e');
+      _localCompletedQuizzes = {};
     }
   }
 
-  Future<void> _syncQuizCompletionWithFirebase(String userId, String lessonId, int score, int xpReward, int gemsReward) async {
+  /// مزامنة إكمال الاختبار مع Firebase (بدون حساب مكافآت)
+  Future<void> _syncQuizCompletionWithFirebase(String userId, String lessonId) async {
     if (!_hasNetworkConnection) return;
     
     try {
-      final quizResult = QuizResultModel(
-        lessonId: lessonId,
-        score: score,
-        correctAnswers: (score * 10 / 100).round(),
-        totalQuestions: 10,
-        answers: [],
-        completedAt: DateTime.now(),
-      );
-      
-      await FirebaseService.saveQuizResult(userId, lessonId, quizResult)
-          .timeout(const Duration(seconds: 10));
-      
-      await FirebaseService.addXPAndGems(userId, xpReward, gemsReward, 'إكمال اختبار: $score%')
-          .timeout(const Duration(seconds: 10));
-      
-      // تحديث قائمة الدروس المكتملة
+      // تحديث قائمة الدروس المكتملة في Firebase
       await FirebaseService.updateUserData(userId, {
         'completedLessons': FieldValue.arrayUnion([lessonId]),
       }).timeout(const Duration(seconds: 10));
       
+      // إزالة من القائمة المحلية بعد المزامنة الناجحة
       _localCompletedQuizzes.remove(lessonId);
-      _localQuizXP.remove(lessonId);
-      _localQuizGems.remove(lessonId);
       await _saveLocalProgress();
+      
+      print('🔄 تم مزامنة إكمال الاختبار مع Firebase: $lessonId');
     } catch (e) {
-      // تجاهل أخطاء المزامنة
+      print('⚠️ فشل في مزامنة إكمال الاختبار مع Firebase: $e');
     }
   }
-
-  int get totalLocalXP => _localQuizXP.values.fold(0, (sum, xp) => sum + xp);
-  int get totalLocalGems => _localQuizGems.values.fold(0, (sum, gems) => sum + gems);
 
   void _setLoading(bool loading) {
     _isLoading = loading;

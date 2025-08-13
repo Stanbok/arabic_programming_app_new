@@ -36,8 +36,6 @@ class LessonProvider with ChangeNotifier {
       _setLoading(true);
       _clearError();
       
-      print('🚀 بدء التحميل الفوري للدروس...');
-      
       // المرحلة 1: تحميل الدروس المحلية فوراً (أولوية قصوى)
       await _loadLocalLessonsInstantly(level: level);
       
@@ -50,7 +48,6 @@ class LessonProvider with ChangeNotifier {
       _loadFirebaseLessonsInBackground(level: level);
       
     } catch (e) {
-      print('❌ خطأ في تحميل الدروس: $e');
       _setError('فشل في تحميل الدروس');
     } finally {
       _setLoading(false);
@@ -60,21 +57,16 @@ class LessonProvider with ChangeNotifier {
   /// تحميل الدروس المحلية فوراً
   Future<void> _loadLocalLessonsInstantly({int? level}) async {
     try {
-      print('⚡ تحميل الدروس المحلية فوراً...');
-      
       _localLessons = await LocalService.getLocalLessons(level: level);
       _lessons = List.from(_localLessons);
       
       // تحميل التقدم المحلي
       await _loadLocalProgress();
       
-      print('✅ تم تحميل ${_lessons.length} درس محلي فوراً');
-      
       // إشعار فوري لعرض الدروس
       notifyListeners();
       
     } catch (e) {
-      print('⚠️ خطأ في تحميل الدروس المحلية: $e');
       _localLessons = [];
       _lessons = [];
     }
@@ -102,24 +94,20 @@ class LessonProvider with ChangeNotifier {
         _lessons = allLessons;
         _lastCacheUpdate = cacheAge;
         
-        print('💾 تم دمج ${cachedLessons.length} درس من الكاش');
         notifyListeners();
       }
     } catch (e) {
-      print('⚠️ خطأ في تحميل الكاش: $e');
+      // تجاهل أخطاء الكاش
     }
   }
 
   /// تحميل دروس Firebase في الخلفية
   Future<void> _loadFirebaseLessonsInBackground({int? level}) async {
     try {
-      print('☁️ تحميل دروس Firebase في الخلفية...');
-      
       _hasNetworkConnection = await FirebaseService.checkConnection()
           .timeout(const Duration(seconds: 2), onTimeout: () => false);
       
       if (!_hasNetworkConnection) {
-        print('📱 وضع أوفلاين - الاعتماد على الدروس المحلية');
         return;
       }
       
@@ -149,12 +137,11 @@ class LessonProvider with ChangeNotifier {
         await CacheService.cacheLessons(_lessons);
         _lastCacheUpdate = DateTime.now();
         
-        print('✅ تم دمج ${firebaseLessons.length} درس من Firebase');
         notifyListeners();
       }
       
     } catch (e) {
-      print('⚠️ خطأ في تحميل دروس Firebase: $e');
+      // تجاهل أخطاء Firebase
     }
   }
 
@@ -169,8 +156,6 @@ class LessonProvider with ChangeNotifier {
       // حفظ التقدم محلياً
       await _saveLocalProgress();
       
-      print('💎 تم إكمال الدرس محلياً: +$xpReward XP, +$gemsReward جوهرة');
-      
       // إشعار فوري
       notifyListeners();
       
@@ -178,7 +163,7 @@ class LessonProvider with ChangeNotifier {
       _syncLessonCompletionWithFirebase(userId, lessonId, xpReward, gemsReward);
       
     } catch (e) {
-      print('❌ خطأ في إكمال الدرس محلياً: $e');
+      // تجاهل الأخطاء
     }
   }
 
@@ -204,8 +189,6 @@ class LessonProvider with ChangeNotifier {
       
       await _saveLocalProgress();
       
-      print('🎯 تم إكمال الاختبار محلياً: $score% (+$xpReward XP, +$gemsReward جوهرة)');
-      
       // إشعار فوري
       notifyListeners();
       
@@ -213,7 +196,7 @@ class LessonProvider with ChangeNotifier {
       _syncQuizCompletionWithFirebase(userId, lessonId, score, xpReward, gemsReward);
       
     } catch (e) {
-      print('❌ خطأ في إكمال الاختبار محلياً: $e');
+      // تجاهل الأخطاء
     }
   }
 
@@ -234,7 +217,7 @@ class LessonProvider with ChangeNotifier {
       await prefs.setStringList('local_lesson_gems', gemsEntries);
       
     } catch (e) {
-      print('⚠️ خطأ في حفظ التقدم المحلي: $e');
+      // تجاهل أخطاء الحفظ
     }
   }
 
@@ -267,10 +250,8 @@ class LessonProvider with ChangeNotifier {
         }
       }
       
-      print('📊 تم تحميل التقدم المحلي: ${_localCompletedLessons.length} درس مكتمل');
-      
     } catch (e) {
-      print('⚠️ خطأ في تحميل التقدم المحلي: $e');
+      // تجاهل أخطاء التحميل
     }
   }
 
@@ -286,8 +267,6 @@ class LessonProvider with ChangeNotifier {
       await FirebaseService.addXPAndGems(userId, xpReward, gemsReward, 'إكمال درس محلي')
           .timeout(const Duration(seconds: 10));
       
-      print('🔄 تم مزامنة إكمال الدرس مع Firebase');
-      
       // إزالة من التقدم المحلي بعد المزامنة
       _localCompletedLessons.remove(lessonId);
       _localLessonXP.remove(lessonId);
@@ -295,7 +274,7 @@ class LessonProvider with ChangeNotifier {
       await _saveLocalProgress();
       
     } catch (e) {
-      print('⚠️ فشل في مزامنة إكمال الدرس: $e');
+      // تجاهل أخطاء المزامنة
     }
   }
 
@@ -306,10 +285,11 @@ class LessonProvider with ChangeNotifier {
     try {
       final quizResult = QuizResultModel(
         lessonId: lessonId,
-        userId: userId,
         score: score,
-        completedAt: DateTime.now(),
+        correctAnswers: (score * 10 / 100).round(), // تقدير تقريبي
+        totalQuestions: 10, // افتراضي
         answers: [], // يمكن إضافة الإجابات لاحقاً
+        completedAt: DateTime.now(),
       );
       
       await FirebaseService.saveQuizResult(userId, lessonId, quizResult)
@@ -318,8 +298,6 @@ class LessonProvider with ChangeNotifier {
       await FirebaseService.addXPAndGems(userId, xpReward, gemsReward, 'إكمال اختبار محلي: $score%')
           .timeout(const Duration(seconds: 10));
       
-      print('🔄 تم مزامنة إكمال الاختبار مع Firebase');
-      
       // إزالة من التقدم المحلي بعد المزامنة
       final quizKey = '${lessonId}_quiz';
       _localLessonXP.remove(quizKey);
@@ -327,18 +305,13 @@ class LessonProvider with ChangeNotifier {
       await _saveLocalProgress();
       
     } catch (e) {
-      print('⚠️ فشل في مزامنة إكمال الاختبار: $e');
+      // تجاهل أخطاء المزامنة
     }
   }
 
   /// الحصول على الدروس المتاحة مع دعم التقدم المحلي
   List<LessonModel> getAvailableLessons(List<String> completedLessons, int currentLevel) {
-    print('🔍 البحث عن الدروس المتاحة...');
-    print('📚 إجمالي الدروس: ${_lessons.length}');
-    print('🎯 المستوى الحالي: $currentLevel');
-    
     if (_lessons.isEmpty) {
-      print('⚠️ لا توجد دروس محملة');
       return [];
     }
     
@@ -369,7 +342,6 @@ class LessonProvider with ChangeNotifier {
       return a.order.compareTo(b.order);
     });
     
-    print('🎯 الدروس المتاحة: ${availableLessons.length}');
     return availableLessons;
   }
 
@@ -389,8 +361,6 @@ class LessonProvider with ChangeNotifier {
       _setLoading(true);
       _clearError();
       
-      print('📖 تحميل الدرس: $lessonId');
-      
       // البحث في الكاش أولاً
       _currentLesson = await CacheService.getCachedLesson(lessonId);
       
@@ -401,7 +371,6 @@ class LessonProvider with ChangeNotifier {
       
       if (_currentLesson == null && _hasNetworkConnection) {
         // البحث في Firebase
-        print('🔍 البحث في Firebase...');
         _currentLesson = await FirebaseService.getLesson(lessonId)
             .timeout(const Duration(seconds: 10));
         
@@ -414,15 +383,12 @@ class LessonProvider with ChangeNotifier {
       if (_currentLesson != null) {
         // تحميل التقدم
         await _loadLessonProgress(userId, lessonId);
-        print('✅ تم تحميل الدرس: ${_currentLesson!.title}');
       } else {
-        print('❌ لم يتم العثور على الدرس');
         _setError('لم يتم العثور على الدرس المطلوب');
       }
       
       notifyListeners();
     } catch (e) {
-      print('❌ خطأ في تحميل الدرس: $e');
       _setError('فشل في تحميل الدرس - حاول مرة أخرى');
     } finally {
       _setLoading(false);
@@ -436,7 +402,6 @@ class LessonProvider with ChangeNotifier {
         _currentProgress = await FirebaseService.getLessonProgress(userId, lessonId)
             .timeout(const Duration(seconds: 5));
       } catch (e) {
-        print('⚠️ فشل في تحميل التقدم: $e');
         _currentProgress = null;
       }
     }
@@ -447,8 +412,6 @@ class LessonProvider with ChangeNotifier {
     try {
       _setLoading(true);
       _clearError();
-      
-      print('🔍 البحث عن الدرس: $lessonId');
       
       // البحث في الكاش أولاً
       var lesson = await CacheService.getCachedLesson(lessonId);
@@ -469,15 +432,8 @@ class LessonProvider with ChangeNotifier {
         }
       }
       
-      if (lesson != null) {
-        print('✅ تم العثور على الدرس: ${lesson.title}');
-      } else {
-        print('❌ لم يتم العثور على الدرس');
-      }
-      
       return lesson;
     } catch (e) {
-      print('❌ خطأ في البحث عن الدرس: $e');
       _setError('فشل في البحث عن الدرس');
       return null;
     } finally {
@@ -507,7 +463,6 @@ class LessonProvider with ChangeNotifier {
         _saveSlideProgressAsync(userId, lessonId, slideId);
       }
     } catch (e) {
-      print('❌ خطأ في حفظ تقدم الشريحة: $e');
       _setError('فشل في حفظ التقدم - حاول مرة أخرى');
     }
   }
@@ -522,10 +477,8 @@ class LessonProvider with ChangeNotifier {
         await FirebaseService.addXPAndGems(userId, 10, 1, 'إكمال شريحة')
             .timeout(const Duration(seconds: 5));
         
-        print('✅ تم حفظ تقدم الشريحة أونلاين');
       } catch (e) {
-        print('⚠️ فشل في حفظ التقدم أونلاين: $e');
-        // يمكن إضافة قائمة انتظار للمزامنة لاحقاً
+        // تجاهل أخطاء الحفظ
       }
     }
   }
@@ -553,7 +506,6 @@ class LessonProvider with ChangeNotifier {
       _saveLessonCompletionAsync(userId, lessonId);
       
     } catch (e) {
-      print('❌ خطأ في إكمال الدرس: $e');
       _setError('فشل في حفظ إكمال الدرس - حاول مرة أخرى');
     }
   }
@@ -576,9 +528,8 @@ class LessonProvider with ChangeNotifier {
           'إكمال درس: ${_currentLesson!.title}'
         ).timeout(const Duration(seconds: 10));
         
-        print('✅ تم حفظ إكمال الدرس أونلاين');
       } catch (e) {
-        print('⚠️ فشل في حفظ إكمال الدرس أونلاين: $e');
+        // تجاهل أخطاء الحفظ
       }
     }
   }
@@ -593,7 +544,6 @@ class LessonProvider with ChangeNotifier {
       _saveQuizResultAsync(userId, lessonId, result);
       
     } catch (e) {
-      print('❌ خطأ في حفظ نتيجة الاختبار: $e');
       _setError('فشل في حفظ نتيجة الاختبار - حاول مرة أخرى');
     }
   }
@@ -623,16 +573,14 @@ class LessonProvider with ChangeNotifier {
           'إكمال اختبار: ${result.score}%'
         ).timeout(const Duration(seconds: 10));
         
-        print('✅ تم حفظ نتيجة الاختبار أونلاين');
       } catch (e) {
-        print('⚠️ فشل في حفظ نتيجة الاختبار أونلاين: $e');
+        // تجاهل أخطاء الحفظ
       }
     }
   }
 
   /// إعادة تحميل الدروس
   Future<void> retryLoadLessons({int? level}) async {
-    print('🔄 إعادة محاولة تحميل الدروس...');
     await loadLessons(level: level, forceRefresh: true);
   }
 
@@ -642,12 +590,8 @@ class LessonProvider with ChangeNotifier {
       _setLoading(true);
       _clearError();
       
-      print('🏠 تحميل الدروس المحلية فقط...');
-      
       _localLessons = await LocalService.getLocalLessons(level: level);
       _lessons = List.from(_localLessons);
-      
-      print('✅ تم تحميل ${_lessons.length} درس محلي');
       
       if (_lessons.isEmpty) {
         _setError('لا توجد دروس محلية متاحة');
@@ -655,7 +599,6 @@ class LessonProvider with ChangeNotifier {
       
       notifyListeners();
     } catch (e) {
-      print('❌ خطأ في تحميل الدروس المحلية: $e');
       _setError('فشل في تحميل الدروس المحلية');
     } finally {
       _setLoading(false);
@@ -667,9 +610,8 @@ class LessonProvider with ChangeNotifier {
     try {
       await CacheService.clearCache();
       _lastCacheUpdate = null;
-      print('🗑️ تم مسح الكاش');
     } catch (e) {
-      print('⚠️ خطأ في مسح الكاش: $e');
+      // تجاهل أخطاء مسح الكاش
     }
   }
 

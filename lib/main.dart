@@ -17,9 +17,6 @@ import 'screens/lesson/lesson_screen.dart';
 import 'screens/quiz/quiz_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/settings/settings_screen.dart';
-import 'screens/admin/admin_dashboard_screen.dart';
-import 'screens/admin/lesson_upload_screen.dart';
-import 'screens/admin/lesson_edit_screen.dart';
 import 'services/firebase_service.dart';
 
 void main() async {
@@ -50,7 +47,7 @@ class MyApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp.router(
-            title: 'Python in English',
+            title: 'Python in Arabic',
             debugShowCheckedModeBanner: false,
             theme: themeProvider.lightTheme,
             darkTheme: themeProvider.darkTheme,
@@ -106,20 +103,6 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsScreen(),
-    ),
-    GoRoute(
-      path: '/admin',
-      builder: (context, state) => const AdminDashboardScreen(),
-    ),
-    GoRoute(
-      path: '/admin/lesson-upload',
-      builder: (context, state) => const LessonUploadScreen(),
-    ),
-    GoRoute(
-      path: '/admin/lesson-edit/:lessonId',
-      builder: (context, state) => LessonEditScreen(
-        lessonId: state.pathParameters['lessonId']!,
-      ),
     ),
   ],
 );

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 import '../models/user_model.dart';
@@ -12,10 +11,6 @@ class AuthProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   bool _isGuestUser = false;
-
-  static const String ADMIN_UID = 'FkRMLu7IC3WLSD6jzujnJ79elUO2';
-  
-  bool get isAdmin => _user?.uid == ADMIN_UID && !_isGuestUser;
 
   User? get user => _user;
   bool get isLoading => _isLoading;
@@ -328,7 +323,6 @@ class AuthProvider with ChangeNotifier {
       if (!_isGuestUser) {
         await FirebaseService.signOut();
         await GoogleSignIn().signOut();
-        await FacebookAuth.instance.logOut();
       }
       
       _user = null;

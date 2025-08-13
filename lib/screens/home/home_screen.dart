@@ -184,43 +184,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
           bottomNavigationBar: Consumer<AuthProvider>(
             builder: (context, authProvider, child) {
-              if (authProvider.isAdmin) {
-                return BottomNavigationBar(
-                  type: BottomNavigationBarType.fixed,
-                  currentIndex: _currentIndex,
-                  backgroundColor: Colors.white,
-                  onTap: (index) {
-                    setState(() {
-                      _currentIndex = index;
-                    });
-                    switch (index) {
-                      case 0:
-                        // الرئيسية - لا حاجة للتنقل
-                        break;
-                      case 1:
-                        context.push('/profile');
-                        break;
-                      case 2:
-                        context.push('/admin');
-                        break;
-                    }
-                  },
-                  items: const [
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home),
-                      label: 'الرئيسية',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.person),
-                      label: 'البروفايل',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.admin_panel_settings),
-                      label: 'لوحة التحكم',
-                    ),
-                  ],
-                );
-              } else if (!authProvider.isGuestUser) {
+              if (!authProvider.isGuestUser) {
                 return BottomNavigationBar(
                   currentIndex: _currentIndex,
                   backgroundColor: Colors.white,

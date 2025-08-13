@@ -1,27 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/lesson_model.dart';
-
-class UnitInfo {
-  final int unit;
-  final String title;
-  final int totalLessons;
-  final int completedLessons;
-  final bool isUnlocked;
-  final bool isCompleted;
-  final double progress;
-  final List<LessonModel> lessons;
-
-  UnitInfo({
-    required this.unit,
-    required this.title,
-    required this.totalLessons,
-    required this.completedLessons,
-    required this.isUnlocked,
-    required this.isCompleted,
-    required this.progress,
-    required this.lessons,
-  });
-}
+import '../providers/lesson_provider.dart'; // استيراد UnitInfo من هنا
 
 class UnitCard extends StatelessWidget {
   final UnitInfo unitInfo;

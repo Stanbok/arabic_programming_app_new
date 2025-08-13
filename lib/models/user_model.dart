@@ -90,22 +90,17 @@ class UserModel {
   }
 
   int get level {
-    // Calculate level based on XP
-    if (xp < 100) return 1;
-    if (xp < 300) return 2;
-    if (xp < 600) return 3;
-    if (xp < 1000) return 4;
-    return (xp / 500).floor() + 1;
+    return currentLevel;
   }
 
   int get xpForNextLevel {
-    final currentLevelXP = _getXPForLevel(level);
-    final nextLevelXP = _getXPForLevel(level + 1);
+    final nextLevelXP = _getXPForLevel(currentLevel + 1);
+    final currentLevelXP = _getXPForLevel(currentLevel);
     return nextLevelXP - currentLevelXP;
   }
 
   int get currentLevelProgress {
-    final currentLevelXP = _getXPForLevel(level);
+    final currentLevelXP = _getXPForLevel(currentLevel);
     return xp - currentLevelXP;
   }
 
@@ -115,5 +110,18 @@ class UserModel {
     if (level == 3) return 300;
     if (level == 4) return 600;
     return 1000 + (level - 5) * 500;
+  }
+
+  bool canLevelUp() {
+    final nextLevelXP = _getXPForLevel(currentLevel + 1);
+    return xp >= nextLevelXP;
+  }
+
+  int calculateLevelFromXP() {
+    if (xp < 100) return 1;
+    if (xp < 300) return 2;
+    if (xp < 600) return 3;
+    if (xp < 1000) return 4;
+    return (xp / 500).floor() + 1;
   }
 }

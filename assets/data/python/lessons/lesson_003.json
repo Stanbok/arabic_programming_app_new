@@ -1,0 +1,45 @@
+{
+  "id": "lesson_003",
+  "title": "الحلقات التكرارية",
+  "description": "تعلم كيفية استخدام الحلقات التكرارية for و while في Python",
+  "imageUrl": null,
+  "unit": 2,
+  "order": 1,
+  "xpReward": 70,
+  "gemsReward": 3,
+  "isPublished": true,
+  "slides": [
+    {
+      "id": "slide_003_1",
+      "title": "حلقة for",
+      "content": "حلقة for تستخدم لتكرار عملية معينة عدد محدد من المرات أو على عناصر قائمة.",
+      "imageUrl": null,
+      "codeExample": "# طباعة الأرقام من 1 إلى 5\nfor i in range(1, 6):\n    print(i)",
+      "order": 1
+    },
+    {
+      "id": "slide_003_2",
+      "title": "حلقة while",
+      "content": "حلقة while تستمر في التكرار طالما أن الشرط المحدد صحيح.",
+      "imageUrl": null,
+      "codeExample": "# عد تنازلي من 5 إلى 1\ncount = 5\nwhile count > 0:\n    print(count)\n    count = count - 1",
+      "order": 2
+    }
+  ],
+  "quiz": [
+    {
+      "question": "ما هو الناتج من الكود: for i in range(3): print(i)",
+      "options": ["1 2 3", "0 1 2", "1 2", "0 1 2 3"],
+      "correctAnswerIndex": 1,
+      "explanation": "range(3) ينتج الأرقام 0, 1, 2"
+    },
+    {
+      "question": "متى تتوقف حلقة while؟",
+      "options": ["بعد 10 مرات", "عندما يصبح الشرط خاطئ", "عند الخطأ", "لا تتوقف أبداً"],
+      "correctAnswerIndex": 1,
+      "explanation": "حلقة while تتوقف عندما يصبح الشرط المحدد خاطئاً (False)"
+    }
+  ],
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}

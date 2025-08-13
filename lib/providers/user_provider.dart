@@ -26,6 +26,15 @@ class UserProvider with ChangeNotifier {
   bool get isListening => _isListening;
   int get totalXP => (_user?.xp ?? 0) + _localXP;
   int get totalGems => (_user?.gems ?? 0) + _localGems;
+  int get currentLevel {
+    if (_user == null) return 1;
+    
+    final totalXP = (_user!.xp) + _localXP;
+    final calculatedLevel = _calculateLevelFromXP(totalXP);
+    
+    // استخدام أعلى قيمة بين المستوى المحفوظ والمحسوب
+    return calculatedLevel > _user!.currentLevel ? calculatedLevel : _user!.currentLevel;
+  }
 
   // تحميل فوري لبيانات المستخدم
   Future<void> loadUserDataInstantly(String userId) async {
@@ -319,6 +328,14 @@ class UserProvider with ChangeNotifier {
   void _clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  int _calculateLevelFromXP(int xp) {
+    if (xp < 100) return 1;
+    if (xp < 300) return 2;
+    if (xp < 600) return 3;
+    if (xp < 1000) return 4;
+    return (xp / 500).floor() + 1;
   }
 
   @override

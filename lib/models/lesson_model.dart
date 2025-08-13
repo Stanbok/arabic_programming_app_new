@@ -5,7 +5,7 @@ class LessonModel {
   final String title;
   final String description;
   final String? imageUrl;
-  final int level;
+  final int unit; // تغيير من level إلى unit
   final int order;
   final int xpReward;
   final int gemsReward;
@@ -20,7 +20,7 @@ class LessonModel {
     required this.title,
     required this.description,
     this.imageUrl,
-    required this.level,
+    required this.unit, // تغيير من level إلى unit
     required this.order,
     this.xpReward = 50,
     this.gemsReward = 2,
@@ -37,7 +37,7 @@ class LessonModel {
       'title': title,
       'description': description,
       'imageUrl': imageUrl,
-      'level': level,
+      'unit': unit, // تغيير من level إلى unit
       'order': order,
       'xpReward': xpReward,
       'gemsReward': gemsReward,
@@ -55,7 +55,7 @@ class LessonModel {
       title: map['title'] ?? '',
       description: map['description'] ?? '',
       imageUrl: map['imageUrl'],
-      level: map['level'] ?? 1,
+      unit: map['unit'] ?? map['level'] ?? 1, // دعم كل من unit و level للتوافق مع البيانات القديمة
       order: map['order'] ?? 0,
       xpReward: map['xpReward'] ?? 50,
       gemsReward: map['gemsReward'] ?? 2,
@@ -75,10 +75,8 @@ class LessonModel {
     if (dateValue == null) {
       return DateTime.now();
     } else if (dateValue is Timestamp) {
-      // من Firestore
       return dateValue.toDate();
     } else if (dateValue is String) {
-      // من JSON المحلي
       return DateTime.parse(dateValue);
     } else {
       return DateTime.now();

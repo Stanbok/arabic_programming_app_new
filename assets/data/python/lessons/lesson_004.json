@@ -1,0 +1,45 @@
+{
+  "id": "lesson_004",
+  "title": "الدوال في Python",
+  "description": "تعلم كيفية إنشاء واستخدام الدوال لتنظيم الكود وإعادة استخدامه",
+  "imageUrl": null,
+  "unit": 2,
+  "order": 2,
+  "xpReward": 80,
+  "gemsReward": 4,
+  "isPublished": true,
+  "slides": [
+    {
+      "id": "slide_004_1",
+      "title": "ما هي الدوال؟",
+      "content": "الدوال هي مجموعة من التعليمات المجمعة معاً لأداء مهمة محددة. يمكن استدعاؤها عدة مرات.",
+      "imageUrl": null,
+      "codeExample": "def say_hello():\n    print('مرحباً!')\n\n# استدعاء الدالة\nsay_hello()",
+      "order": 1
+    },
+    {
+      "id": "slide_004_2",
+      "title": "الدوال مع المعاملات",
+      "content": "يمكن للدوال أن تستقبل معاملات (parameters) وترجع قيماً باستخدام return.",
+      "imageUrl": null,
+      "codeExample": "def add_numbers(a, b):\n    result = a + b\n    return result\n\n# استخدام الدالة\nsum = add_numbers(5, 3)\nprint(sum)  # النتيجة: 8",
+      "order": 2
+    }
+  ],
+  "quiz": [
+    {
+      "question": "كيف تعرّف دالة في Python؟",
+      "options": ["function myFunc():", "def myFunc():", "create myFunc():", "func myFunc():"],
+      "correctAnswerIndex": 1,
+      "explanation": "تستخدم الكلمة المفتاحية def لتعريف دالة في Python"
+    },
+    {
+      "question": "ما هي الكلمة المستخدمة لإرجاع قيمة من الدالة؟",
+      "options": ["give", "return", "send", "output"],
+      "correctAnswerIndex": 1,
+      "explanation": "الكلمة المفتاحية return تستخدم لإرجاع قيمة من الدالة"
+    }
+  ],
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}

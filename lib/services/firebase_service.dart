@@ -247,14 +247,58 @@ class FirebaseService {
     try {
       final batch = _firestore.batch();
       
-      // Update user XP and gems
-      final userRef = _firestore.collection('users').doc(userId);
-      batch.update(userRef, {
-        'xp': FieldValue.increment(xp),
-        'gems': FieldValue.increment(gems),
-      });
+      // جلب بيانات المستخدم الحالية
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userData = userDoc.data();
       
-      // Add transaction log
+      if (userData != null) {
+        final currentXP = userData['xp'] ?? 0;
+        final currentLevel = userData['currentLevel'] ?? 1;
+        final newXP = currentXP + xp;
+        
+        // حساب المستوى الجديد
+        final newLevel = _calculateLevelFromXP(newXP);
+        
+        // تحديث XP والجواهر والمستوى
+        final userRef = _firestore.collection('users').doc(userId);
+        batch.update(userRef, {
+          'xp': FieldValue.increment(xp),
+          'gems': FieldValue.increment(gems),
+          'currentLevel': newLevel, // تحديث المستوى
+        });
+        
+        // إضافة مكافأة ترقية المستوى
+        if (newLevel > currentLevel) {
+          batch.update(userRef, {
+            'gems': FieldValue.increment(20), // مكافأة 20 جوهرة للترقية
+          });
+          
+          // سجل معاملة الترقية
+          final levelUpTransactionRef = _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('transactions')
+              .doc();
+          
+          batch.set(levelUpTransactionRef, {
+            'type': 'level_up',
+            'xpAmount': 0,
+            'gemsAmount': 20,
+            'reason': 'ترقية للمستوى $newLevel',
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        // إذا لم توجد بيانات المستخدم، أنشئ مستخدم جديد
+        final userRef = _firestore.collection('users').doc(userId);
+        batch.update(userRef, {
+          'xp': FieldValue.increment(xp),
+          'gems': FieldValue.increment(gems),
+          'currentLevel': _calculateLevelFromXP(xp),
+        });
+      }
+      
+      // إضافة سجل المعاملة
       final transactionRef = _firestore
           .collection('users')
           .doc(userId)

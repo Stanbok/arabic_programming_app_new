@@ -244,6 +244,39 @@ class FirebaseService {
     }
   }
 
+  // إضافة الدالة المفقودة - getUserAttempts
+  static Future<List<LessonAttemptModel>> getUserAttempts(String userId) async {
+    try {
+      print('🔄 جلب محاولات المستخدم من Firebase...');
+      
+      QuerySnapshot snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('attempts')
+          .orderBy('attemptedAt', descending: true)
+          .get();
+      
+      final attempts = snapshot.docs
+          .map((doc) {
+            try {
+              return LessonAttemptModel.fromMap(doc.data() as Map<String, dynamic>);
+            } catch (e) {
+              print('❌ خطأ في معالجة المحاولة ${doc.id}: $e');
+              return null;
+            }
+          })
+          .where((attempt) => attempt != null)
+          .cast<LessonAttemptModel>()
+          .toList();
+      
+      print('✅ تم جلب ${attempts.length} محاولة من Firebase');
+      return attempts;
+    } catch (e) {
+      print('❌ خطأ في جلب محاولات المستخدم: $e');
+      throw Exception('خطأ في جلب محاولات المستخدم: ${e.toString()}');
+    }
+  }
+
   // XP and Gems Methods - المصدر الوحيد لتحديث المكافآت في Firebase
   static Future<void> addXPAndGems(String userId, int xp, int gems, String reason) async {
     try {

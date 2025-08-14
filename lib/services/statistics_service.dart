@@ -271,7 +271,7 @@ class StatisticsService {
     try {
       print('🔄 تحديث الإحصائيات من Firebase...');
       
-      // محاولة جلب البيانات من Firebase مع timeout قصير
+      // محاولة جلب البيانات من Firebase مع timeout قصير - تم إصلاح اسم الدالة
       final firebaseAttempts = await FirebaseService.getUserAttempts(userId)
           .timeout(const Duration(seconds: 5), onTimeout: () => <LessonAttemptModel>[]);
       
@@ -304,5 +304,60 @@ class StatisticsService {
     } catch (e) {
       print('⚠️ فشل في تحديث الإحصائيات من Firebase: $e');
     }
+  }
+}
+
+// إضافة class مفقود للإحصائيات
+class LessonStatistics {
+  final String lessonId;
+  final int totalAttempts;
+  final int passedAttempts;
+  final int failedAttempts;
+  final double averageScore;
+  final bool hasPassedBefore;
+  final DateTime? firstPassDate;
+  final DateTime? lastAttemptDate;
+
+  LessonStatistics({
+    required this.lessonId,
+    required this.totalAttempts,
+    required this.passedAttempts,
+    required this.failedAttempts,
+    required this.averageScore,
+    required this.hasPassedBefore,
+    this.firstPassDate,
+    this.lastAttemptDate,
+  });
+
+  factory LessonStatistics.fromAttempts(String lessonId, List<LessonAttemptModel> attempts) {
+    if (attempts.isEmpty) {
+      return LessonStatistics(
+        lessonId: lessonId,
+        totalAttempts: 0,
+        passedAttempts: 0,
+        failedAttempts: 0,
+        averageScore: 0.0,
+        hasPassedBefore: false,
+      );
+    }
+
+    final passedAttempts = attempts.where((a) => a.isPassed).length;
+    final failedAttempts = attempts.length - passedAttempts;
+    final totalScore = attempts.map((a) => a.score).reduce((a, b) => a + b);
+    final averageScore = totalScore / attempts.length;
+    
+    final firstPass = attempts.firstWhere((a) => a.isPassed, orElse: () => attempts.first);
+    final lastAttempt = attempts.last;
+
+    return LessonStatistics(
+      lessonId: lessonId,
+      totalAttempts: attempts.length,
+      passedAttempts: passedAttempts,
+      failedAttempts: failedAttempts,
+      averageScore: averageScore,
+      hasPassedBefore: passedAttempts > 0,
+      firstPassDate: passedAttempts > 0 ? firstPass.attemptedAt : null,
+      lastAttemptDate: lastAttempt.attemptedAt,
+    );
   }
 }

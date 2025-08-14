@@ -16,10 +16,10 @@ class UserModel {
     required this.id,
     required this.name,
     required this.email,
-    required this.xp,
-    required this.gems,
-    required this.currentLevel,
-    required this.completedLessons,
+    this.xp = 0, // جعل القيمة اختيارية مع قيمة افتراضية
+    this.gems = 0, // جعل القيمة اختيارية مع قيمة افتراضية
+    this.currentLevel = 1, // جعل القيمة اختيارية مع قيمة افتراضية
+    this.completedLessons = const [], // جعل القيمة اختيارية مع قيمة افتراضية
     this.profileImageUrl,
     required this.createdAt,
     required this.lastLoginAt,

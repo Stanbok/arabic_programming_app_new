@@ -20,7 +20,7 @@ class LessonModel {
     required this.title,
     required this.description,
     this.imageUrl,
-    required this.unit, // تغيير من level إلى unit
+    required this.unit,
     required this.order,
     this.xpReward = 50,
     this.gemsReward = 2,
@@ -37,7 +37,7 @@ class LessonModel {
       'title': title,
       'description': description,
       'imageUrl': imageUrl,
-      'unit': unit, // تغيير من level إلى unit
+      'unit': unit, // استخدام unit فقط في التخزين
       'order': order,
       'xpReward': xpReward,
       'gemsReward': gemsReward,
@@ -55,7 +55,7 @@ class LessonModel {
       title: map['title'] ?? '',
       description: map['description'] ?? '',
       imageUrl: map['imageUrl'],
-      unit: map['unit'] ?? map['level'] ?? 1, // دعم كل من unit و level للتوافق مع البيانات القديمة
+      unit: _parseUnit(map),
       order: map['order'] ?? 0,
       xpReward: map['xpReward'] ?? 50,
       gemsReward: map['gemsReward'] ?? 2,
@@ -71,6 +71,21 @@ class LessonModel {
     );
   }
 
+  static int _parseUnit(Map<String, dynamic> map) {
+    // أولوية للـ unit الجديد
+    if (map.containsKey('unit') && map['unit'] != null) {
+      return map['unit'] as int;
+    }
+    
+    // التوافق مع level القديم
+    if (map.containsKey('level') && map['level'] != null) {
+      return map['level'] as int;
+    }
+    
+    // القيمة الافتراضية
+    return 1;
+  }
+
   static DateTime _parseDateTime(dynamic dateValue) {
     if (dateValue == null) {
       return DateTime.now();
@@ -81,6 +96,48 @@ class LessonModel {
     } else {
       return DateTime.now();
     }
+  }
+
+  @deprecated
+  int get level => unit;
+
+  bool get isValid {
+    return id.isNotEmpty && 
+           title.isNotEmpty && 
+           unit > 0 && 
+           order >= 0;
+  }
+
+  LessonModel copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? imageUrl,
+    int? unit,
+    int? order,
+    int? xpReward,
+    int? gemsReward,
+    bool? isPublished,
+    List<SlideModel>? slides,
+    List<QuizQuestionModel>? quiz,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return LessonModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      unit: unit ?? this.unit,
+      order: order ?? this.order,
+      xpReward: xpReward ?? this.xpReward,
+      gemsReward: gemsReward ?? this.gemsReward,
+      isPublished: isPublished ?? this.isPublished,
+      slides: slides ?? this.slides,
+      quiz: quiz ?? this.quiz,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
   }
 }
 

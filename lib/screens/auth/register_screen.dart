@@ -37,73 +37,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    final trimmedName = _nameController.text.trim();
-    final trimmedEmail = _emailController.text.trim().toLowerCase();
-    final password = _passwordController.text;
-
-    if (trimmedName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يرجى إدخال اسم صحيح'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (trimmedName.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الاسم يجب أن يكون حرفين على الأقل'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     final success = await authProvider.register(
-      trimmedName,
-      trimmedEmail,
-      password,
+      _nameController.text.trim(),
+      _emailController.text.trim(),
+      _passwordController.text,
     );
 
     if (success && mounted) {
-      if (authProvider.user != null) {
-        try {
-          await userProvider.loadUserData(authProvider.user!.uid);
-          userProvider.startListening(authProvider.user!.uid);
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('مرحباً $trimmedName! تم إنشاء حسابك بنجاح'),
-                backgroundColor: Colors.green,
-              ),
-            );
-            context.go('/home');
-          }
-        } catch (e) {
-          print('❌ خطأ في تحميل بيانات المستخدم بعد التسجيل: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('تم إنشاء الحساب ولكن فشل في تحميل البيانات - يرجى تسجيل الدخول مرة أخرى'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-            context.go('/login');
-          }
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('حدث خطأ غير متوقع - يرجى المحاولة مرة أخرى'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
+      // Load user data and start listening
+      await userProvider.loadUserData(authProvider.user!.uid);
+      userProvider.startListening(authProvider.user!.uid);
+      
+      context.go('/home');
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -178,15 +123,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           label: 'الاسم الكامل',
                           prefixIcon: Icons.person_outlined,
                           validator: (value) {
-                            final trimmedValue = value?.trim();
-                            if (trimmedValue == null || trimmedValue.isEmpty) {
+                            if (value == null || value.isEmpty) {
                               return 'يرجى إدخال الاسم الكامل';
                             }
-                            if (trimmedValue.length < 2) {
+                            if (value.length < 2) {
                               return 'الاسم يجب أن يكون حرفين على الأقل';
-                            }
-                            if (RegExp(r'[0-9]').hasMatch(trimmedValue)) {
-                              return 'الاسم لا يجب أن يحتوي على أرقام';
                             }
                             return null;
                           },
@@ -201,11 +142,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           keyboardType: TextInputType.emailAddress,
                           prefixIcon: Icons.email_outlined,
                           validator: (value) {
-                            final trimmedValue = value?.trim().toLowerCase();
-                            if (trimmedValue == null || trimmedValue.isEmpty) {
+                            if (value == null || value.isEmpty) {
                               return 'يرجى إدخال البريد الإلكتروني';
                             }
-                            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(trimmedValue)) {
+                            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
                               return 'يرجى إدخال بريد إلكتروني صحيح';
                             }
                             return null;
@@ -234,9 +174,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             }
                             if (value.length < 6) {
                               return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
-                            }
-                            if (!RegExp(r'^(?=.*[a-zA-Z])').hasMatch(value)) {
-                              return 'كلمة المرور يجب أن تحتوي على حرف واحد على الأقل';
                             }
                             return null;
                           },

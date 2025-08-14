@@ -11,7 +11,6 @@ import '../../services/firebase_service.dart';
 import '../../services/reward_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../models/progress_model.dart';
-import '../../models/retake_stats_model.dart';
 
 class QuizScreen extends StatefulWidget {
   final String lessonId;
@@ -34,11 +33,6 @@ class _QuizScreenState extends State<QuizScreen> {
   bool _isCompleted = false;
   QuizResultModel? _result;
   bool _alreadyCompleted = false;
-  
-  bool _isSavingResults = false;
-  bool _resultsCalculated = false;
-  int? _scoringTimeMs;
-  DateTime? _scoringStartTime;
 
   @override
   void initState() {
@@ -60,15 +54,10 @@ class _QuizScreenState extends State<QuizScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userId = authProvider.user?.uid ?? 'guest';
     
-    final isRetakeAfterPass = await RewardService.isRetakeAfterPass(widget.lessonId, userId);
+    _alreadyCompleted = await RewardService.isQuizCompleted(widget.lessonId, userId);
     
-    // السماح بإعادة الاختبار دائماً - النظام الجديد يتعامل مع المكافآت
-    _alreadyCompleted = false;
-    
-    if (isRetakeAfterPass) {
-      print('🔄 هذه محاولة إعادة بعد النجاح - سيتم تطبيق نظام تقليل المكافآت');
-    } else {
-      print('✅ هذه المحاولة الأولى أو محاولة قبل النجاح');
+    if (_alreadyCompleted) {
+      print('⚠️ تم إكمال هذا الاختبار مسبقاً');
     }
   }
 
@@ -152,14 +141,34 @@ class _QuizScreenState extends State<QuizScreen> {
     if (lesson == null) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
     final userId = authProvider.user?.uid ?? 'guest';
 
-    _scoringStartTime = DateTime.now();
+    // التحقق من عدم إكمال الاختبار مسبقاً
+    if (await RewardService.isQuizCompleted(widget.lessonId, userId)) {
+      setState(() {
+        _isCompleted = true;
+        _result = QuizResultModel(
+          lessonId: widget.lessonId,
+          score: 0,
+          correctAnswers: 0,
+          totalQuestions: lesson.quiz.length,
+          answers: _selectedAnswers,
+          completedAt: DateTime.now(),
+        );
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم إكمال هذا الاختبار مسبقاً'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
 
-    final isRetakeAfterPass = await RewardService.isRetakeAfterPass(widget.lessonId, userId);
-    final retakeStats = await RewardService.getRetakeStats(widget.lessonId, userId);
-
+    // حساب النتائج
     int correctAnswers = 0;
     for (int i = 0; i < lesson.quiz.length; i++) {
       if (i < _selectedAnswers.length && _selectedAnswers[i] == lesson.quiz[i].correctAnswerIndex) {
@@ -184,138 +193,41 @@ class _QuizScreenState extends State<QuizScreen> {
       completedAt: DateTime.now(),
     );
 
-    _scoringTimeMs = DateTime.now().difference(_scoringStartTime!).inMilliseconds;
-    print('⏱️ وقت حساب النتائج: ${_scoringTimeMs}ms');
     print('📊 نتيجة الاختبار: $score% (${correctAnswers}/${lesson.quiz.length})');
-    
-    if (isRetakeAfterPass) {
-      print('🔄 محاولة إعادة بعد النجاح - المكافأة التالية: ${retakeStats.nextRewardPercentage}');
+
+    // حفظ النتيجة وإضافة المكافآت
+    if (!authProvider.isGuestUser && authProvider.user != null) {
+      try {
+        // حفظ نتيجة الاختبار
+        await FirebaseService.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
+        
+        // تسجيل إكمال الاختبار
+        await RewardService.markQuizCompleted(widget.lessonId, userId, score);
+        
+        // إضافة المكافآت إذا نجح
+        if (_result!.isPassed) {
+          final rewardInfo = RewardService.getLessonRewards(lesson, score);
+          final userProvider = Provider.of<UserProvider>(context, listen: false);
+          
+          final success = await userProvider.addReward(rewardInfo, authProvider.user!.uid);
+          
+          if (success) {
+            print('✅ تم إضافة المكافآت: $rewardInfo');
+          } else {
+            print('❌ فشل في إضافة المكافآت');
+          }
+        }
+      } catch (e) {
+        print('❌ خطأ في حفظ النتيجة: $e');
+      }
+    } else {
+      // للضيوف - تسجيل الإكمال محلياً فقط
+      await RewardService.markQuizCompleted(widget.lessonId, userId, score);
     }
 
     setState(() {
       _isCompleted = true;
-      _resultsCalculated = true;
     });
-
-    _saveResultsInBackground(authProvider, lessonProvider, userId, lesson, isRetakeAfterPass);
-  }
-
-  Future<void> _saveResultsInBackground(AuthProvider authProvider, LessonProvider lessonProvider, String userId, LessonModel lesson, bool isRetakeAfterPass) async {
-    setState(() {
-      _isSavingResults = true;
-    });
-
-    try {
-      final futures = <Future>[];
-      
-      // حفظ النتيجة في Firebase
-      futures.add(
-        lessonProvider.saveQuizResult(userId, widget.lessonId, _result!)
-          .timeout(const Duration(seconds: 5))
-      );
-
-      if (!isRetakeAfterPass && _result!.isPassed) {
-        futures.add(
-          RewardService.markQuizCompleted(widget.lessonId, userId, _result!.score)
-            .timeout(const Duration(seconds: 3))
-        );
-      }
-      
-      // تحديث حالة الدرس
-      futures.add(
-        lessonProvider.updateLessonStateAfterCompletion(
-          widget.lessonId, 
-          userId, 
-          _result!.isPassed
-        ).timeout(const Duration(seconds: 3))
-      );
-
-      // انتظار جميع العمليات الأساسية
-      await Future.wait(futures, eagerError: false);
-      
-      if (_result!.isPassed) {
-        final rewardInfo = await RewardService.getLessonRewardsWithRetakeLogic(
-          lesson, 
-          _result!.score, 
-          userId,
-          isRetakeAfterPass: isRetakeAfterPass
-        );
-        
-        final userProvider = Provider.of<UserProvider>(context, listen: false);
-        
-        final success = await userProvider.addReward(rewardInfo, userId)
-          .timeout(const Duration(seconds: 5), onTimeout: () => false);
-        
-        if (success) {
-          print('✅ تم إضافة المكافآت: $rewardInfo');
-        } else {
-          print('❌ فشل في إضافة المكافآت');
-        }
-
-        if (!isRetakeAfterPass) {
-          await RewardService.recordFirstPassTime(widget.lessonId, userId);
-        } else {
-          await RewardService.recordRetakeAttempt(widget.lessonId, userId);
-        }
-        
-        try {
-          final nextLesson = await lessonProvider.unlockNextLesson(
-            widget.lessonId, 
-            userProvider.user?.completedLessons ?? []
-          );
-          
-          if (nextLesson != null && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('تم فتح الدرس التالي: ${nextLesson.title}'),
-                backgroundColor: Colors.green,
-                action: SnackBarAction(
-                  label: 'انتقل',
-                  textColor: Colors.white,
-                  onPressed: () {
-                    context.pushReplacement('/lesson/${nextLesson.id}');
-                  },
-                ),
-              ),
-            );
-          }
-        } catch (e) {
-          print('⚠️ خطأ في فتح الدرس التالي: $e');
-        }
-      }
-      
-    } catch (e) {
-      print('❌ خطأ في حفظ النتائج: $e');
-      
-      try {
-        if (!isRetakeAfterPass && _result!.isPassed) {
-          await RewardService.markQuizCompleted(widget.lessonId, userId, _result!.score)
-            .timeout(const Duration(seconds: 3));
-        }
-        
-        await lessonProvider.updateLessonStateAfterCompletion(
-          widget.lessonId, 
-          userId, 
-          _result!.isPassed
-        ).timeout(const Duration(seconds: 3));
-
-        if (_result!.isPassed) {
-          if (!isRetakeAfterPass) {
-            await RewardService.recordFirstPassTime(widget.lessonId, userId);
-          } else {
-            await RewardService.recordRetakeAttempt(widget.lessonId, userId);
-          }
-        }
-      } catch (localError) {
-        print('❌ فشل في الحفظ المحلي أيضاً: $localError');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSavingResults = false;
-        });
-      }
-    }
   }
 
   LessonModel? _getCurrentLesson() {
@@ -443,9 +355,8 @@ class _QuizScreenState extends State<QuizScreen> {
             );
           }
 
-          // السماح بإعادة الاختبار دائماً - النظام الجديد يتعامل مع المكافآت
           if (_isCompleted && _result != null) {
-            return _buildResultsView(lesson, _result!);
+            return _buildResultScreen(lesson, _result!);
           }
 
           return Column(
@@ -641,7 +552,7 @@ class _QuizScreenState extends State<QuizScreen> {
             Expanded(
               child: CustomButton(
                 text: 'السابق',
-                onPressed: _resultsCalculated ? null : _previousQuestion,
+                onPressed: _previousQuestion,
                 isOutlined: true,
                 icon: Icons.arrow_back_ios,
               ),
@@ -652,415 +563,233 @@ class _QuizScreenState extends State<QuizScreen> {
           // Next/Submit Button
           Expanded(
             flex: 2,
-            child: _resultsCalculated 
-              ? Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'تم حساب النتائج',
-                        style: TextStyle(
-                          color: Colors.green[700],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (_scoringTimeMs != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '(${_scoringTimeMs}ms)',
-                          style: TextStyle(
-                            color: Colors.green[600],
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                )
-              : CustomButton(
-                  text: isLastQuestion ? 'إنهاء الاختبار' : 'التالي',
-                  onPressed: hasAnswered
-                      ? (isLastQuestion ? _submitQuiz : _nextQuestion)
-                      : null,
-                  icon: isLastQuestion ? Icons.check : Icons.arrow_forward_ios,
-                ),
+            child: CustomButton(
+              text: isLastQuestion ? 'إنهاء الاختبار' : 'التالي',
+              onPressed: hasAnswered
+                  ? (isLastQuestion ? _submitQuiz : _nextQuestion)
+                  : null,
+              icon: isLastQuestion ? Icons.check : Icons.arrow_forward_ios,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildResultsView(LessonModel lesson, QuizResultModel result) {
-    return FutureBuilder<RetakeStats>(
-      future: RewardService.getRetakeStats(widget.lessonId, Provider.of<AuthProvider>(context, listen: false).user?.uid ?? 'guest'),
-      builder: (context, retakeSnapshot) {
-        final retakeStats = retakeSnapshot.data;
-        
-        RewardInfo? rewardInfo;
-        if (result.isPassed && retakeStats != null) {
-          final baseXP = lesson.xpReward;
-          final baseGems = lesson.gemsReward;
-          
-          double performanceMultiplier = 1.0;
-          if (result.score >= 95) {
-            performanceMultiplier = 1.5;
-          } else if (result.score >= 85) {
-            performanceMultiplier = 1.25;
-          } else if (result.score >= 70) {
-            performanceMultiplier = 1.0;
-          } else {
-            performanceMultiplier = 0.0;
-          }
-          
-          final retakeMultiplier = retakeStats.hasPassedBefore ? retakeStats.nextRewardMultiplier : 1.0;
-          
-          rewardInfo = RewardInfo(
-            xp: (baseXP * performanceMultiplier * retakeMultiplier).round(),
-            gems: (baseGems * performanceMultiplier * retakeMultiplier).round(),
-            source: retakeStats.hasPassedBefore ? 'lesson_retake' : 'lesson_completion',
-            lessonId: lesson.id,
-            score: result.score,
-            retakeMultiplier: retakeMultiplier,
-            isRetake: retakeStats.hasPassedBefore,
-          );
-        }
-        
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              if (_isSavingResults)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.only(bottom: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                  ),
-                  child: const Row(
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      SizedBox(width: 12),
-                      Text('جاري حفظ النتائج...'),
-                    ],
-                  ),
+  Widget _buildResultScreen(LessonModel lesson, QuizResultModel result) {
+    final rewardInfo = result.isPassed ? RewardService.getLessonRewards(lesson, result.score) : null;
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          // Result Icon and Score
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: result.isPassed ? Colors.green : Colors.red,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: (result.isPassed ? Colors.green : Colors.red).withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
-
-              if (retakeStats != null && retakeStats.hasPassedBefore)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.only(bottom: 24),
-                  decoration: BoxDecoration(
-                    color: retakeStats.willGetNoReward 
-                        ? Colors.orange.withOpacity(0.1)
-                        : Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: retakeStats.willGetNoReward 
-                          ? Colors.orange.withOpacity(0.3)
-                          : Colors.blue.withOpacity(0.3)
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.refresh,
-                            color: retakeStats.willGetNoReward ? Colors.orange : Colors.blue,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'محاولة إعادة',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: retakeStats.willGetNoReward ? Colors.orange[700] : Colors.blue[700],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        retakeStats.statusMessage,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      if (retakeStats.retakeAttempts > 0) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'المحاولة رقم ${retakeStats.retakeAttempts + 1} بعد النجاح',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-              // Result Icon and Score
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: result.isPassed ? Colors.green : Colors.red,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: (result.isPassed ? Colors.green : Colors.red).withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${result.score}%',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      result.grade,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              Text(
-                result.isPassed ? 'تهانينا! 🎉' : 'حاول مرة أخرى 💪',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: result.isPassed ? Colors.green : Colors.red,
-                ),
-              ),
-              
-              const SizedBox(height: 16),
-              
-              Text(
-                result.isPassed
-                    ? 'لقد نجحت في الاختبار بتفوق!'
-                    : 'لم تحصل على الدرجة المطلوبة للنجاح (70%)',
-                style: Theme.of(context).textTheme.titleMedium,
-                textAlign: TextAlign.center,
-              ),
-              
-              if (_scoringTimeMs != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'تم حساب النتائج في ${_scoringTimeMs}ms',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              
-              const SizedBox(height: 32),
-              
-              // Stars Rating
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(3, (index) {
-                  return Icon(
-                    index < result.stars ? Icons.star : Icons.star_border,
-                    size: 32,
-                    color: Colors.amber,
-                  );
-                }),
-              ),
-              
-              const SizedBox(height: 32),
-              
-              // Results Summary
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'ملخص النتائج',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildResultItem(
-                          icon: Icons.check_circle,
-                          label: 'إجابات صحيحة',
-                          value: '${result.correctAnswers}',
-                          color: Colors.green,
-                        ),
-                        _buildResultItem(
-                          icon: Icons.cancel,
-                          label: 'إجابات خاطئة',
-                          value: '${result.totalQuestions - result.correctAnswers}',
-                          color: Colors.red,
-                        ),
-                        if (rewardInfo != null)
-                          _buildResultItem(
-                            icon: Icons.star,
-                            label: 'XP مكتسب',
-                            value: '${rewardInfo.xp}',
-                            color: Colors.amber,
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 32),
-              
-              // Rewards (if passed)
-              if (rewardInfo != null && (rewardInfo.xp > 0 || rewardInfo.gems > 0)) ...[
-                const SizedBox(height: 24),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
                 Text(
-                  'المكافآت المكتسبة',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  '${result.score}%',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  result.grade,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          Text(
+            result.isPassed ? 'تهانينا! 🎉' : 'حاول مرة أخرى 💪',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: result.isPassed ? Colors.green : Colors.red,
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          Text(
+            result.isPassed
+                ? 'لقد نجحت في الاختبار بتفوق!'
+                : 'لم تحصل على الدرجة المطلوبة للنجاح (70%)',
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 32),
+          
+          // Stars Rating
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(3, (index) {
+              return Icon(
+                index < result.stars ? Icons.star : Icons.star_border,
+                size: 32,
+                color: Colors.amber,
+              );
+            }),
+          ),
+          
+          const SizedBox(height: 32),
+          
+          // Results Summary
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'ملخص النتائج',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                
                 const SizedBox(height: 16),
+                
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    if (rewardInfo.xp > 0)
-                      _buildRewardCard(
+                    _buildResultItem(
+                      icon: Icons.check_circle,
+                      label: 'إجابات صحيحة',
+                      value: '${result.correctAnswers}',
+                      color: Colors.green,
+                    ),
+                    _buildResultItem(
+                      icon: Icons.cancel,
+                      label: 'إجابات خاطئة',
+                      value: '${result.totalQuestions - result.correctAnswers}',
+                      color: Colors.red,
+                    ),
+                    if (rewardInfo != null)
+                      _buildResultItem(
                         icon: Icons.star,
-                        color: Colors.amber,
+                        label: 'XP مكتسب',
                         value: '${rewardInfo.xp}',
-                        label: 'XP',
-                      ),
-                    if (rewardInfo.gems > 0)
-                      _buildRewardCard(
-                        icon: Icons.diamond,
-                        color: Colors.blue,
-                        value: '${rewardInfo.gems}',
-                        label: 'جواهر',
+                        color: Colors.amber,
                       ),
                   ],
                 ),
-                
-                if (retakeStats != null && retakeStats.hasPassedBefore && retakeStats.nextRewardMultiplier < 1.0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'مكافأة مقللة (${retakeStats.nextRewardPercentage}) - محاولة إعادة',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.orange[600],
-                        fontStyle: FontStyle.italic,
-                      ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 32),
+          
+          // Rewards (if passed)
+          if (result.isPassed && rewardInfo != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.amber.withOpacity(0.1),
+                    Colors.orange.withOpacity(0.1),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.amber.withOpacity(0.3),
+                ),
+              ),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.card_giftcard,
+                    size: 32,
+                    color: Colors.amber,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'المكافآت المكتسبة',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-              ],
-
-              const SizedBox(height: 32),
-              
-              // Action Buttons
-              Column(
-                children: [
-                  if (result.isPassed)
-                    Consumer<LessonProvider>(
-                      builder: (context, lessonProvider, child) {
-                        final userProvider = Provider.of<UserProvider>(context, listen: false);
-                        final nextLesson = lessonProvider.getNextAvailableLesson(
-                          userProvider.user?.completedLessons ?? []
-                        );
-                        
-                        return SizedBox(
-                          width: double.infinity,
-                          child: CustomButton(
-                            text: nextLesson != null ? 'الدرس التالي' : 'العودة للرئيسية',
-                            onPressed: () {
-                              if (nextLesson != null) {
-                                context.go('/lesson/${nextLesson.id}');
-                              } else {
-                                context.go('/home');
-                              }
-                            },
-                            icon: nextLesson != null ? Icons.arrow_forward : Icons.home,
-                          ),
-                        );
-                      },
-                    )
-                  else
-                    SizedBox(
-                      width: double.infinity,
-                      child: CustomButton(
-                        text: 'إعادة المحاولة',
-                        onPressed: () {
-                          setState(() {
-                            _isCompleted = false;
-                            _result = null;
-                            _resultsCalculated = false;
-                            _isSavingResults = false;
-                            _scoringTimeMs = null;
-                            _currentQuestionIndex = 0;
-                            _selectedAnswers = List.filled(lesson.quiz.length, -1);
-                            _timeRemaining = 300;
-                            _alreadyCompleted = false; // السماح بإعادة المحاولة
-                          });
-                          _startTimer();
-                        },
-                        icon: Icons.refresh,
-                      ),
-                    ),
-                  
-                  const SizedBox(height: 12),
-                  
-                  SizedBox(
-                    width: double.infinity,
-                    child: CustomButton(
-                      text: 'العودة للرئيسية',
-                      onPressed: () => context.go('/home'),
-                      isOutlined: true,
-                      icon: Icons.home,
+                  const SizedBox(height: 8),
+                  Text(
+                    '${rewardInfo.xp} نقطة خبرة + ${rewardInfo.gems} جوهرة',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Colors.amber[700],
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
+            ),
+          
+          const SizedBox(height: 32),
+          
+          // Action Buttons
+          Column(
+            children: [
+              if (result.isPassed)
+                SizedBox(
+                  width: double.infinity,
+                  child: CustomButton(
+                    text: 'الدرس التالي',
+                    onPressed: () => context.go('/home'),
+                    icon: Icons.arrow_forward,
+                  ),
+                )
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: CustomButton(
+                    text: 'العودة للدرس',
+                    onPressed: () => context.pop(),
+                    icon: Icons.school,
+                  ),
+                ),
+              
+              const SizedBox(height: 12),
+              
+              SizedBox(
+                width: double.infinity,
+                child: CustomButton(
+                  text: 'العودة للرئيسية',
+                  onPressed: () => context.go('/home'),
+                  isOutlined: true,
+                  icon: Icons.home,
+                ),
+              ),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -1093,47 +822,6 @@ class _QuizScreenState extends State<QuizScreen> {
           textAlign: TextAlign.center,
         ),
       ],
-    );
-  }
-
-  Widget _buildRewardCard({
-    required IconData icon,
-    required Color color,
-    required String value,
-    required String label,
-  }) {
-    return Container(
-      width: 100,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            size: 32,
-            color: color,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
     );
   }
 }

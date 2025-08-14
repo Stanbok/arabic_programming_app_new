@@ -6,8 +6,6 @@ class ProgressModel {
   final int timeSpent; // in seconds
   final DateTime? completedAt;
   final bool isCompleted;
-  final int? unit;
-  final int? order;
 
   ProgressModel({
     required this.lessonId,
@@ -15,8 +13,6 @@ class ProgressModel {
     this.timeSpent = 0,
     this.completedAt,
     this.isCompleted = false,
-    this.unit,
-    this.order,
   });
 
   Map<String, dynamic> toMap() {
@@ -26,8 +22,6 @@ class ProgressModel {
       'timeSpent': timeSpent,
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'isCompleted': isCompleted,
-      'unit': unit,
-      'order': order,
     };
   }
 
@@ -40,8 +34,6 @@ class ProgressModel {
           ? (map['completedAt'] as Timestamp).toDate() 
           : null,
       isCompleted: map['isCompleted'] ?? false,
-      unit: map['unit'],
-      order: map['order'],
     );
   }
 
@@ -51,8 +43,6 @@ class ProgressModel {
     int? timeSpent,
     DateTime? completedAt,
     bool? isCompleted,
-    int? unit,
-    int? order,
   }) {
     return ProgressModel(
       lessonId: lessonId ?? this.lessonId,
@@ -60,8 +50,6 @@ class ProgressModel {
       timeSpent: timeSpent ?? this.timeSpent,
       completedAt: completedAt ?? this.completedAt,
       isCompleted: isCompleted ?? this.isCompleted,
-      unit: unit ?? this.unit,
-      order: order ?? this.order,
     );
   }
 
@@ -73,11 +61,9 @@ class ProgressModel {
     }
   }
 
-  double getProgressPercentage(int totalSlides) {
-    if (totalSlides <= 0) return 0.0;
-    return (slidesCompleted.length / totalSlides).clamp(0.0, 1.0);
+  double get progressPercentage {
+    // This would be calculated based on total slides in lesson
+    // For now, return a simple calculation
+    return slidesCompleted.length / 10.0; // Assuming 10 slides per lesson
   }
-
-  @deprecated
-  double get progressPercentage => getProgressPercentage(10);
 }

@@ -175,8 +175,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   child: Consumer3<UserProvider, LessonProvider, AuthProvider>(
                     builder: (context, userProvider, lessonProvider, authProvider, child) {
                       final user = userProvider.user;
-                      final unitsInfo = lessonProvider.getUnitsInfo(user?.completedLessons ?? []);
-
+                      
                       return RefreshIndicator(
                         onRefresh: _refreshData,
                         child: Container(
@@ -196,7 +195,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                                 const SizedBox(height: 24),
                                 
                                 // World Map Lessons
-                                _buildWorldMapSection(unitsInfo, lessonProvider.isLoading),
+                                FutureBuilder<List<UnitInfo>>(
+                                  future: lessonProvider.getUnitsInfo(
+                                    user?.completedLessons ?? [], 
+                                    authProvider.user?.uid ?? 'guest'
+                                  ),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState == ConnectionState.waiting) {
+                                      return const Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.all(32),
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      );
+                                    }
+                                    
+                                    final unitsInfo = snapshot.data ?? [];
+                                    return _buildWorldMapSection(unitsInfo, lessonProvider.isLoading);
+                                  },
+                                ),
                                 
                                 const SizedBox(height: 100),
                               ],

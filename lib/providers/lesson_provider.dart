@@ -143,7 +143,7 @@ class LessonProvider with ChangeNotifier {
   }
 
   /// الحصول على الدروس المتاحة بناءً على نظام الوحدات - متاح لجميع المستخدمين
-  List<LessonModel> getAvailableLessons(List<String> completedQuizzes, int currentUnit) async {
+  Future<List<LessonModel>> getAvailableLessons(List<String> completedQuizzes, int currentUnit) async {
     if (_lessons.isEmpty) {
       return [];
     }

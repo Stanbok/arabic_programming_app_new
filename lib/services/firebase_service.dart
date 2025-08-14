@@ -1,214 +1,79 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import '../models/user_model.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
+import '../models/user_model.dart';
 import '../models/lesson_attempt_model.dart';
 
-import 'dart:io';
-
 class FirebaseService {
-  static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseStorage _storage = FirebaseStorage.instance;
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Authentication Methods
-  static Future<UserCredential?> signInWithEmailAndPassword(
-      String email, String password) async {
+  /// Check network connectivity
+  static Future<bool> checkConnection() async {
     try {
-      return await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final connectivityResult = await Connectivity().checkConnectivity();
+      return connectivityResult != ConnectivityResult.none;
     } catch (e) {
-      throw Exception('خطأ في تسجيل الدخول: ${e.toString()}');
+      return false;
     }
   }
 
-  static Future<UserCredential?> createUserWithEmailAndPassword(
-      String email, String password) async {
-    try {
-      return await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-    } catch (e) {
-      throw Exception('خطأ في إنشاء الحساب: ${e.toString()}');
-    }
-  }
-
-  static Future<void> sendPasswordResetEmail(String email) async {
-    try {
-      await _auth.sendPasswordResetEmail(email: email);
-    } catch (e) {
-      throw Exception('خطأ في إرسال رابط إعادة تعيين كلمة المرور: ${e.toString()}');
-    }
-  }
-
-  static Future<void> signOut() async {
-    await _auth.signOut();
-  }
-
-  static User? getCurrentUser() {
-    return _auth.currentUser;
-  }
-
-  // User Data Methods
-  static Future<void> createUserDocument(UserModel user) async {
-    try {
-      await _firestore.collection('users').doc(user.id).set(user.toMap());
-    } catch (e) {
-      throw Exception('خطأ في حفظ بيانات المستخدم: ${e.toString()}');
-    }
-  }
-
-  static Future<UserModel?> getUserData(String userId) async {
-    try {
-      return await retryOperation(() async {
-        DocumentSnapshot doc = await _firestore
-            .collection('users')
-            .doc(userId)
-            .get(const GetOptions(source: Source.serverAndCache));
-        
-        if (doc.exists) {
-          return UserModel.fromMap(doc.data() as Map<String, dynamic>);
-        }
-        return null;
-      });
-    } catch (e) {
-      throw Exception('خطأ في جلب بيانات المستخدم: ${e.toString()}');
-    }
-  }
-
-  static Future<void> updateUserData(String userId, Map<String, dynamic> data) async {
-    try {
-      await _firestore.collection('users').doc(userId).update(data);
-    } catch (e) {
-      throw Exception('خطأ في تحديث بيانات المستخدم: ${e.toString()}');
-    }
-  }
-
-  static Stream<UserModel?> getUserDataStream(String userId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots(includeMetadataChanges: true)
-        .map((doc) {
-          if (doc.exists && doc.data() != null) {
-            return UserModel.fromMap(doc.data()!);
-          }
-          return null;
-        })
-        .handleError((error) {
-          print('خطأ في stream بيانات المستخدم: $error');
-          throw Exception('خطأ في الاستماع لبيانات المستخدم: $error');
-        });
-  }
-
-  // Lesson Methods
+  /// Get lessons from Firestore
   static Future<List<LessonModel>> getLessons({int? unit}) async {
     try {
-      print('🔄 جلب الدروس من Firestore...');
-      
-      Query query = _firestore
-          .collection('lessons')
-          .where('isPublished', isEqualTo: true)
-          .orderBy('unit')
-          .orderBy('order');
+      Query query = _firestore.collection('lessons');
       
       if (unit != null) {
         query = query.where('unit', isEqualTo: unit);
       }
-
-      print('🔍 تنفيذ الاستعلام...');
-      QuerySnapshot snapshot = await query.get();
       
-      print('📦 تم جلب ${snapshot.docs.length} مستند');
+      final querySnapshot = await query.get();
       
-      if (snapshot.docs.isEmpty) {
-        print('⚠️ لا توجد دروس في قاعدة البيانات!');
-        print('💡 تأكد من:');
-        print('  - وجود مجموعة "lessons" في Firestore');
-        print('  - وجود دروس مع isPublished = true');
-        print('  - صحة قواعد الأمان في Firestore');
-      }
-      
-      final lessons = snapshot.docs
-          .map((doc) {
-            try {
-              final data = doc.data() as Map<String, dynamic>;
-              print('📄 معالجة الدرس: ${data['title'] ?? 'بدون عنوان'}');
-              return LessonModel.fromMap(data);
-            } catch (e) {
-              print('❌ خطأ في معالجة الدرس ${doc.id}: $e');
-              return null;
-            }
-          })
-          .where((lesson) => lesson != null)
-          .cast<LessonModel>()
+      return querySnapshot.docs
+          .map((doc) => LessonModel.fromMap(doc.data() as Map<String, dynamic>))
           .toList();
-      
-      print('✅ تم معالجة ${lessons.length} درس بنجاح');
-      return lessons;
     } catch (e) {
-      print('❌ خطأ في جلب الدروس: $e');
-      
-      if (e.toString().contains('permission-denied')) {
-        throw Exception('خطأ في الصلاحيات: تأكد من قواعد الأمان في Firestore');
-      } else if (e.toString().contains('unavailable')) {
-        throw Exception('خطأ في الاتصال: تأكد من اتصال الإنترنت');
-      } else {
-        throw Exception('خطأ في جلب الدروس: ${e.toString()}');
-      }
+      print('خطأ في جلب الدروس من Firebase: $e');
+      return [];
     }
   }
 
+  /// Get a specific lesson
   static Future<LessonModel?> getLesson(String lessonId) async {
     try {
-      DocumentSnapshot doc = await _firestore.collection('lessons').doc(lessonId).get();
+      final doc = await _firestore.collection('lessons').doc(lessonId).get();
+      
       if (doc.exists) {
-        return LessonModel.fromMap(doc.data() as Map<String, dynamic>);
+        return LessonModel.fromMap(doc.data()!);
       }
+      
       return null;
     } catch (e) {
-      throw Exception('خطأ في جلب الدرس: ${e.toString()}');
+      print('خطأ في جلب الدرس من Firebase: $e');
+      return null;
     }
   }
 
-  // Quiz Methods
-  static Future<void> saveQuizResult(
-      String userId, String lessonId, QuizResultModel result) async {
+  /// Save quiz result
+  static Future<void> saveQuizResult(String userId, String lessonId, QuizResultModel result) async {
     try {
       await _firestore
           .collection('users')
           .doc(userId)
-          .collection('quizResults')
+          .collection('quiz_results')
           .doc(lessonId)
           .set(result.toMap());
-    } catch (e) {
-      throw Exception('خطأ في حفظ نتيجة الاختبار: ${e.toString()}');
-    }
-  }
-
-  static Future<List<QuizResultModel>> getQuizResults(String userId) async {
-    try {
-      QuerySnapshot snapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('quizResults')
-          .orderBy('completedAt', descending: true)
-          .get();
       
-      return snapshot.docs
-          .map((doc) => QuizResultModel.fromMap(doc.data() as Map<String, dynamic>))
-          .toList();
+      print('✅ تم حفظ نتيجة الاختبار في Firebase');
     } catch (e) {
-      throw Exception('خطأ في جلب نتائج الاختبارات: ${e.toString()}');
+      print('❌ خطأ في حفظ نتيجة الاختبار: $e');
+      rethrow;
     }
   }
 
-  // Attempt Methods - New for statistics tracking
+  /// Save lesson attempt for statistics
   static Future<void> saveAttempt(LessonAttemptModel attempt) async {
     try {
       await _firestore
@@ -217,236 +82,132 @@ class FirebaseService {
           .collection('attempts')
           .doc(attempt.id)
           .set(attempt.toMap());
+      
+      print('✅ تم حفظ المحاولة في Firebase');
     } catch (e) {
-      throw Exception('خطأ في حفظ المحاولة: ${e.toString()}');
+      print('❌ خطأ في حفظ المحاولة: $e');
+      rethrow;
     }
   }
 
-  static Future<List<LessonAttemptModel>> getAttempts(String userId, {String? lessonId}) async {
+  /// Get user data
+  static Future<UserModel?> getUserData(String userId) async {
     try {
-      Query query = _firestore
+      final doc = await _firestore.collection('users').doc(userId).get();
+      
+      if (doc.exists) {
+        return UserModel.fromMap(doc.data()!);
+      }
+      
+      return null;
+    } catch (e) {
+      print('خطأ في جلب بيانات المستخدم: $e');
+      return null;
+    }
+  }
+
+  /// Update user data
+  static Future<void> updateUserData(String userId, Map<String, dynamic> data) async {
+    try {
+      await _firestore.collection('users').doc(userId).update(data);
+      print('✅ تم تحديث بيانات المستخدم في Firebase');
+    } catch (e) {
+      print('❌ خطأ في تحديث بيانات المستخدم: $e');
+      rethrow;
+    }
+  }
+
+  /// Create user document
+  static Future<void> createUserDocument(String userId, UserModel user) async {
+    try {
+      await _firestore.collection('users').doc(userId).set(user.toMap());
+      print('✅ تم إنشاء مستند المستخدم في Firebase');
+    } catch (e) {
+      print('❌ خطأ في إنشاء مستند المستخدم: $e');
+      rethrow;
+    }
+  }
+
+  /// Get user attempts for statistics
+  static Future<List<LessonAttemptModel>> getUserAttempts(String userId) async {
+    try {
+      final querySnapshot = await _firestore
           .collection('users')
           .doc(userId)
           .collection('attempts')
-          .orderBy('attemptedAt', descending: true);
+          .orderBy('attemptedAt', descending: true)
+          .get();
       
-      if (lessonId != null) {
-        query = query.where('lessonId', isEqualTo: lessonId);
-      }
-
-      QuerySnapshot snapshot = await query.get();
-      
-      return snapshot.docs
-          .map((doc) => LessonAttemptModel.fromMap(doc.data() as Map<String, dynamic>))
+      return querySnapshot.docs
+          .map((doc) => LessonAttemptModel.fromMap(doc.data()))
           .toList();
     } catch (e) {
-      throw Exception('خطأ في جلب المحاولات: ${e.toString()}');
+      print('خطأ في جلب محاولات المستخدم: $e');
+      return [];
     }
   }
 
-  // XP and Gems Methods - المصدر الوحيد لتحديث المكافآت في Firebase
-  static Future<void> addXPAndGems(String userId, int xp, int gems, String reason) async {
+  /// Batch update user progress
+  static Future<void> batchUpdateUserProgress(String userId, Map<String, dynamic> updates) async {
     try {
-      print('🔄 إضافة مكافآت Firebase: +$xp XP, +$gems Gems ($reason)');
-      
       final batch = _firestore.batch();
+      final userRef = _firestore.collection('users').doc(userId);
       
-      // جلب بيانات المستخدم الحالية
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      final userData = userDoc.data();
-      
-      if (userData != null) {
-        final currentXP = userData['xp'] ?? 0;
-        final currentLevel = userData['currentLevel'] ?? 1;
-        final newXP = currentXP + xp;
-        
-        // حساب المستوى الجديد
-        final newLevel = _calculateLevelFromXP(newXP);
-        
-        // تحديث XP والجواهر والمستوى
-        final userRef = _firestore.collection('users').doc(userId);
-        batch.update(userRef, {
-          'xp': FieldValue.increment(xp),
-          'gems': FieldValue.increment(gems),
-          'currentLevel': newLevel,
-        });
-        
-        // إضافة مكافأة ترقية المستوى (مرة واحدة فقط)
-        if (newLevel > currentLevel) {
-          batch.update(userRef, {
-            'gems': FieldValue.increment(20), // مكافأة 20 جوهرة للترقية
-          });
-          
-          // سجل معاملة الترقية
-          final levelUpTransactionRef = _firestore
-              .collection('users')
-              .doc(userId)
-              .collection('transactions')
-              .doc();
-          
-          batch.set(levelUpTransactionRef, {
-            'type': 'level_up',
-            'xpAmount': 0,
-            'gemsAmount': 20,
-            'reason': 'ترقية للمستوى $newLevel',
-            'timestamp': FieldValue.serverTimestamp(),
-          });
-          
-          print('🎉 ترقية للمستوى $newLevel! مكافأة إضافية: +20 جوهرة');
-        }
-      } else {
-        // إذا لم توجد بيانات المستخدم، أنشئ مستخدم جديد
-        final userRef = _firestore.collection('users').doc(userId);
-        batch.update(userRef, {
-          'xp': FieldValue.increment(xp),
-          'gems': FieldValue.increment(gems),
-          'currentLevel': _calculateLevelFromXP(xp),
-        });
-      }
-      
-      // إضافة سجل المعاملة
-      final transactionRef = _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('transactions')
-          .doc();
-      
-      batch.set(transactionRef, {
-        'type': xp > 0 ? 'reward' : 'expense',
-        'xpAmount': xp,
-        'gemsAmount': gems,
-        'reason': reason,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      batch.update(userRef, updates);
       
       await batch.commit();
-      print('✅ تم تحديث المكافآت في Firebase بنجاح');
+      print('✅ تم تحديث تقدم المستخدم بشكل مجمع');
     } catch (e) {
-      print('❌ خطأ في تحديث النقاط: $e');
-      throw Exception('خطأ في تحديث النقاط: ${e.toString()}');
+      print('❌ خطأ في التحديث المجمع: $e');
+      rethrow;
     }
   }
 
-  // Storage Methods
-  static Future<String> uploadProfileImage(String userId, String imagePath) async {
-    try {
-      final ref = _storage.ref().child('profile_images').child('$userId.jpg');
-      await ref.putFile(File(imagePath));
-      return await ref.getDownloadURL();
-    } catch (e) {
-      throw Exception('خطأ في رفع الصورة: ${e.toString()}');
-    }
-  }
-
-  // Settings Methods
-  static Future<void> resetUserProgress(String userId) async {
+  /// Delete user data (for account deletion)
+  static Future<void> deleteUserData(String userId) async {
     try {
       final batch = _firestore.batch();
       
-      // Reset user stats
-      final userRef = _firestore.collection('users').doc(userId);
-      batch.update(userRef, {
-        'xp': 0,
-        'gems': 0,
-        'currentLevel': 1,
-        'completedLessons': [],
-      });
+      // Delete user document
+      batch.delete(_firestore.collection('users').doc(userId));
       
-      // Delete quiz results subcollection
-      final quizSnapshot = await _firestore
+      // Delete user's quiz results
+      final quizResults = await _firestore
           .collection('users')
           .doc(userId)
-          .collection('quizResults')
+          .collection('quiz_results')
           .get();
       
-      for (var doc in quizSnapshot.docs) {
+      for (var doc in quizResults.docs) {
         batch.delete(doc.reference);
       }
       
-      // Delete attempts subcollection
-      final attemptsSnapshot = await _firestore
+      // Delete user's attempts
+      final attempts = await _firestore
           .collection('users')
           .doc(userId)
           .collection('attempts')
           .get();
       
-      for (var doc in attemptsSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-      
-      // Delete transactions subcollection
-      final transactionSnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('transactions')
-          .get();
-      
-      for (var doc in transactionSnapshot.docs) {
+      for (var doc in attempts.docs) {
         batch.delete(doc.reference);
       }
       
       await batch.commit();
+      print('✅ تم حذف جميع بيانات المستخدم');
     } catch (e) {
-      throw Exception('خطأ في إعادة تعيين الحساب: ${e.toString()}');
+      print('❌ خطأ في حذف بيانات المستخدم: $e');
+      rethrow;
     }
   }
 
-  // Level Management
-  static Future<void> checkAndUpdateLevel(String userId) async {
+  /// Sync local data with Firebase
+  static Future<void> syncLocalData(String userId, Map<String, dynamic> localData) async {
     try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      final userData = userDoc.data()!;
-      final currentXP = userData['xp'] ?? 0;
-      final currentLevel = userData['currentLevel'] ?? 1;
-      
-      // Calculate new level based on XP
-      int newLevel = _calculateLevelFromXP(currentXP);
-      
-      if (newLevel > currentLevel) {
-        await _firestore.collection('users').doc(userId).update({
-          'currentLevel': newLevel,
-        });
-        
-        // Award bonus gems for level up (handled in addXPAndGems now)
-        await addXPAndGems(userId, 0, 20, 'مكافأة الوصول للمستوى $newLevel');
-      }
+      await updateUserData(userId, localData);
+      print('🔄 تم مزامنة البيانات المحلية مع Firebase');
     } catch (e) {
-      throw Exception('خطأ في تحديث المستوى: ${e.toString()}');
+      print('⚠️ فشل في مزامنة البيانات المحلية: $e');
     }
-  }
-
-  static int _calculateLevelFromXP(int xp) {
-    if (xp < 100) return 1;
-    if (xp < 300) return 2;
-    if (xp < 600) return 3;
-    if (xp < 1000) return 4;
-    return (xp / 500).floor() + 1;
-  }
-
-  // التحقق من اتصال الشبكة
-  static Future<bool> checkConnection() async {
-    try {
-      await _firestore.doc('test/connection').get();
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // إعادة المحاولة مع التأخير
-  static Future<T> retryOperation<T>(
-    Future<T> Function() operation, {
-    int maxRetries = 3,
-    Duration delay = const Duration(seconds: 1),
-  }) async {
-    for (int i = 0; i < maxRetries; i++) {
-      try {
-        return await operation();
-      } catch (e) {
-        if (i == maxRetries - 1) rethrow;
-        await Future.delayed(delay * (i + 1));
-      }
-    }
-    throw Exception('فشل في العملية بعد $maxRetries محاولات');
   }
 }

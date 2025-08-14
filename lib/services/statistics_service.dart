@@ -153,7 +153,7 @@ class StatisticsService {
   }
 
   /// Calculate XP multiplier for post-pass retakes
-  static double calculateRetakeMultiplier(String lessonId, String userId) async {
+  static Future<double> calculateRetakeMultiplier(String lessonId, String userId) async {
     final attempts = await getAttempts(lessonId, userId);
     
     if (attempts.isEmpty) return 1.0;

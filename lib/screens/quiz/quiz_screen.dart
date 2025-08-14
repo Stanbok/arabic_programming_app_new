@@ -11,6 +11,8 @@ import '../../services/firebase_service.dart';
 import '../../services/reward_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../models/progress_model.dart';
+import '../../models/reward_info_model.dart';
+import '../../models/retake_stats_model.dart';
 
 class QuizScreen extends StatefulWidget {
   final String lessonId;
@@ -59,10 +61,15 @@ class _QuizScreenState extends State<QuizScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userId = authProvider.user?.uid ?? 'guest';
     
-    _alreadyCompleted = await RewardService.isQuizCompleted(widget.lessonId, userId);
+    final isRetakeAfterPass = await RewardService.isRetakeAfterPass(widget.lessonId, userId);
     
-    if (_alreadyCompleted) {
-      print('⚠️ تم إكمال هذا الاختبار مسبقاً');
+    // السماح بإعادة الاختبار دائماً - النظام الجديد يتعامل مع المكافآت
+    _alreadyCompleted = false;
+    
+    if (isRetakeAfterPass) {
+      print('🔄 هذه محاولة إعادة بعد النجاح - سيتم تطبيق نظام تقليل المكافآت');
+    } else {
+      print('✅ هذه المحاولة الأولى أو محاولة قبل النجاح');
     }
   }
 
@@ -154,33 +161,6 @@ class _QuizScreenState extends State<QuizScreen> {
     final isRetakeAfterPass = await RewardService.isRetakeAfterPass(widget.lessonId, userId);
     final retakeStats = await RewardService.getRetakeStats(widget.lessonId, userId);
 
-    // التحقق من عدم إكمال الاختبار مسبقاً (للمحاولات الأولى فقط)
-    if (!isRetakeAfterPass && await RewardService.isQuizCompleted(widget.lessonId, userId)) {
-      setState(() {
-        _isCompleted = true;
-        _result = QuizResultModel(
-          lessonId: widget.lessonId,
-          score: 0,
-          correctAnswers: 0,
-          totalQuestions: lesson.quiz.length,
-          answers: _selectedAnswers,
-          completedAt: DateTime.now(),
-        );
-        _resultsCalculated = true;
-        _scoringTimeMs = DateTime.now().difference(_scoringStartTime!).inMilliseconds;
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إكمال هذا الاختبار مسبقاً'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
     int correctAnswers = 0;
     for (int i = 0; i < lesson.quiz.length; i++) {
       if (i < _selectedAnswers.length && _selectedAnswers[i] == lesson.quiz[i].correctAnswerIndex) {
@@ -221,91 +201,95 @@ class _QuizScreenState extends State<QuizScreen> {
     _saveResultsInBackground(authProvider, lessonProvider, userId, lesson, isRetakeAfterPass);
   }
 
-  Future<void> _saveResultsInBackground(
-    AuthProvider authProvider,
-    LessonProvider lessonProvider,
-    String userId,
-    LessonModel lesson,
-    bool isRetakeAfterPass, // إضافة معامل إعادة المحاولة
-  ) async {
-    if (_result == null) return;
-
+  Future<void> _saveResultsInBackground(AuthProvider authProvider, LessonProvider lessonProvider, String userId, LessonModel lesson, bool isRetakeAfterPass) async {
     setState(() {
       _isSavingResults = true;
     });
 
     try {
-      // حفظ النتيجة وإضافة المكافآت
-      if (!authProvider.isGuestUser && authProvider.user != null) {
-        final futures = <Future>[];
+      final futures = <Future>[];
+      
+      // حفظ النتيجة في Firebase
+      futures.add(
+        lessonProvider.saveQuizResult(userId, widget.lessonId, _result!)
+          .timeout(const Duration(seconds: 5))
+      );
 
-        // حفظ نتيجة الاختبار
+      if (!isRetakeAfterPass && _result!.isPassed) {
         futures.add(
-          FirebaseService.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!)
-            .timeout(const Duration(seconds: 5))
+          RewardService.markQuizCompleted(widget.lessonId, userId, _result!.score)
+            .timeout(const Duration(seconds: 3))
+        );
+      }
+      
+      // تحديث حالة الدرس
+      futures.add(
+        lessonProvider.updateLessonStateAfterCompletion(
+          widget.lessonId, 
+          userId, 
+          _result!.isPassed
+        ).timeout(const Duration(seconds: 3))
+      );
+
+      // انتظار جميع العمليات الأساسية
+      await Future.wait(futures, eagerError: false);
+      
+      if (_result!.isPassed) {
+        final rewardInfo = await RewardService.getLessonRewardsWithRetakeLogic(
+          lesson, 
+          _result!.score, 
+          userId,
+          isRetakeAfterPass: isRetakeAfterPass
         );
         
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        
+        final success = await userProvider.addReward(rewardInfo, userId)
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
+        
+        if (success) {
+          print('✅ تم إضافة المكافآت: $rewardInfo');
+        } else {
+          print('❌ فشل في إضافة المكافآت');
+        }
+
         if (!isRetakeAfterPass) {
-          futures.add(
-            RewardService.markQuizCompleted(widget.lessonId, userId, _result!.score)
-              .timeout(const Duration(seconds: 3))
-          );
+          await RewardService.recordFirstPassTime(widget.lessonId, userId);
+        } else {
+          await RewardService.recordRetakeAttempt(widget.lessonId, userId);
         }
         
-        // تحديث حالة الدرس
-        futures.add(
-          lessonProvider.updateLessonStateAfterCompletion(
+        try {
+          final nextLesson = await lessonProvider.unlockNextLesson(
             widget.lessonId, 
-            authProvider.user!.uid, 
-            _result!.isPassed
-          ).timeout(const Duration(seconds: 3))
-        );
-
-        // انتظار جميع العمليات الأساسية
-        await Future.wait(futures, eagerError: false);
-        
-        // إضافة المكافآت إذا نجح
-        if (_result!.isPassed) {
-          final rewardInfo = await RewardService.getLessonRewardsWithRetakeLogic(
-            lesson, 
-            _result!.score, 
-            userId,
-            isRetakeAfterPass: isRetakeAfterPass
+            authProvider.user?.completedLessons ?? []
           );
           
-          final userProvider = Provider.of<UserProvider>(context, listen: false);
-          
-          final success = await userProvider.addReward(rewardInfo, authProvider.user!.uid)
-            .timeout(const Duration(seconds: 5), onTimeout: () => false);
-          
-          if (success) {
-            print('✅ تم إضافة المكافآت: $rewardInfo');
-          } else {
-            print('❌ فشل في إضافة المكافآت');
+          if (nextLesson != null && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('تم فتح الدرس التالي: ${nextLesson.title}'),
+                backgroundColor: Colors.green,
+                action: SnackBarAction(
+                  label: 'انتقل',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    context.pushReplacement('/lesson/${nextLesson.id}');
+                  },
+                ),
+              ),
+            );
           }
-
-          if (!isRetakeAfterPass) {
-            await RewardService.recordFirstPassTime(widget.lessonId, userId);
-          } else {
-            await RewardService.recordRetakeAttempt(widget.lessonId, userId);
-          }
-          
-          try {
-            final nextLesson = await lessonProvider.unlockNextLesson(
-              widget.lessonId, 
-              userProvider.user?.completedLessons ?? []
-            ).timeout(const Duration(seconds: 3));
-            
-            if (nextLesson != null) {
-              print('🔓 تم فتح الدرس التالي: ${nextLesson.title}');
-            }
-          } catch (e) {
-            print('⚠️ فشل في فتح الدرس التالي: $e');
-          }
+        } catch (e) {
+          print('⚠️ خطأ في فتح الدرس التالي: $e');
         }
-      } else {
-        // للضيوف - تسجيل الإكمال محلياً فقط
-        if (!isRetakeAfterPass) {
+      }
+      
+    } catch (e) {
+      print('❌ خطأ في حفظ النتائج: $e');
+      
+      try {
+        if (!isRetakeAfterPass && _result!.isPassed) {
           await RewardService.markQuizCompleted(widget.lessonId, userId, _result!.score)
             .timeout(const Duration(seconds: 3));
         }
@@ -323,20 +307,8 @@ class _QuizScreenState extends State<QuizScreen> {
             await RewardService.recordRetakeAttempt(widget.lessonId, userId);
           }
         }
-      }
-
-      print('✅ تم حفظ جميع النتائج بنجاح');
-    } catch (e) {
-      print('❌ خطأ في حفظ النتيجة: $e');
-      // عرض رسالة خطأ للمستخدم
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('تم حساب النتيجة بنجاح، لكن حدث خطأ في الحفظ: $e'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+      } catch (localError) {
+        print('❌ فشل في الحفظ المحلي أيضاً: $localError');
       }
     } finally {
       if (mounted) {
@@ -472,8 +444,9 @@ class _QuizScreenState extends State<QuizScreen> {
             );
           }
 
+          // السماح بإعادة الاختبار دائماً - النظام الجديد يتعامل مع المكافآت
           if (_isCompleted && _result != null) {
-            return _buildResultScreen(lesson, _result!);
+            return _buildResultsView(lesson, _result!);
           }
 
           return Column(
@@ -726,12 +699,40 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
-  Widget _buildResultScreen(LessonModel lesson, QuizResultModel result) {
+  Widget _buildResultsView(LessonModel lesson, QuizResultModel result) {
     return FutureBuilder<RetakeStats>(
       future: RewardService.getRetakeStats(widget.lessonId, Provider.of<AuthProvider>(context, listen: false).user?.uid ?? 'guest'),
       builder: (context, retakeSnapshot) {
         final retakeStats = retakeSnapshot.data;
-        final rewardInfo = result.isPassed ? RewardService.getLessonRewards(lesson, result.score) : null;
+        
+        RewardInfo? rewardInfo;
+        if (result.isPassed && retakeStats != null) {
+          final baseXP = lesson.xpReward;
+          final baseGems = lesson.gemsReward;
+          
+          double performanceMultiplier = 1.0;
+          if (result.score >= 95) {
+            performanceMultiplier = 1.5;
+          } else if (result.score >= 85) {
+            performanceMultiplier = 1.25;
+          } else if (result.score >= 70) {
+            performanceMultiplier = 1.0;
+          } else {
+            performanceMultiplier = 0.0;
+          }
+          
+          final retakeMultiplier = retakeStats.hasPassedBefore ? retakeStats.nextRewardMultiplier : 1.0;
+          
+          rewardInfo = RewardInfo(
+            xp: (baseXP * performanceMultiplier * retakeMultiplier).round(),
+            gems: (baseGems * performanceMultiplier * retakeMultiplier).round(),
+            source: retakeStats.hasPassedBefore ? 'lesson_retake' : 'lesson_completion',
+            lessonId: lesson.id,
+            score: result.score,
+            retakeMultiplier: retakeMultiplier,
+            isRetake: retakeStats.hasPassedBefore,
+          );
+        }
         
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -950,59 +951,48 @@ class _QuizScreenState extends State<QuizScreen> {
               const SizedBox(height: 32),
               
               // Rewards (if passed)
-              if (result.isPassed && rewardInfo != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.amber.withOpacity(0.1),
-                        Colors.orange.withOpacity(0.1),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.amber.withOpacity(0.3),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.card_giftcard,
-                        size: 32,
-                        color: Colors.amber,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'المكافآت المكتسبة',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${rewardInfo.xp} نقطة خبرة + ${rewardInfo.gems} جوهرة',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.amber[700],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (retakeStats != null && retakeStats.hasPassedBefore && retakeStats.nextRewardMultiplier < 1.0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            'مكافأة مقللة (${retakeStats.nextRewardPercentage}) - محاولة إعادة',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.orange[600],
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                    ],
+              if (rewardInfo != null && (rewardInfo.xp > 0 || rewardInfo.gems > 0)) ...[
+                const SizedBox(height: 24),
+                Text(
+                  'المكافآت المكتسبة',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    if (rewardInfo.xp > 0)
+                      _buildRewardCard(
+                        icon: Icons.star,
+                        color: Colors.amber,
+                        value: '${rewardInfo.xp}',
+                        label: 'XP',
+                      ),
+                    if (rewardInfo.gems > 0)
+                      _buildRewardCard(
+                        icon: Icons.diamond,
+                        color: Colors.blue,
+                        value: '${rewardInfo.gems}',
+                        label: 'جواهر',
+                      ),
+                  ],
+                ),
+                
+                if (retakeStats != null && retakeStats.hasPassedBefore && retakeStats.nextRewardMultiplier < 1.0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'مكافأة مقللة (${retakeStats.nextRewardPercentage}) - محاولة إعادة',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.orange[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+              ],
+
               const SizedBox(height: 32),
               
               // Action Buttons
@@ -1038,7 +1028,6 @@ class _QuizScreenState extends State<QuizScreen> {
                       child: CustomButton(
                         text: 'إعادة المحاولة',
                         onPressed: () {
-                          // إعادة تعيين الاختبار للمحاولة مرة أخرى
                           setState(() {
                             _isCompleted = false;
                             _result = null;
@@ -1048,6 +1037,7 @@ class _QuizScreenState extends State<QuizScreen> {
                             _currentQuestionIndex = 0;
                             _selectedAnswers = List.filled(lesson.quiz.length, -1);
                             _timeRemaining = 300;
+                            _alreadyCompleted = false; // السماح بإعادة المحاولة
                           });
                           _startTimer();
                         },
@@ -1104,6 +1094,47 @@ class _QuizScreenState extends State<QuizScreen> {
           textAlign: TextAlign.center,
         ),
       ],
+    );
+  }
+
+  Widget _buildRewardCard({
+    required IconData icon,
+    required Color color,
+    required String value,
+    required String label,
+  }) {
+    return Container(
+      width: 100,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 32,
+            color: color,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }

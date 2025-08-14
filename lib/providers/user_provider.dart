@@ -393,8 +393,8 @@ class UserProvider with ChangeNotifier {
     switch (rewardInfo.source) {
       case 'lesson_completion':
         return 'إكمال درس: ${rewardInfo.lessonId} (${rewardInfo.score}%)';
-      case 'app_share':
-        return 'مشاركة التطبيق';
+      case 'lesson_retake':
+        return 'إعادة درس: ${rewardInfo.lessonId} (${rewardInfo.score}%) - مكافأة مقللة';
       default:
         return 'مكافأة: ${rewardInfo.source}';
     }

@@ -60,6 +60,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         _isLoading = true;
       });
 
+      await lessonProvider.clearDuplicateData();
+
       // تحميل الدروس المحلية فوراً
       await lessonProvider.loadLessons();
       
@@ -101,6 +103,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
 
     try {
+      await lessonProvider.clearDuplicateData();
+      
       await lessonProvider.loadLessons(forceRefresh: true);
       
       if (authProvider.user != null && !authProvider.isGuestUser) {

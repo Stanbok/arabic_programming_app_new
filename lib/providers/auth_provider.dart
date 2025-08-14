@@ -123,9 +123,14 @@ class AuthProvider with ChangeNotifier {
               .timeout(const Duration(seconds: 10));
 
           if (!userDoc.exists) {
+            final displayName = _user!.displayName?.trim();
+            final userName = (displayName != null && displayName.isNotEmpty) 
+                ? displayName 
+                : 'مستخدم Google';
+                
             final userModel = UserModel(
               id: _user!.uid,
-              name: _user!.displayName ?? 'مستخدم Google',
+              name: userName,
               email: _user!.email ?? '',
               createdAt: DateTime.now(),
               lastLoginAt: DateTime.now(),
@@ -194,9 +199,14 @@ class AuthProvider with ChangeNotifier {
               .timeout(const Duration(seconds: 10));
 
           if (!userDoc.exists) {
+            final displayName = _user!.displayName?.trim();
+            final userName = (displayName != null && displayName.isNotEmpty) 
+                ? displayName 
+                : 'مستخدم Facebook';
+                
             final userModel = UserModel(
               id: _user!.uid,
-              name: _user!.displayName ?? 'مستخدم Facebook',
+              name: userName,
               email: _user!.email ?? '',
               createdAt: DateTime.now(),
               lastLoginAt: DateTime.now(),
@@ -263,7 +273,22 @@ class AuthProvider with ChangeNotifier {
       
       print('📝 بدء إنشاء حساب جديد...');
       
-      final credential = await FirebaseService.createUserWithEmailAndPassword(email, password)
+      final trimmedName = name.trim();
+      final trimmedEmail = email.trim().toLowerCase();
+      
+      if (trimmedName.isEmpty) {
+        throw Exception('يرجى إدخال اسم صحيح');
+      }
+      
+      if (trimmedName.length < 2) {
+        throw Exception('الاسم يجب أن يكون حرفين على الأقل');
+      }
+      
+      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(trimmedEmail)) {
+        throw Exception('يرجى إدخال بريد إلكتروني صحيح');
+      }
+      
+      final credential = await FirebaseService.createUserWithEmailAndPassword(trimmedEmail, password)
           .timeout(const Duration(seconds: 15), onTimeout: () {
         throw Exception('انتهت مهلة إنشاء الحساب - تأكد من اتصال الإنترنت');
       });
@@ -274,17 +299,29 @@ class AuthProvider with ChangeNotifier {
         
         print('✅ تم إنشاء الحساب بنجاح');
         
-        // Create user document in Firestore with timeout
-        final userModel = UserModel(
-          id: _user!.uid,
-          name: name,
-          email: email,
-          createdAt: DateTime.now(),
-          lastLoginAt: DateTime.now(),
-        );
-        
-        await FirebaseService.createUserDocument(userModel)
-            .timeout(const Duration(seconds: 10));
+        try {
+          final userModel = UserModel(
+            id: _user!.uid,
+            name: trimmedName, // استخدام الاسم المنظف
+            email: trimmedEmail, // استخدام البريد المنظف
+            createdAt: DateTime.now(),
+            lastLoginAt: DateTime.now(),
+          );
+          
+          await FirebaseService.createUserDocument(userModel)
+              .timeout(const Duration(seconds: 10));
+          
+          print('✅ تم حفظ بيانات المستخدم بنجاح: $trimmedName');
+        } catch (e) {
+          print('❌ فشل في حفظ بيانات المستخدم: $e');
+          try {
+            await _user!.delete();
+            print('🗑️ تم حذف الحساب بسبب فشل حفظ البيانات');
+          } catch (deleteError) {
+            print('❌ فشل في حذف الحساب: $deleteError');
+          }
+          throw Exception('فشل في حفظ بيانات المستخدم - تم إلغاء إنشاء الحساب');
+        }
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('is_guest_user', false);
@@ -389,6 +426,8 @@ class AuthProvider with ChangeNotifier {
       return 'تم تجاوز عدد المحاولات المسموح - حاول مرة أخرى لاحقاً';
     } else if (error.contains('operation-not-allowed')) {
       return 'هذه الطريقة غير مفعلة حالياً';
+    } else if (error.contains('فشل في حفظ بيانات المستخدم')) {
+      return 'فشل في حفظ بيانات المستخدم - يرجى المحاولة مرة أخرى';
     }
     return 'حدث خطأ غير متوقع - حاول مرة أخرى';
   }

@@ -41,15 +41,17 @@ class LessonProvider with ChangeNotifier {
   Set<int> get loadingUnits => Set.from(_loadingUnits);
   int get totalLoadedLessons => _loadedLessons.length;
 
-  /// الحصول على جميع الدروس المحملة
+  /// الحصول على جميع الدروس المحملة مع إزالة التكرار
   List<LessonModel> _getAllLoadedLessons() {
-    final allLessons = <LessonModel>[];
-    allLessons.addAll(_localLessons);
-    allLessons.addAll(_loadedLessons.values);
-    
-    // إزالة التكرارات
     final uniqueLessons = <String, LessonModel>{};
-    for (var lesson in allLessons) {
+    
+    // إضافة الدروس المحلية
+    for (var lesson in _localLessons) {
+      uniqueLessons[lesson.id] = lesson;
+    }
+    
+    // إضافة الدروس المحملة (تحل محل المحلية إذا كانت أحدث)
+    for (var lesson in _loadedLessons.values) {
       uniqueLessons[lesson.id] = lesson;
     }
     
@@ -67,6 +69,8 @@ class LessonProvider with ChangeNotifier {
     try {
       _setLoading(true);
       _clearError();
+      
+      await clearDuplicateData();
       
       // المرحلة 1: تحميل الدروس المحلية فوراً (أولوية قصوى)
       await _loadLocalLessonsInstantly(unit: unit);
@@ -728,6 +732,95 @@ class LessonProvider with ChangeNotifier {
   void _clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  /// تنظيف البيانات المكررة والمتداخلة
+  Future<void> clearDuplicateData() async {
+    try {
+      print('🧹 بدء تنظيف البيانات المكررة...');
+      
+      // تنظيف الدروس المكررة في الذاكرة
+      final uniqueLessons = <String, LessonModel>{};
+      for (var lesson in _loadedLessons.values) {
+        uniqueLessons[lesson.id] = lesson;
+      }
+      _loadedLessons.clear();
+      _loadedLessons.addAll(uniqueLessons);
+      
+      // تنظيف الوحدات المكررة
+      final cleanedUnits = <int, List<LessonModel>>{};
+      for (var entry in _unitLessons.entries) {
+        final uniqueUnitLessons = <String, LessonModel>{};
+        for (var lesson in entry.value) {
+          uniqueUnitLessons[lesson.id] = lesson;
+        }
+        cleanedUnits[entry.key] = uniqueUnitLessons.values.toList();
+      }
+      _unitLessons.clear();
+      _unitLessons.addAll(cleanedUnits);
+      
+      // تنظيف الدروس المحلية المكررة
+      final uniqueLocalLessons = <String, LessonModel>{};
+      for (var lesson in _localLessons) {
+        uniqueLocalLessons[lesson.id] = lesson;
+      }
+      _localLessons = uniqueLocalLessons.values.toList();
+      
+      await _cleanupOldSharedPreferencesData();
+      
+      print('✅ تم تنظيف البيانات المكررة - الدروس المحملة: ${_loadedLessons.length}');
+      
+    } catch (e) {
+      print('❌ خطأ في تنظيف البيانات المكررة: $e');
+    }
+  }
+
+  /// تنظيف البيانات القديمة من SharedPreferences
+  Future<void> _cleanupOldSharedPreferencesData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      int cleanedCount = 0;
+      
+      for (String key in keys) {
+        // تنظيف البيانات المتعلقة بالمشاركة
+        if (key.contains('share') || 
+            key.contains('sharing') ||
+            key.contains('shared')) {
+          await prefs.remove(key);
+          cleanedCount++;
+          continue;
+        }
+        
+        // تنظيف البيانات القديمة
+        if (key.contains('_level_') ||
+            key.startsWith('old_') ||
+            key.contains('legacy_') ||
+            key.contains('deprecated_') ||
+            key.endsWith('_old') ||
+            key.contains('backup_')) {
+          await prefs.remove(key);
+          cleanedCount++;
+          continue;
+        }
+        
+        // تنظيف البيانات المكررة
+        if (key.contains('duplicate_') ||
+            key.contains('_copy') ||
+            key.contains('temp_')) {
+          await prefs.remove(key);
+          cleanedCount++;
+          continue;
+        }
+      }
+      
+      if (cleanedCount > 0) {
+        print('🧹 تم تنظيف $cleanedCount مفتاح من البيانات القديمة في SharedPreferences');
+      }
+      
+    } catch (e) {
+      print('❌ خطأ في تنظيف البيانات القديمة من SharedPreferences: $e');
+    }
   }
 }
 

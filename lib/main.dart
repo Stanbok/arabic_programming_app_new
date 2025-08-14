@@ -19,6 +19,8 @@ import 'screens/quiz/quiz_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'services/firebase_service.dart';
+import 'services/reward_service.dart';
+import 'services/data_migration_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +32,28 @@ void main() async {
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
   
+  await _initializeCleanupServices();
+  
   runApp(const MyApp());
+}
+
+/// تهيئة خدمات التنظيف والإصلاح
+Future<void> _initializeCleanupServices() async {
+  try {
+    print('🚀 بدء تهيئة خدمات التنظيف والإصلاح...');
+    
+    // تهيئة خدمة توحيد البيانات
+    final migrationService = DataMigrationService();
+    await migrationService.initialize();
+    
+    // تنظيف البيانات القديمة والمتداخلة
+    await RewardService.cleanupLegacyData();
+    
+    print('✅ تم تهيئة خدمات التنظيف والإصلاح بنجاح');
+  } catch (e) {
+    print('❌ خطأ في تهيئة خدمات التنظيف: $e');
+    // لا نوقف التطبيق في حالة فشل التنظيف
+  }
 }
 
 class MyApp extends StatelessWidget {

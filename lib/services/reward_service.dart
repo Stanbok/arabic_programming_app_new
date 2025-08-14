@@ -4,14 +4,19 @@ import 'dart:convert';
 import '../models/lesson_model.dart';
 
 /// خدمة إدارة المكافآت - المصدر الوحيد لحساب وتوزيع XP والجواهر
+/// يتضمن نظام اضمحلال الخبرة للمحاولات المتكررة بعد النجاح
 class RewardService {
   static const String _completedQuizzesKey = 'completed_quizzes_secure';
-  // static const String _shareRewardKey = 'share_reward_claimed';
-  // static const String _lastShareKey = 'last_share_timestamp';
   static const String _retakeAttemptsKey = 'retake_attempts';
   static const String _lastPassTimestampKey = 'last_pass_timestamp';
   
   /// الحصول على مكافآت الدرس مع نظام تقليل المكافآت للمحاولات المتكررة
+  /// نظام اضمحلال الخبرة:
+  /// - المحاولة الأولى بعد النجاح: 30% من المكافأة الأساسية
+  /// - المحاولة الثانية: 20%
+  /// - المحاولة الثالثة: 10%
+  /// - المحاولة الرابعة فما فوق: 0%
+  /// - إعادة تعيين كل 24 ساعة من آخر نجاح
   static Future<RewardInfo> getLessonRewardsWithRetakeLogic(
     LessonModel lesson, 
     int quizScore, 
@@ -81,7 +86,7 @@ class RewardService {
     );
   }
 
-  /// حساب مضاعف تقليل المكافآت للمحاولات المتكررة
+  /// حساب مضاعف تقليل المكافآت للمحاولات المتكررة (نظام اضمحلال الخبرة)
   static Future<double> _calculateRetakeMultiplier(String lessonId, String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -99,17 +104,17 @@ class RewardService {
       final now = DateTime.now();
       final hoursSinceLastPass = now.difference(lastPassTime).inHours;
       
-      // إعادة تعيين العداد إذا مر أكثر من 24 ساعة
+      // إعادة تعيين العداد إذا مر أكثر من 24 ساعة (نظام اضمحلال الخبرة)
       if (hoursSinceLastPass >= 24) {
         await prefs.remove(retakeKey);
-        print('🔄 تم إعادة تعيين عداد المحاولات بعد 24 ساعة');
+        print('🔄 تم إعادة تعيين عداد المحاولات بعد 24 ساعة (اضمحلال الخبرة)');
         return 0.3; // البداية من 30% بعد إعادة التعيين
       }
       
       // الحصول على عدد المحاولات الحالي
       final currentAttempts = prefs.getInt(retakeKey) ?? 0;
       
-      // حساب المضاعف بناءً على عدد المحاولات
+      // حساب المضاعف بناءً على عدد المحاولات (نظام اضمحلال الخبرة)
       switch (currentAttempts) {
         case 0:
           return 0.3; // 30% للمحاولة الأولى بعد النجاح
@@ -118,7 +123,7 @@ class RewardService {
         case 2:
           return 0.1; // 10% للمحاولة الثالثة
         default:
-          return 0.0; // 0% للمحاولة الرابعة فما فوق
+          return 0.0; // 0% للمحاولة الرابعة فما فوق (اضمحلال كامل)
       }
     } catch (e) {
       print('❌ خطأ في حساب مضاعف إعادة المحاولة: $e');
@@ -233,12 +238,7 @@ class RewardService {
   /// التحقق من إكمال الاختبار مسبقاً
   static Future<bool> isQuizCompleted(String lessonId, String userId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final completedQuizzes = await _getSecureCompletedQuizzes();
-      
-      // إنشاء مفتاح فريد للمستخدم والدرس
-      final quizKey = _generateQuizKey(userId, lessonId);
-      return completedQuizzes.contains(quizKey);
+      return await isRetakeAfterPass(lessonId, userId);
     } catch (e) {
       print('خطأ في التحقق من إكمال الاختبار: $e');
       return false;
@@ -248,79 +248,19 @@ class RewardService {
   /// تسجيل إكمال الاختبار بشكل آمن
   static Future<void> markQuizCompleted(String lessonId, String userId, int score) async {
     try {
-      final quizKey = _generateQuizKey(userId, lessonId);
-      final completedQuizzes = await _getSecureCompletedQuizzes();
+      final isRetakeAfterPass = await RewardService.isRetakeAfterPass(lessonId, userId);
       
-      if (!completedQuizzes.contains(quizKey)) {
-        completedQuizzes.add(quizKey);
-        await _saveSecureCompletedQuizzes(completedQuizzes);
-        
-        // حفظ تفاصيل إضافية للتحقق
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('quiz_${quizKey}_score', score.toString());
-        await prefs.setString('quiz_${quizKey}_timestamp', DateTime.now().toIso8601String());
+      if (!isRetakeAfterPass) {
+        // تسجيل وقت النجاح الأول
+        await recordFirstPassTime(lessonId, userId);
+        print('✅ تم تسجيل إكمال الاختبار للمرة الأولى: $lessonId');
+      } else {
+        print('🔄 محاولة إعادة - لا يتم تسجيل إكمال جديد');
       }
     } catch (e) {
       print('خطأ في تسجيل إكمال الاختبار: $e');
     }
   }
-  
-  /*
-  /// التحقق من إمكانية الحصول على مكافأة المشاركة
-  static Future<bool> canClaimShareReward(String userId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final claimed = prefs.getBool('${_shareRewardKey}_$userId') ?? false;
-      
-      if (claimed) {
-        // التحقق من آخر مشاركة (يمكن المشاركة مرة واحدة كل 24 ساعة)
-        final lastShareStr = prefs.getString('${_lastShareKey}_$userId');
-        if (lastShareStr != null) {
-          final lastShare = DateTime.parse(lastShareStr);
-          final now = DateTime.now();
-          final difference = now.difference(lastShare).inHours;
-          
-          return difference >= 24; // يمكن المشاركة مرة كل 24 ساعة
-        }
-      }
-      
-      return !claimed;
-    } catch (e) {
-      print('خطأ في التحقق من مكافأة المشاركة: $e');
-      return false;
-    }
-  }
-  
-  /// تسجيل مكافأة المشاركة
-  static Future<RewardInfo?> claimShareReward(String userId, bool actuallyShared) async {
-    try {
-      // التحقق من المشاركة الفعلية
-      if (!actuallyShared) {
-        return null;
-      }
-      
-      final canClaim = await canClaimShareReward(userId);
-      if (!canClaim) {
-        return null;
-      }
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('${_shareRewardKey}_$userId', true);
-      await prefs.setString('${_lastShareKey}_$userId', DateTime.now().toIso8601String());
-      
-      return RewardInfo(
-        xp: 0,
-        gems: 50,
-        source: 'app_share',
-        lessonId: null,
-        score: null,
-      );
-    } catch (e) {
-      print('خطأ في تسجيل مكافأة المشاركة: $e');
-      return null;
-    }
-  }
-  */
   
   /// إنشاء مفتاح آمن للاختبار
   static String _generateQuizKey(String userId, String lessonId) {
@@ -384,8 +324,6 @@ class RewardService {
       
       // إزالة جميع البيانات المتعلقة بالمكافآت
       await prefs.remove(_completedQuizzesKey);
-      // await prefs.remove('${_shareRewardKey}_$userId');
-      // await prefs.remove('${_lastShareKey}_$userId');
       
       final keys = prefs.getKeys();
       for (String key in keys) {
@@ -395,14 +333,65 @@ class RewardService {
         if (key.contains(_retakeAttemptsKey) || key.contains(_lastPassTimestampKey)) {
           await prefs.remove(key);
         }
-        if (key.contains('share_reward') || key.contains('last_share')) {
+        if (key.contains('share_reward') || 
+            key.contains('last_share') || 
+            key.contains('completed_quizzes_old') ||
+            key.contains('_level_') ||
+            key.startsWith('old_') ||
+            key.contains('legacy_') ||
+            key.contains('deprecated_')) {
           await prefs.remove(key);
         }
       }
       
-      print('تم إعادة تعيين جميع المكافآت للمستخدم: $userId');
+      print('تم إعادة تعيين جميع المكافآت وتنظيف البيانات القديمة للمستخدم: $userId');
     } catch (e) {
       print('خطأ في إعادة تعيين المكافآت: $e');
+    }
+  }
+
+  /// تنظيف شامل للبيانات القديمة والمتداخلة
+  static Future<void> cleanupLegacyData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      int cleanedCount = 0;
+      
+      for (String key in keys) {
+        // تنظيف البيانات المتعلقة بالمشاركة
+        if (key.contains('share') || 
+            key.contains('sharing') ||
+            key.contains('shared')) {
+          await prefs.remove(key);
+          cleanedCount++;
+          continue;
+        }
+        
+        // تنظيف البيانات القديمة
+        if (key.contains('_level_') ||
+            key.startsWith('old_') ||
+            key.contains('legacy_') ||
+            key.contains('deprecated_') ||
+            key.endsWith('_old') ||
+            key.contains('backup_')) {
+          await prefs.remove(key);
+          cleanedCount++;
+          continue;
+        }
+        
+        // تنظيف البيانات المكررة
+        if (key.contains('duplicate_') ||
+            key.contains('_copy') ||
+            key.contains('temp_')) {
+          await prefs.remove(key);
+          cleanedCount++;
+          continue;
+        }
+      }
+      
+      print('✅ تم تنظيف $cleanedCount مفتاح من البيانات القديمة والمتداخلة');
+    } catch (e) {
+      print('❌ خطأ في تنظيف البيانات القديمة: $e');
     }
   }
 }

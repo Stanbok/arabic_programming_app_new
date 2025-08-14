@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class QuizResultModel {
   final String lessonId;
-  final int score;
+  final int score; // percentage
   final int correctAnswers;
   final int totalQuestions;
-  final List<int> answers;
+  final List<int> answers; // user's selected answer indices
   final DateTime completedAt;
 
   QuizResultModel({
@@ -15,23 +17,6 @@ class QuizResultModel {
     required this.completedAt,
   });
 
-  bool get isPassed => score >= 70;
-  
-  String get grade {
-    if (score >= 95) return 'ممتاز';
-    if (score >= 85) return 'جيد جداً';
-    if (score >= 75) return 'جيد';
-    if (score >= 70) return 'مقبول';
-    return 'راسب';
-  }
-  
-  int get stars {
-    if (score >= 95) return 3;
-    if (score >= 85) return 2;
-    if (score >= 70) return 1;
-    return 0;
-  }
-
   Map<String, dynamic> toMap() {
     return {
       'lessonId': lessonId,
@@ -39,7 +24,7 @@ class QuizResultModel {
       'correctAnswers': correctAnswers,
       'totalQuestions': totalQuestions,
       'answers': answers,
-      'completedAt': completedAt.toIso8601String(),
+      'completedAt': Timestamp.fromDate(completedAt),
     };
   }
 
@@ -50,7 +35,24 @@ class QuizResultModel {
       correctAnswers: map['correctAnswers'] ?? 0,
       totalQuestions: map['totalQuestions'] ?? 0,
       answers: List<int>.from(map['answers'] ?? []),
-      completedAt: DateTime.parse(map['completedAt'] ?? DateTime.now().toIso8601String()),
+      completedAt: (map['completedAt'] as Timestamp).toDate(),
     );
+  }
+
+  bool get isPassed => score >= 70; // 70% to pass
+
+  String get grade {
+    if (score >= 90) return 'ممتاز';
+    if (score >= 80) return 'جيد جداً';
+    if (score >= 70) return 'جيد';
+    if (score >= 60) return 'مقبول';
+    return 'راسب';
+  }
+
+  int get stars {
+    if (score >= 90) return 3;
+    if (score >= 70) return 2;
+    if (score >= 50) return 1;
+    return 0;
   }
 }

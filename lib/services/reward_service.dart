@@ -2,71 +2,49 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../models/lesson_model.dart';
-import '../services/statistics_service.dart';
 
 /// خدمة إدارة المكافآت - المصدر الوحيد لحساب وتوزيع XP والجواهر
-/// تم إزالة ميزة المشاركة بالكامل
 class RewardService {
   static const String _completedQuizzesKey = 'completed_quizzes_secure';
+  static const String _shareRewardKey = 'share_reward_claimed';
+  static const String _lastShareKey = 'last_share_timestamp';
   
-  /// الحصول على مكافآت الدرس من JSON مع دعم نظام إعادة المحاولة
-  static Future<RewardInfo> getLessonRewards(
-    LessonModel lesson, 
-    int quizScore, 
-    String userId,
-    bool isFirstPass,
-  ) async {
-    print('🎯 حساب مكافآت الدرس: ${lesson.title}');
-    print('📊 النتيجة: $quizScore%, أول نجاح: $isFirstPass');
-    
+  /// الحصول على مكافآت الدرس من JSON فقط
+  static RewardInfo getLessonRewards(LessonModel lesson, int quizScore) {
     // استخدام القيم من JSON كما هي
     int baseXP = lesson.xpReward;
     int baseGems = lesson.gemsReward;
     
-    print('💎 المكافآت الأساسية: $baseXP XP, $baseGems Gems');
-    
     // مكافأة إضافية بناءً على الأداء (من JSON أيضاً)
-    double performanceMultiplier = 1.0;
+    double multiplier = 1.0;
     if (quizScore >= 95) {
-      performanceMultiplier = 1.5; // 50% إضافية للأداء الممتاز
+      multiplier = 1.5; // 50% إضافية للأداء الممتاز
     } else if (quizScore >= 85) {
-      performanceMultiplier = 1.25; // 25% إضافية للأداء الجيد
+      multiplier = 1.25; // 25% إضافية للأداء الجيد
     } else if (quizScore >= 70) {
-      performanceMultiplier = 1.0; // المكافأة الأساسية للنجاح
+      multiplier = 1.0; // المكافأة الأساسية للنجاح
     } else {
-      performanceMultiplier = 0.0; // لا مكافأة للرسوب
+      multiplier = 0.0; // لا مكافأة للرسوب
     }
-    
-    print('⚡ مضاعف الأداء: ${performanceMultiplier}x');
-
-    // تطبيق نظام تقليل المكافآت لإعادة المحاولة بعد النجاح
-    double retakeMultiplier = 1.0;
-    if (!isFirstPass && quizScore >= 70) {
-      retakeMultiplier = await StatisticsService.calculateRetakeMultiplier(lesson.id, userId);
-      print('🔄 مضاعف إعادة المحاولة: ${retakeMultiplier}x');
-    }
-
-    final finalXP = (baseXP * performanceMultiplier * retakeMultiplier).round();
-    final finalGems = (baseGems * performanceMultiplier * retakeMultiplier).round();
-    
-    print('✅ المكافآت النهائية: $finalXP XP, $finalGems Gems');
     
     return RewardInfo(
-      xp: finalXP,
-      gems: finalGems,
-      source: isFirstPass ? 'lesson_completion' : 'lesson_retake',
+      xp: (baseXP * multiplier).round(),
+      gems: (baseGems * multiplier).round(),
+      source: 'lesson_completion',
       lessonId: lesson.id,
       score: quizScore,
-      isFirstPass: isFirstPass,
-      retakeMultiplier: retakeMultiplier,
     );
   }
   
   /// التحقق من إكمال الاختبار مسبقاً
   static Future<bool> isQuizCompleted(String lessonId, String userId) async {
     try {
-      final attempts = await StatisticsService.getAttempts(lessonId, userId);
-      return attempts.any((attempt) => attempt.isPassed);
+      final prefs = await SharedPreferences.getInstance();
+      final completedQuizzes = await _getSecureCompletedQuizzes();
+      
+      // إنشاء مفتاح فريد للمستخدم والدرس
+      final quizKey = _generateQuizKey(userId, lessonId);
+      return completedQuizzes.contains(quizKey);
     } catch (e) {
       print('خطأ في التحقق من إكمال الاختبار: $e');
       return false;
@@ -90,6 +68,61 @@ class RewardService {
       }
     } catch (e) {
       print('خطأ في تسجيل إكمال الاختبار: $e');
+    }
+  }
+  
+  /// التحقق من إمكانية الحصول على مكافأة المشاركة
+  static Future<bool> canClaimShareReward(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final claimed = prefs.getBool('${_shareRewardKey}_$userId') ?? false;
+      
+      if (claimed) {
+        // التحقق من آخر مشاركة (يمكن المشاركة مرة واحدة كل 24 ساعة)
+        final lastShareStr = prefs.getString('${_lastShareKey}_$userId');
+        if (lastShareStr != null) {
+          final lastShare = DateTime.parse(lastShareStr);
+          final now = DateTime.now();
+          final difference = now.difference(lastShare).inHours;
+          
+          return difference >= 24; // يمكن المشاركة مرة كل 24 ساعة
+        }
+      }
+      
+      return !claimed;
+    } catch (e) {
+      print('خطأ في التحقق من مكافأة المشاركة: $e');
+      return false;
+    }
+  }
+  
+  /// تسجيل مكافأة المشاركة
+  static Future<RewardInfo?> claimShareReward(String userId, bool actuallyShared) async {
+    try {
+      // التحقق من المشاركة الفعلية
+      if (!actuallyShared) {
+        return null;
+      }
+      
+      final canClaim = await canClaimShareReward(userId);
+      if (!canClaim) {
+        return null;
+      }
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('${_shareRewardKey}_$userId', true);
+      await prefs.setString('${_lastShareKey}_$userId', DateTime.now().toIso8601String());
+      
+      return RewardInfo(
+        xp: 0,
+        gems: 50,
+        source: 'app_share',
+        lessonId: null,
+        score: null,
+      );
+    } catch (e) {
+      print('خطأ في تسجيل مكافأة المشاركة: $e');
+      return null;
     }
   }
   
@@ -155,6 +188,8 @@ class RewardService {
       
       // إزالة جميع البيانات المتعلقة بالمكافآت
       await prefs.remove(_completedQuizzesKey);
+      await prefs.remove('${_shareRewardKey}_$userId');
+      await prefs.remove('${_lastShareKey}_$userId');
       
       // إزالة تفاصيل الاختبارات
       final keys = prefs.getKeys();
@@ -164,9 +199,6 @@ class RewardService {
         }
       }
       
-      // إعادة تعيين الإحصائيات
-      await StatisticsService.resetAllStatistics(userId);
-      
       print('تم إعادة تعيين جميع المكافآت للمستخدم: $userId');
     } catch (e) {
       print('خطأ في إعادة تعيين المكافآت: $e');
@@ -174,15 +206,13 @@ class RewardService {
   }
 }
 
-/// معلومات المكافأة المحدثة
+/// معلومات المكافأة
 class RewardInfo {
   final int xp;
   final int gems;
   final String source;
   final String? lessonId;
   final int? score;
-  final bool isFirstPass;
-  final double retakeMultiplier;
   
   RewardInfo({
     required this.xp,
@@ -190,8 +220,6 @@ class RewardInfo {
     required this.source,
     this.lessonId,
     this.score,
-    this.isFirstPass = true,
-    this.retakeMultiplier = 1.0,
   });
   
   Map<String, dynamic> toMap() {
@@ -201,14 +229,12 @@ class RewardInfo {
       'source': source,
       'lessonId': lessonId,
       'score': score,
-      'isFirstPass': isFirstPass,
-      'retakeMultiplier': retakeMultiplier,
       'timestamp': DateTime.now().toIso8601String(),
     };
   }
   
   @override
   String toString() {
-    return 'RewardInfo(xp: $xp, gems: $gems, source: $source, lessonId: $lessonId, score: $score, isFirstPass: $isFirstPass, retakeMultiplier: $retakeMultiplier)';
+    return 'RewardInfo(xp: $xp, gems: $gems, source: $source, lessonId: $lessonId, score: $score)';
   }
 }

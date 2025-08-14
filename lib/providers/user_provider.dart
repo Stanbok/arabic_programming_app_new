@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../services/firebase_service.dart';
 import '../services/reward_service.dart';
+import '../services/statistics_service.dart';
 import '../models/user_model.dart';
 import '../models/quiz_result_model.dart';
 
@@ -316,8 +317,8 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  Map<String, dynamic> get userStats {
-    if (_user == null || _quizResults.isEmpty) {
+  Future<Map<String, dynamic>> get userStats async {
+    if (_user == null) {
       return {
         'totalQuizzes': 0,
         'averageScore': 0.0,
@@ -326,16 +327,9 @@ class UserProvider with ChangeNotifier {
       };
     }
 
-    final totalQuizzes = _quizResults.length;
-    final averageScore = _quizResults.map((r) => r.score).reduce((a, b) => a + b) / totalQuizzes;
-    final completionRate = (_user!.completedLessons.length / 50.0) * 100; // Assuming 50 total lessons
-
-    return {
-      'totalQuizzes': totalQuizzes,
-      'averageScore': averageScore,
-      'totalTimeSpent': 0, // Would need to calculate from progress data
-      'completionRate': completionRate,
-    };
+    // Get enhanced statistics from StatisticsService
+    final stats = await StatisticsService.getUserStatistics(_user!.id);
+    return stats;
   }
 
   /// حفظ المكافآت المعلقة محلياً
@@ -393,8 +387,8 @@ class UserProvider with ChangeNotifier {
     switch (rewardInfo.source) {
       case 'lesson_completion':
         return 'إكمال درس: ${rewardInfo.lessonId} (${rewardInfo.score}%)';
-      case 'app_share':
-        return 'مشاركة التطبيق';
+      case 'lesson_retake':
+        return 'إعادة محاولة درس: ${rewardInfo.lessonId} (${rewardInfo.score}%) - مضاعف: ${(rewardInfo.retakeMultiplier * 100).round()}%';
       default:
         return 'مكافأة: ${rewardInfo.source}';
     }

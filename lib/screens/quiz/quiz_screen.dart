@@ -7,10 +7,11 @@ import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/lesson_model.dart';
 import '../../models/quiz_result_model.dart';
+import '../../models/lesson_attempt_model.dart';
 import '../../services/firebase_service.dart';
 import '../../services/reward_service.dart';
+import '../../services/statistics_service.dart';
 import '../../widgets/custom_button.dart';
-import '../../models/progress_model.dart';
 
 class QuizScreen extends StatefulWidget {
   final String lessonId;
@@ -31,8 +32,11 @@ class _QuizScreenState extends State<QuizScreen> {
   Timer? _timer;
   int _timeRemaining = 300; // 5 minutes
   bool _isCompleted = false;
+  bool _isSubmitting = false;
   QuizResultModel? _result;
+  LessonAttemptModel? _attemptResult;
   bool _alreadyCompleted = false;
+  int _scoringStartTime = 0;
 
   @override
   void initState() {
@@ -57,7 +61,7 @@ class _QuizScreenState extends State<QuizScreen> {
     _alreadyCompleted = await RewardService.isQuizCompleted(widget.lessonId, userId);
     
     if (_alreadyCompleted) {
-      print('⚠️ تم إكمال هذا الاختبار مسبقاً');
+      print('⚠️ تم إكمال هذا الاختبار مسبقاً - يمكن إعادة المحاولة للمراجعة');
     }
   }
 
@@ -135,99 +139,137 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Future<void> _submitQuiz() async {
+    if (_isSubmitting) return; // Prevent duplicate submissions
+    
+    setState(() {
+      _isSubmitting = true;
+    });
+    
     _timer?.cancel();
+    _scoringStartTime = DateTime.now().millisecondsSinceEpoch;
     
     final lesson = _getCurrentLesson();
-    if (lesson == null) return;
+    if (lesson == null) {
+      setState(() {
+        _isSubmitting = false;
+      });
+      return;
+    }
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userId = authProvider.user?.uid ?? 'guest';
 
-    // التحقق من عدم إكمال الاختبار مسبقاً
-    if (await RewardService.isQuizCompleted(widget.lessonId, userId)) {
+    try {
+      // حساب النتائج بشكل متزامن
+      int correctAnswers = 0;
+      for (int i = 0; i < lesson.quiz.length; i++) {
+        if (i < _selectedAnswers.length && _selectedAnswers[i] == lesson.quiz[i].correctAnswerIndex) {
+          correctAnswers++;
+        }
+      }
+
+      final score = RewardService.calculateScore(correctAnswers, lesson.quiz.length);
+      final scoringEndTime = DateTime.now().millisecondsSinceEpoch;
+      final scoringTimeMs = scoringEndTime - _scoringStartTime;
+      
+      // التحقق من صحة النتيجة
+      if (!RewardService.isValidScore(score, lesson.quiz.length)) {
+        print('❌ نتيجة غير صحيحة: $score');
+        setState(() {
+          _isSubmitting = false;
+        });
+        return;
+      }
+
+      // تحديد ما إذا كانت هذه أول مرة ينجح فيها المستخدم
+      final previousAttempts = await StatisticsService.getAttempts(widget.lessonId, userId);
+      final isFirstPass = score >= 70 && !previousAttempts.any((a) => a.isPassed);
+
+      // حساب المكافآت
+      int xpAwarded = 0;
+      int gemsAwarded = 0;
+      
+      if (score >= 70) { // نجح في الاختبار
+        final rewardInfo = await RewardService.getLessonRewards(lesson, score, userId, isFirstPass);
+        xpAwarded = rewardInfo.xp;
+        gemsAwarded = rewardInfo.gems;
+      }
+
+      // تسجيل المحاولة في الإحصائيات
+      _attemptResult = await StatisticsService.recordAttempt(
+        lessonId: widget.lessonId,
+        userId: userId,
+        score: score,
+        correctAnswers: correctAnswers,
+        totalQuestions: lesson.quiz.length,
+        answers: _selectedAnswers,
+        scoringTimeMs: scoringTimeMs,
+        xpAwarded: xpAwarded,
+        gemsAwarded: gemsAwarded,
+      );
+
+      _result = QuizResultModel(
+        lessonId: widget.lessonId,
+        score: score,
+        correctAnswers: correctAnswers,
+        totalQuestions: lesson.quiz.length,
+        answers: _selectedAnswers,
+        completedAt: DateTime.now(),
+      );
+
+      print('📊 نتيجة الاختبار: $score% (${correctAnswers}/${lesson.quiz.length})');
+      print('⏱️ وقت الحساب: ${scoringTimeMs}ms');
+      print('💎 المكافآت: ${xpAwarded} XP, ${gemsAwarded} Gems');
+
+      // حفظ النتيجة وإضافة المكافآت للمستخدمين المسجلين
+      if (!authProvider.isGuestUser && authProvider.user != null) {
+        try {
+          // حفظ نتيجة الاختبار
+          await FirebaseService.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
+          
+          // إضافة المكافآت إذا نجح
+          if (_result!.isPassed && (xpAwarded > 0 || gemsAwarded > 0)) {
+            final rewardInfo = await RewardService.getLessonRewards(lesson, score, userId, isFirstPass);
+            final userProvider = Provider.of<UserProvider>(context, listen: false);
+            
+            final success = await userProvider.addReward(rewardInfo, authProvider.user!.uid);
+            
+            if (success) {
+              print('✅ تم إضافة المكافآت: $rewardInfo');
+            } else {
+              print('❌ فشل في إضافة المكافآت');
+            }
+          }
+
+          // تحديث حالة الدرس إذا نجح لأول مرة
+          if (isFirstPass) {
+            final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
+            await lessonProvider.markLessonCompleted(widget.lessonId, userId);
+          }
+        } catch (e) {
+          print('❌ خطأ في حفظ النتيجة: $e');
+        }
+      }
+
       setState(() {
         _isCompleted = true;
-        _result = QuizResultModel(
-          lessonId: widget.lessonId,
-          score: 0,
-          correctAnswers: 0,
-          totalQuestions: lesson.quiz.length,
-          answers: _selectedAnswers,
-          completedAt: DateTime.now(),
-        );
+        _isSubmitting = false;
+      });
+    } catch (e) {
+      print('❌ خطأ في معالجة الاختبار: $e');
+      setState(() {
+        _isSubmitting = false;
       });
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إكمال هذا الاختبار مسبقاً'),
-            backgroundColor: Colors.orange,
+          SnackBar(
+            content: Text('خطأ في معالجة الاختبار: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
-      return;
     }
-
-    // حساب النتائج
-    int correctAnswers = 0;
-    for (int i = 0; i < lesson.quiz.length; i++) {
-      if (i < _selectedAnswers.length && _selectedAnswers[i] == lesson.quiz[i].correctAnswerIndex) {
-        correctAnswers++;
-      }
-    }
-
-    final score = RewardService.calculateScore(correctAnswers, lesson.quiz.length);
-    
-    // التحقق من صحة النتيجة
-    if (!RewardService.isValidScore(score, lesson.quiz.length)) {
-      print('❌ نتيجة غير صحيحة: $score');
-      return;
-    }
-
-    _result = QuizResultModel(
-      lessonId: widget.lessonId,
-      score: score,
-      correctAnswers: correctAnswers,
-      totalQuestions: lesson.quiz.length,
-      answers: _selectedAnswers,
-      completedAt: DateTime.now(),
-    );
-
-    print('📊 نتيجة الاختبار: $score% (${correctAnswers}/${lesson.quiz.length})');
-
-    // حفظ النتيجة وإضافة المكافآت
-    if (!authProvider.isGuestUser && authProvider.user != null) {
-      try {
-        // حفظ نتيجة الاختبار
-        await FirebaseService.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
-        
-        // تسجيل إكمال الاختبار
-        await RewardService.markQuizCompleted(widget.lessonId, userId, score);
-        
-        // إضافة المكافآت إذا نجح
-        if (_result!.isPassed) {
-          final rewardInfo = RewardService.getLessonRewards(lesson, score);
-          final userProvider = Provider.of<UserProvider>(context, listen: false);
-          
-          final success = await userProvider.addReward(rewardInfo, authProvider.user!.uid);
-          
-          if (success) {
-            print('✅ تم إضافة المكافآت: $rewardInfo');
-          } else {
-            print('❌ فشل في إضافة المكافآت');
-          }
-        }
-      } catch (e) {
-        print('❌ خطأ في حفظ النتيجة: $e');
-      }
-    } else {
-      // للضيوف - تسجيل الإكمال محلياً فقط
-      await RewardService.markQuizCompleted(widget.lessonId, userId, score);
-    }
-
-    setState(() {
-      _isCompleted = true;
-    });
   }
 
   LessonModel? _getCurrentLesson() {
@@ -334,29 +376,8 @@ class _QuizScreenState extends State<QuizScreen> {
             );
           }
 
-          // عرض تحذير إذا تم إكمال الاختبار مسبقاً
-          if (_alreadyCompleted && !_isCompleted) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_circle, size: 64, color: Colors.green),
-                  const SizedBox(height: 16),
-                  const Text('تم إكمال هذا الاختبار مسبقاً'),
-                  const SizedBox(height: 8),
-                  const Text('لا يمكن إعادة الاختبار للحصول على مكافآت إضافية'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.pop(),
-                    child: const Text('العودة'),
-                  ),
-                ],
-              ),
-            );
-          }
-
           if (_isCompleted && _result != null) {
-            return _buildResultScreen(lesson, _result!);
+            return _buildResultScreen(lesson, _result!, _attemptResult);
           }
 
           return Column(
@@ -552,7 +573,7 @@ class _QuizScreenState extends State<QuizScreen> {
             Expanded(
               child: CustomButton(
                 text: 'السابق',
-                onPressed: _previousQuestion,
+                onPressed: _isSubmitting ? null : _previousQuestion,
                 isOutlined: true,
                 icon: Icons.arrow_back_ios,
               ),
@@ -564,11 +585,15 @@ class _QuizScreenState extends State<QuizScreen> {
           Expanded(
             flex: 2,
             child: CustomButton(
-              text: isLastQuestion ? 'إنهاء الاختبار' : 'التالي',
-              onPressed: hasAnswered
-                  ? (isLastQuestion ? _submitQuiz : _nextQuestion)
-                  : null,
-              icon: isLastQuestion ? Icons.check : Icons.arrow_forward_ios,
+              text: _isSubmitting 
+                  ? 'جاري الحساب...' 
+                  : (isLastQuestion ? 'إنهاء الاختبار' : 'التالي'),
+              onPressed: _isSubmitting 
+                  ? null 
+                  : (hasAnswered ? (isLastQuestion ? _submitQuiz : _nextQuestion) : null),
+              icon: _isSubmitting 
+                  ? Icons.hourglass_empty 
+                  : (isLastQuestion ? Icons.check : Icons.arrow_forward_ios),
             ),
           ),
         ],
@@ -576,8 +601,11 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
-  Widget _buildResultScreen(LessonModel lesson, QuizResultModel result) {
-    final rewardInfo = result.isPassed ? RewardService.getLessonRewards(lesson, result.score) : null;
+  Widget _buildResultScreen(LessonModel lesson, QuizResultModel result, LessonAttemptModel? attempt) {
+    final isRetake = attempt != null && !attempt.isFirstPass;
+    final retakeMultiplier = attempt?.xpAwarded != null && attempt!.xpAwarded > 0 
+        ? (attempt.xpAwarded / (lesson.xpReward * (result.score >= 95 ? 1.5 : result.score >= 85 ? 1.25 : 1.0)))
+        : 0.0;
     
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -634,11 +662,34 @@ class _QuizScreenState extends State<QuizScreen> {
           
           Text(
             result.isPassed
-                ? 'لقد نجحت في الاختبار بتفوق!'
+                ? (isRetake ? 'أحسنت! مراجعة ممتازة للدرس' : 'لقد نجحت في الاختبار بتفوق!')
                 : 'لم تحصل على الدرجة المطلوبة للنجاح (70%)',
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
+          
+          // Retake indicator
+          if (isRetake && result.isPassed)
+            Container(
+              margin: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.refresh, color: Colors.blue, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'مراجعة - مكافأة مخفضة (${(retakeMultiplier * 100).round()}%)',
+                    style: const TextStyle(color: Colors.blue, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
           
           const SizedBox(height: 32),
           
@@ -693,15 +744,26 @@ class _QuizScreenState extends State<QuizScreen> {
                       value: '${result.totalQuestions - result.correctAnswers}',
                       color: Colors.red,
                     ),
-                    if (rewardInfo != null)
+                    if (attempt != null && attempt.xpAwarded > 0)
                       _buildResultItem(
                         icon: Icons.star,
                         label: 'XP مكتسب',
-                        value: '${rewardInfo.xp}',
+                        value: '${attempt.xpAwarded}',
                         color: Colors.amber,
                       ),
                   ],
                 ),
+                
+                if (attempt != null && attempt.scoringTimeMs > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(
+                      'وقت الحساب: ${attempt.scoringTimeMs}ms',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -709,7 +771,7 @@ class _QuizScreenState extends State<QuizScreen> {
           const SizedBox(height: 32),
           
           // Rewards (if passed)
-          if (result.isPassed && rewardInfo != null)
+          if (result.isPassed && attempt != null && (attempt.xpAwarded > 0 || attempt.gemsAwarded > 0))
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -741,7 +803,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${rewardInfo.xp} نقطة خبرة + ${rewardInfo.gems} جوهرة',
+                    '${attempt.xpAwarded} نقطة خبرة + ${attempt.gemsAwarded} جوهرة',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Colors.amber[700],
                       fontWeight: FontWeight.w600,
@@ -756,7 +818,7 @@ class _QuizScreenState extends State<QuizScreen> {
           // Action Buttons
           Column(
             children: [
-              if (result.isPassed)
+              if (result.isPassed && attempt != null && attempt.isFirstPass)
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
@@ -769,9 +831,21 @@ class _QuizScreenState extends State<QuizScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
-                    text: 'العودة للدرس',
-                    onPressed: () => context.pop(),
-                    icon: Icons.school,
+                    text: result.isPassed ? 'إعادة المحاولة للمراجعة' : 'إعادة المحاولة',
+                    onPressed: () {
+                      // Reset quiz state for retake
+                      setState(() {
+                        _isCompleted = false;
+                        _result = null;
+                        _attemptResult = null;
+                        _currentQuestionIndex = 0;
+                        _selectedAnswers = List.filled(lesson.quiz.length, -1);
+                        _timeRemaining = 300;
+                        _isSubmitting = false;
+                      });
+                      _startTimer();
+                    },
+                    icon: Icons.refresh,
                   ),
                 ),
               

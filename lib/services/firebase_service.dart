@@ -4,6 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../models/user_model.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
+import '../models/lesson_attempt_model.dart';
 
 import 'dart:io';
 
@@ -207,6 +208,42 @@ class FirebaseService {
     }
   }
 
+  // Attempt Methods - New for statistics tracking
+  static Future<void> saveAttempt(LessonAttemptModel attempt) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(attempt.userId)
+          .collection('attempts')
+          .doc(attempt.id)
+          .set(attempt.toMap());
+    } catch (e) {
+      throw Exception('خطأ في حفظ المحاولة: ${e.toString()}');
+    }
+  }
+
+  static Future<List<LessonAttemptModel>> getAttempts(String userId, {String? lessonId}) async {
+    try {
+      Query query = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('attempts')
+          .orderBy('attemptedAt', descending: true);
+      
+      if (lessonId != null) {
+        query = query.where('lessonId', isEqualTo: lessonId);
+      }
+
+      QuerySnapshot snapshot = await query.get();
+      
+      return snapshot.docs
+          .map((doc) => LessonAttemptModel.fromMap(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      throw Exception('خطأ في جلب المحاولات: ${e.toString()}');
+    }
+  }
+
   // XP and Gems Methods - المصدر الوحيد لتحديث المكافآت في Firebase
   static Future<void> addXPAndGems(String userId, int xp, int gems, String reason) async {
     try {
@@ -323,6 +360,17 @@ class FirebaseService {
           .get();
       
       for (var doc in quizSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      
+      // Delete attempts subcollection
+      final attemptsSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('attempts')
+          .get();
+      
+      for (var doc in attemptsSnapshot.docs) {
         batch.delete(doc.reference);
       }
       

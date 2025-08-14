@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 import '../services/local_service.dart';
 import '../services/cache_service.dart';
-import '../services/reward_service.dart';
+import '../services/statistics_service.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
 
@@ -143,15 +143,23 @@ class LessonProvider with ChangeNotifier {
   }
 
   /// الحصول على الدروس المتاحة بناءً على نظام الوحدات - متاح لجميع المستخدمين
-  List<LessonModel> getAvailableLessons(List<String> completedQuizzes, int currentUnit) {
+  List<LessonModel> getAvailableLessons(List<String> completedQuizzes, int currentUnit) async {
     if (_lessons.isEmpty) {
       return [];
     }
     
-    // دمج الاختبارات المكتملة مع التقدم المحلي
+    // دمج الاختبارات المكتملة مع التقدم المحلي والإحصائيات
     final allCompletedQuizzes = <String>{};
     allCompletedQuizzes.addAll(completedQuizzes);
     allCompletedQuizzes.addAll(_localCompletedQuizzes);
+    
+    // إضافة الدروس المكتملة من الإحصائيات
+    for (var lesson in _lessons) {
+      final stats = await StatisticsService.getLessonStatistics(lesson.id, 'current_user');
+      if (stats.isCompleted) {
+        allCompletedQuizzes.add(lesson.id);
+      }
+    }
     
     // الحصول على الوحدة الحالية للمستخدم
     int userCurrentUnit = _getUserCurrentUnit(allCompletedQuizzes);
@@ -193,12 +201,20 @@ class LessonProvider with ChangeNotifier {
   }
 
   /// الحصول على معلومات الوحدات للعرض
-  List<UnitInfo> getUnitsInfo(List<String> completedQuizzes) {
+  Future<List<UnitInfo>> getUnitsInfo(List<String> completedQuizzes, String userId) async {
     if (_lessons.isEmpty) return [];
     
     final allCompletedQuizzes = <String>{};
     allCompletedQuizzes.addAll(completedQuizzes);
     allCompletedQuizzes.addAll(_localCompletedQuizzes);
+    
+    // إضافة الدروس المكتملة من الإحصائيات
+    for (var lesson in _lessons) {
+      final stats = await StatisticsService.getLessonStatistics(lesson.id, userId);
+      if (stats.isCompleted) {
+        allCompletedQuizzes.add(lesson.id);
+      }
+    }
     
     final availableUnits = _lessons.map((l) => l.unit).toSet().toList()..sort();
     final unitsInfo = <UnitInfo>[];
@@ -210,7 +226,8 @@ class LessonProvider with ChangeNotifier {
       final isUnlocked = unit == 1 || (unit > 1 && unitsInfo.isNotEmpty && unitsInfo.last.isCompleted);
       
       // تحديد حالة كل درس
-      final lessonsWithStatus = unitLessons.map((lesson) {
+      final lessonsWithStatus = <LessonWithStatus>[];
+      for (var lesson in unitLessons) {
         LessonStatus status;
         if (lesson.unit == 1 && lesson.order == 1) {
           // الدرس الأول دائماً مفتوح
@@ -220,7 +237,7 @@ class LessonProvider with ChangeNotifier {
           status = LessonStatus.completed;
         } else {
           // فحص إذا كان الدرس السابق مكتمل
-          final previousLesson = _getPreviousLesson(lesson);
+          final previousLesson = await _getPreviousLesson(lesson);
           if (previousLesson == null || allCompletedQuizzes.contains(previousLesson.id)) {
             status = LessonStatus.open;
           } else {
@@ -228,8 +245,8 @@ class LessonProvider with ChangeNotifier {
           }
         }
         
-        return LessonWithStatus(lesson: lesson, status: status);
-      }).toList();
+        lessonsWithStatus.add(LessonWithStatus(lesson: lesson, status: status));
+      }
       
       unitsInfo.add(UnitInfo(
         unit: unit,
@@ -247,7 +264,7 @@ class LessonProvider with ChangeNotifier {
   }
 
   /// الحصول على الدرس السابق
-  LessonModel? _getPreviousLesson(LessonModel lesson) {
+  Future<LessonModel?> _getPreviousLesson(LessonModel lesson) async {
     final unitLessons = _lessons.where((l) => l.unit == lesson.unit).toList();
     unitLessons.sort((a, b) => a.order.compareTo(b.order));
     
@@ -282,16 +299,48 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// تسجيل إكمال الاختبار محلياً (بدون حساب مكافآت)
-  Future<void> markQuizCompletedLocally(String lessonId) async {
+  /// تسجيل إكمال الدرس وفتح الدرس التالي
+  Future<void> markLessonCompleted(String lessonId, String userId) async {
     try {
       _localCompletedQuizzes.add(lessonId);
       await _saveLocalProgress();
+      
+      // فتح الدرس التالي
+      await _unlockNextLesson(lessonId);
+      
       notifyListeners();
       
-      print('✅ تم تسجيل إكمال الاختبار محلياً: $lessonId');
+      print('✅ تم تسجيل إكمال الدرس وفتح الدرس التالي: $lessonId');
     } catch (e) {
-      print('❌ خطأ في تسجيل إكمال الاختبار محلياً: $e');
+      print('❌ خطأ في تسجيل إكمال الدرس: $e');
+    }
+  }
+
+  /// فتح الدرس التالي بعد إكمال الدرس الحالي
+  Future<void> _unlockNextLesson(String completedLessonId) async {
+    try {
+      final completedLesson = _lessons.firstWhere((l) => l.id == completedLessonId);
+      
+      // البحث عن الدرس التالي في نفس الوحدة
+      final nextLessonInUnit = _lessons
+          .where((l) => l.unit == completedLesson.unit && l.order == completedLesson.order + 1)
+          .firstOrNull;
+      
+      if (nextLessonInUnit != null) {
+        print('🔓 تم فتح الدرس التالي في الوحدة: ${nextLessonInUnit.title}');
+        return;
+      }
+      
+      // إذا لم يوجد درس تالي في الوحدة، فتح أول درس في الوحدة التالية
+      final nextUnitFirstLesson = _lessons
+          .where((l) => l.unit == completedLesson.unit + 1 && l.order == 1)
+          .firstOrNull;
+      
+      if (nextUnitFirstLesson != null) {
+        print('🔓 تم فتح الوحدة التالية: ${nextUnitFirstLesson.title}');
+      }
+    } catch (e) {
+      print('❌ خطأ في فتح الدرس التالي: $e');
     }
   }
 
@@ -300,8 +349,10 @@ class LessonProvider with ChangeNotifier {
     try {
       await FirebaseService.saveQuizResult(userId, lessonId, result);
       
-      // تسجيل الإكمال محلياً
-      await markQuizCompletedLocally(lessonId);
+      // تسجيل الإكمال محلياً إذا نجح
+      if (result.isPassed) {
+        await markLessonCompleted(lessonId, userId);
+      }
       
       // مزامنة مع Firebase في الخلفية
       _syncQuizCompletionWithFirebase(userId, lessonId);

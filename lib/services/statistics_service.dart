@@ -61,6 +61,8 @@ class StatisticsService {
     // Save to Firebase in background
     _saveAttemptToFirebase(attempt);
     
+    print('📊 تم تسجيل المحاولة: ${attempt.id} - النتيجة: $score% - أول نجاح: $isFirstPass');
+    
     return attempt;
   }
 
@@ -109,7 +111,7 @@ class StatisticsService {
           'averageScore': 0.0,
           'totalXPEarned': 0,
           'totalGemsEarned': 0,
-          'averageScoringTime': 0,
+          'averageScoringTime': 0.0,
           'completionRate': 0.0,
         };
       }
@@ -129,6 +131,13 @@ class StatisticsService {
       final totalScoringTime = userAttempts.map((a) => a.scoringTimeMs).reduce((a, b) => a + b);
       final averageScoringTime = totalScoringTime / userAttempts.length;
 
+      print('📈 إحصائيات المستخدم $userId:');
+      print('   - إجمالي المحاولات: ${userAttempts.length}');
+      print('   - الدروس المكتملة: $completedLessons');
+      print('   - متوسط النتائج: ${averageScore.toStringAsFixed(1)}%');
+      print('   - إجمالي XP: $totalXP');
+      print('   - إجمالي الجواهر: $totalGems');
+
       return {
         'totalAttempts': userAttempts.length,
         'totalLessonsCompleted': completedLessons,
@@ -146,37 +155,64 @@ class StatisticsService {
         'averageScore': 0.0,
         'totalXPEarned': 0,
         'totalGemsEarned': 0,
-        'averageScoringTime': 0,
+        'averageScoringTime': 0.0,
         'completionRate': 0.0,
       };
     }
   }
 
-  /// Calculate XP multiplier for post-pass retakes
+  /// Calculate XP multiplier for post-pass retakes - إصلاح المشكلة الأولى (تصحيح حساب إعادة المحاولة)
   static Future<double> calculateRetakeMultiplier(String lessonId, String userId) async {
-    final attempts = await getAttempts(lessonId, userId);
-    
-    if (attempts.isEmpty) return 1.0;
-    
-    // Find first pass
-    final firstPassIndex = attempts.indexWhere((a) => a.isPassed);
-    if (firstPassIndex == -1) return 1.0; // No pass yet, full XP
-    
-    final firstPassTime = attempts[firstPassIndex].attemptedAt;
-    final now = DateTime.now();
-    
-    // Count retakes within 24 hours of first pass
-    final retakesWithin24h = attempts
-        .skip(firstPassIndex + 1)
-        .where((a) => now.difference(firstPassTime).inHours < 24)
-        .length;
-    
-    // Apply decay multiplier
-    switch (retakesWithin24h) {
-      case 0: return 0.3; // 30% for first retake
-      case 1: return 0.2; // 20% for second retake
-      case 2: return 0.1; // 10% for third retake
-      default: return 0.0; // 0% for fourth+ retakes
+    try {
+      final attempts = await getAttempts(lessonId, userId);
+      
+      print('🔍 حساب مضاعف إعادة المحاولة للدرس $lessonId');
+      print('   - عدد المحاولات السابقة: ${attempts.length}');
+      
+      if (attempts.isEmpty) {
+        print('   - لا توجد محاولات سابقة، مضاعف كامل: 1.0');
+        return 1.0;
+      }
+      
+      // البحث عن أول نجاح
+      final firstPassIndex = attempts.indexWhere((a) => a.isPassed);
+      if (firstPassIndex == -1) {
+        print('   - لم ينجح من قبل، مضاعف كامل: 1.0');
+        return 1.0; // لم ينجح من قبل، مضاعف كامل
+      }
+      
+      print('   - أول نجاح في المحاولة رقم: ${firstPassIndex + 1}');
+      
+      // حساب عدد المحاولات الناجحة بعد النجاح الأول (التصحيح الأساسي)
+      final successfulRetakesAfterFirstPass = attempts
+          .skip(firstPassIndex + 1)
+          .where((a) => a.isPassed) // فقط المحاولات الناجحة
+          .length;
+      
+      print('   - عدد إعادات المحاولة الناجحة بعد النجاح الأول: $successfulRetakesAfterFirstPass');
+      
+      // تطبيق مضاعف التقليل بناءً على عدد إعادات المحاولة الناجحة
+      double multiplier;
+      switch (successfulRetakesAfterFirstPass) {
+        case 0: 
+          multiplier = 0.3; // 30% للإعادة الناجحة الأولى
+          break;
+        case 1: 
+          multiplier = 0.2; // 20% للإعادة الناجحة الثانية
+          break;
+        case 2: 
+          multiplier = 0.1; // 10% للإعادة الناجحة الثالثة
+          break;
+        default: 
+          multiplier = 0.05; // 5% للإعادات الناجحة اللاحقة
+          break;
+      }
+      
+      print('   - المضاعف المطبق: ${multiplier}x (${(multiplier * 100).round()}%)');
+      return multiplier;
+    } catch (e) {
+      print('❌ خطأ في حساب مضاعف إعادة المحاولة: $e');
+      return 1.0;
     }
   }
 
@@ -190,6 +226,7 @@ class StatisticsService {
       attemptsList.add(attempt.toMap());
       
       await prefs.setString(_attemptsKey, json.encode(attemptsList));
+      print('💾 تم حفظ المحاولة محلياً: ${attempt.id}');
     } catch (e) {
       print('خطأ في حفظ المحاولة محلياً: $e');
     }
@@ -205,15 +242,67 @@ class StatisticsService {
     }
   }
 
-  /// Reset all statistics (for testing)
+  /// Reset all statistics (for testing) - إصلاح المشكلة الرابعة
   static Future<void> resetAllStatistics(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_attemptsKey);
       await prefs.remove(_statisticsKey);
-      print('تم إعادة تعيين جميع الإحصائيات للمستخدم: $userId');
+      
+      // إزالة جميع البيانات المتعلقة بالإحصائيات
+      final keys = prefs.getKeys();
+      for (String key in keys) {
+        if (key.startsWith('lesson_attempts_') || 
+            key.startsWith('lesson_statistics_') ||
+            key.startsWith('quiz_') ||
+            key.contains('completed_quizzes')) {
+          await prefs.remove(key);
+        }
+      }
+      
+      print('🔄 تم إعادة تعيين جميع الإحصائيات للمستخدم: $userId');
     } catch (e) {
       print('خطأ في إعادة تعيين الإحصائيات: $e');
+    }
+  }
+
+  /// Force refresh statistics from Firebase - إضافة جديدة لحل مشكلة التحديث
+  static Future<void> refreshStatisticsFromFirebase(String userId) async {
+    try {
+      print('🔄 تحديث الإحصائيات من Firebase...');
+      
+      // محاولة جلب البيانات من Firebase مع timeout قصير
+      final firebaseAttempts = await FirebaseService.getUserAttempts(userId)
+          .timeout(const Duration(seconds: 5), onTimeout: () => <LessonAttemptModel>[]);
+      
+      if (firebaseAttempts.isNotEmpty) {
+        // دمج البيانات المحلية مع Firebase
+        final prefs = await SharedPreferences.getInstance();
+        final localAttemptsJson = prefs.getString(_attemptsKey) ?? '[]';
+        final List<dynamic> localAttemptsList = json.decode(localAttemptsJson);
+        
+        final localAttempts = localAttemptsList
+            .map((json) => LessonAttemptModel.fromMap(json))
+            .toList();
+        
+        // إضافة المحاولات من Firebase التي لا توجد محلياً
+        final allAttempts = <LessonAttemptModel>[];
+        allAttempts.addAll(localAttempts);
+        
+        for (var firebaseAttempt in firebaseAttempts) {
+          if (!allAttempts.any((local) => local.id == firebaseAttempt.id)) {
+            allAttempts.add(firebaseAttempt);
+          }
+        }
+        
+        // حفظ البيانات المدمجة
+        final mergedAttemptsJson = allAttempts.map((a) => a.toMap()).toList();
+        await prefs.setString(_attemptsKey, json.encode(mergedAttemptsJson));
+        
+        print('✅ تم تحديث الإحصائيات من Firebase: ${firebaseAttempts.length} محاولة جديدة');
+      }
+    } catch (e) {
+      print('⚠️ فشل في تحديث الإحصائيات من Firebase: $e');
     }
   }
 }

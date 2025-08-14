@@ -4,19 +4,26 @@ import 'package:go_router/go_router.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/lesson_provider.dart';
 import '../../widgets/custom_button.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
+  /// إصلاح المشكلة الرابعة - إعادة تعيين شاملة للحساب
   Future<void> _resetAccount(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('إعادة تعيين الحساب'),
         content: const Text(
-          'هذا الإجراء سيحذف جميع بياناتك (التقدم، النتائج، النقاط، الجواهر) '
-          'ولكن سيحتفظ بالبيانات الأساسية (الاسم، البريد الإلكتروني).\n\n'
+          'هذا الإجراء سيحذف جميع بياناتك:\n'
+          '• التقدم في الدروس\n'
+          '• نتائج الاختبارات\n'
+          '• نقاط الخبرة والجواهر\n'
+          '• الإحصائيات والمحاولات\n'
+          '• حالة الدروس (مكتمل/مفتوح/مغلق)\n\n'
+          'سيتم الاحتفاظ بالبيانات الأساسية (الاسم، البريد الإلكتروني).\n\n'
           'هل أنت متأكد من أنك تريد المتابعة؟'
         ),
         actions: [
@@ -37,8 +44,35 @@ class SettingsScreen extends StatelessWidget {
 
     if (confirmed == true && context.mounted) {
       try {
+        // إظهار مؤشر التحميل
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('جاري إعادة تعيين الحساب...'),
+              ],
+            ),
+          ),
+        );
+
         final userProvider = Provider.of<UserProvider>(context, listen: false);
+        final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
+        
+        // إعادة تعيين بيانات المستخدم
         await userProvider.resetProgress();
+        
+        // إعادة تعيين تقدم الدروس
+        await lessonProvider.resetLocalProgress();
+        
+        // إغلاق مؤشر التحميل
+        if (context.mounted) {
+          Navigator.of(context).pop();
+        }
         
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -48,10 +82,15 @@ class SettingsScreen extends StatelessWidget {
             ),
           );
           
-          // Navigate back to home
+          // العودة للرئيسية
           context.go('/home');
         }
       } catch (e) {
+        // إغلاق مؤشر التحميل في حالة الخطأ
+        if (context.mounted) {
+          Navigator.of(context).pop();
+        }
+        
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -383,7 +422,7 @@ class SettingsScreen extends StatelessWidget {
             context: context,
             icon: Icons.refresh,
             title: 'إعادة تعيين الحساب',
-            subtitle: 'حذف جميع البيانات والتقدم',
+            subtitle: 'حذف جميع البيانات والتقدم وحالة الدروس',
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
             onTap: () => _resetAccount(context),
             titleColor: Colors.red,

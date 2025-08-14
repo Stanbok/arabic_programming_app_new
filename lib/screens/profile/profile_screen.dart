@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/lesson_provider.dart';
 import '../../services/statistics_service.dart';
 import '../../widgets/custom_button.dart';
 
@@ -20,6 +21,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   int _currentIndex = 1;
   Map<String, dynamic> _userStats = {};
+  bool _isLoadingStats = false;
 
   @override
   void initState() {
@@ -27,14 +29,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserStatistics();
   }
 
+  /// إصلاح المشكلة الثانية - تحديث الإحصائيات (تحسين آلية التحديث)
   Future<void> _loadUserStatistics() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userId = authProvider.user?.uid ?? 'guest';
+    if (!mounted) return;
     
-    final stats = await StatisticsService.getUserStatistics(userId);
     setState(() {
-      _userStats = stats;
+      _isLoadingStats = true;
     });
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.user?.uid ?? 'guest';
+      
+      print('📊 تحميل إحصائيات المستخدم: $userId');
+      
+      // تحديث الإحصائيات من Firebase أولاً
+      await StatisticsService.refreshStatisticsFromFirebase(userId);
+      
+      // ثم جلب الإحصائيات المحدثة
+      final stats = await StatisticsService.getUserStatistics(userId);
+      
+      if (mounted) {
+        setState(() {
+          _userStats = stats;
+          _isLoadingStats = false;
+        });
+        
+        print('✅ تم تحميل الإحصائيات: $stats');
+      }
+    } catch (e) {
+      print('❌ خطأ في تحميل الإحصائيات: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingStats = false;
+        });
+      }
+    }
+  }
+
+  /// تحديث الإحصائيات عند العودة للشاشة - تحسين التوقيت
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // تحديث الإحصائيات فقط إذا لم تكن قيد التحميل
+    if (!_isLoadingStats) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _loadUserStatistics();
+        }
+      });
+    }
   }
 
   Future<void> _changeProfileImage() async {
@@ -43,23 +87,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     
     if (user == null) return;
     
-    // Check if user has enough gems
-    if (userProvider.totalGems < 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تحتاج إلى 100 جوهرة لتغيير صورة الملف الشخصي'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Show confirmation dialog
+    // Show confirmation dialog with actual gem count
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('تغيير صورة الملف الشخصي'),
-        content: const Text('سيتم خصم 100 جوهرة من رصيدك. هل تريد المتابعة؟'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('سيتم خصم 100 جوهرة من رصيدك.'),
+            const SizedBox(height: 8),
+            Text('الجواهر الحالية: ${user.gems}'),
+            if (userProvider.hasPendingRewards)
+              Text('الجواهر مع المعلقة: ${userProvider.totalGems}'),
+            const SizedBox(height: 8),
+            const Text('هل تريد المتابعة؟'),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -89,7 +134,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (imageUrl != null && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('تم تغيير صورة الملف الشخصي بنجاح'),
+              content: Text('تم تغيير صورة الملف الشخصي بنجاح وخصم 100 جوهرة'),
               backgroundColor: Colors.green,
             ),
           );
@@ -100,6 +145,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('خطأ في تغيير الصورة: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// إعادة تعيين الحساب مع إعادة تعيين LessonProvider أيضاً
+  Future<void> _resetAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('إعادة تعيين الحساب'),
+        content: const Text('سيتم حذف جميع التقدم والإحصائيات. هذا الإجراء لا يمكن التراجع عنه. هل أنت متأكد؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('إعادة تعيين'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
+      
+      // إعادة تعيين UserProvider
+      await userProvider.resetProgress();
+      
+      // إعادة تعيين LessonProvider
+      await lessonProvider.resetLocalProgress();
+      
+      // إعادة تحميل الإحصائيات
+      await _loadUserStatistics();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم إعادة تعيين الحساب بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في إعادة تعيين الحساب: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -118,6 +219,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
+            icon: _isLoadingStats 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: _isLoadingStats ? null : _loadUserStatistics,
+            tooltip: 'تحديث الإحصائيات',
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => context.push('/settings'),
           ),
@@ -131,58 +243,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                // Profile Header
-                _buildProfileHeader(user, userProvider),
-                
-                const SizedBox(height: 24),
-                
-                // Pending Rewards Indicator
-                if (userProvider.hasPendingRewards)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.sync, color: Colors.blue),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'يتم مزامنة المكافآت مع الخادم...',
-                            style: TextStyle(color: Colors.blue),
+          return RefreshIndicator(
+            onRefresh: _loadUserStatistics,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Profile Header
+                  _buildProfileHeader(user, userProvider),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Pending Rewards Indicator
+                  if (userProvider.hasPendingRewards)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.sync, color: Colors.blue),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'يتم مزامنة المكافآت مع الخادم...',
+                              style: TextStyle(color: Colors.blue),
+                            ),
                           ),
-                        ),
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ],
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                
-                // Stats Cards
-                _buildStatsSection(user, _userStats),
-                
-                const SizedBox(height: 24),
-                
-                // Action Buttons (Sharing removed)
-                _buildActionButtons(),
-                
-                const SizedBox(height: 24),
-                
-                // Achievements Section
-                _buildAchievementsSection(user),
-              ],
+                  
+                  // Stats Cards
+                  _buildStatsSection(user, _userStats),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Action Buttons
+                  _buildActionButtons(),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Achievements Section
+                  _buildAchievementsSection(user),
+                ],
+              ),
             ),
           );
         },
@@ -344,11 +460,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'الإحصائيات',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'الإحصائيات',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (_isLoadingStats)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
         ),
         
         const SizedBox(height: 16),
@@ -404,13 +531,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         
         const SizedBox(height: 16),
         
-        // Sharing feature completely removed
         SizedBox(
           width: double.infinity,
           child: CustomButton(
             text: 'الإعدادات',
             onPressed: () => context.push('/settings'),
             icon: Icons.settings,
+            isOutlined: true,
+          ),
+        ),
+        
+        const SizedBox(height: 12),
+        
+        SizedBox(
+          width: double.infinity,
+          child: CustomButton(
+            text: 'إعادة تعيين الحساب',
+            onPressed: _resetAccount,
+            icon: Icons.refresh,
             isOutlined: true,
           ),
         ),
@@ -621,7 +759,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     // Level achievements
-    if (user.level >= 2) {
+    if (user.currentLevel >= 2) {
       achievements.add({
         'title': 'متعلم مبتدئ',
         'description': 'وصلت للمستوى الثاني',
@@ -630,7 +768,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     }
 
-    if (user.level >= 5) {
+    if (user.currentLevel >= 5) {
       achievements.add({
         'title': 'متعلم متقدم',
         'description': 'وصلت للمستوى الخامس',

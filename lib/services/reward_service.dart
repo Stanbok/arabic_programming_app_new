@@ -16,9 +16,14 @@ class RewardService {
     String userId,
     bool isFirstPass,
   ) async {
+    print('🎯 حساب مكافآت الدرس: ${lesson.title}');
+    print('📊 النتيجة: $quizScore%, أول نجاح: $isFirstPass');
+    
     // استخدام القيم من JSON كما هي
     int baseXP = lesson.xpReward;
     int baseGems = lesson.gemsReward;
+    
+    print('💎 المكافآت الأساسية: $baseXP XP, $baseGems Gems');
     
     // مكافأة إضافية بناءً على الأداء (من JSON أيضاً)
     double performanceMultiplier = 1.0;
@@ -31,15 +36,20 @@ class RewardService {
     } else {
       performanceMultiplier = 0.0; // لا مكافأة للرسوب
     }
+    
+    print('⚡ مضاعف الأداء: ${performanceMultiplier}x');
 
     // تطبيق نظام تقليل المكافآت لإعادة المحاولة بعد النجاح
     double retakeMultiplier = 1.0;
     if (!isFirstPass && quizScore >= 70) {
       retakeMultiplier = await StatisticsService.calculateRetakeMultiplier(lesson.id, userId);
+      print('🔄 مضاعف إعادة المحاولة: ${retakeMultiplier}x');
     }
 
     final finalXP = (baseXP * performanceMultiplier * retakeMultiplier).round();
     final finalGems = (baseGems * performanceMultiplier * retakeMultiplier).round();
+    
+    print('✅ المكافآت النهائية: $finalXP XP, $finalGems Gems');
     
     return RewardInfo(
       xp: finalXP,

@@ -172,6 +172,11 @@ class _QuizScreenState extends State<QuizScreen> {
       final scoringEndTime = DateTime.now().millisecondsSinceEpoch;
       final scoringTimeMs = scoringEndTime - _scoringStartTime;
       
+      print('📊 نتائج الاختبار:');
+      print('   - النتيجة: $score%');
+      print('   - الإجابات الصحيحة: $correctAnswers/${lesson.quiz.length}');
+      print('   - وقت الحساب: ${scoringTimeMs}ms');
+      
       // التحقق من صحة النتيجة
       if (!RewardService.isValidScore(score, lesson.quiz.length)) {
         print('❌ نتيجة غير صحيحة: $score');
@@ -185,6 +190,11 @@ class _QuizScreenState extends State<QuizScreen> {
       final previousAttempts = await StatisticsService.getAttempts(widget.lessonId, userId);
       final isFirstPass = score >= 70 && !previousAttempts.any((a) => a.isPassed);
 
+      print('🎯 تحليل المحاولة:');
+      print('   - المحاولات السابقة: ${previousAttempts.length}');
+      print('   - نجح من قبل: ${previousAttempts.any((a) => a.isPassed)}');
+      print('   - أول نجاح: $isFirstPass');
+
       // حساب المكافآت
       int xpAwarded = 0;
       int gemsAwarded = 0;
@@ -193,6 +203,11 @@ class _QuizScreenState extends State<QuizScreen> {
         final rewardInfo = await RewardService.getLessonRewards(lesson, score, userId, isFirstPass);
         xpAwarded = rewardInfo.xp;
         gemsAwarded = rewardInfo.gems;
+        
+        print('💎 المكافآت المحسوبة:');
+        print('   - XP: $xpAwarded');
+        print('   - Gems: $gemsAwarded');
+        print('   - مضاعف إعادة المحاولة: ${rewardInfo.retakeMultiplier}');
       }
 
       // تسجيل المحاولة في الإحصائيات
@@ -217,9 +232,7 @@ class _QuizScreenState extends State<QuizScreen> {
         completedAt: DateTime.now(),
       );
 
-      print('📊 نتيجة الاختبار: $score% (${correctAnswers}/${lesson.quiz.length})');
-      print('⏱️ وقت الحساب: ${scoringTimeMs}ms');
-      print('💎 المكافآت: ${xpAwarded} XP, ${gemsAwarded} Gems');
+      print('✅ تم إنشاء نتيجة الاختبار والمحاولة بنجاح');
 
       // حفظ النتيجة وإضافة المكافآت للمستخدمين المسجلين
       if (!authProvider.isGuestUser && authProvider.user != null) {

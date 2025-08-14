@@ -200,13 +200,18 @@ class LessonProvider with ChangeNotifier {
     return maxUnit + 1;
   }
 
-  /// الحصول على معلومات الوحدات للعرض
+  /// الحصول على معلومات الوحدات للعرض - إصلاح المشكلة الخامسة
   List<UnitInfo> getUnitsInfo(List<String> completedLessons) {
     if (_lessons.isEmpty) return [];
     
     final allCompletedQuizzes = <String>{};
     allCompletedQuizzes.addAll(completedLessons);
     allCompletedQuizzes.addAll(_localCompletedQuizzes);
+    
+    print('🔍 حساب معلومات الوحدات:');
+    print('   - الدروس المكتملة من Firebase: ${completedLessons.length}');
+    print('   - الدروس المكتملة محلياً: ${_localCompletedQuizzes.length}');
+    print('   - إجمالي الدروس المكتملة: ${allCompletedQuizzes.length}');
     
     final availableUnits = _lessons.map((l) => l.unit).toSet().toList()..sort();
     final unitsInfo = <UnitInfo>[];
@@ -216,6 +221,8 @@ class LessonProvider with ChangeNotifier {
       final completedCount = unitLessons.where((l) => allCompletedQuizzes.contains(l.id)).length;
       final isCompleted = completedCount == unitLessons.length;
       final isUnlocked = unit == 1 || (unit > 1 && unitsInfo.isNotEmpty && unitsInfo.last.isCompleted);
+      
+      print('   - الوحدة $unit: $completedCount/${unitLessons.length} مكتملة، مفتوحة: $isUnlocked');
       
       // تحديد حالة كل درس
       final lessonsWithStatus = <LessonWithStatus>[];
@@ -276,9 +283,6 @@ class LessonProvider with ChangeNotifier {
     
     return null;
   }
-
-  /// الحصول على الدرس السابق
-  
 
   /// الحصول على عنوان الوحدة
   String _getUnitTitle(int unit) {
@@ -403,6 +407,7 @@ class LessonProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('local_completed_quizzes', _localCompletedQuizzes.toList());
+      print('💾 تم حفظ التقدم المحلي: ${_localCompletedQuizzes.length} درس مكتمل');
     } catch (e) {
       print('❌ خطأ في حفظ التقدم المحلي: $e');
     }
@@ -414,6 +419,7 @@ class LessonProvider with ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final completedQuizzes = prefs.getStringList('local_completed_quizzes') ?? [];
       _localCompletedQuizzes = completedQuizzes.toSet();
+      print('📚 تم تحميل التقدم المحلي: ${_localCompletedQuizzes.length} درس مكتمل');
     } catch (e) {
       print('❌ خطأ في تحميل التقدم المحلي: $e');
       _localCompletedQuizzes = {};
@@ -437,6 +443,21 @@ class LessonProvider with ChangeNotifier {
       print('🔄 تم مزامنة إكمال الاختبار مع Firebase: $lessonId');
     } catch (e) {
       print('⚠️ فشل في مزامنة إكمال الاختبار مع Firebase: $e');
+    }
+  }
+
+  /// إعادة تعيين التقدم المحلي للدروس - إصلاح المشكلة الرابعة
+  Future<void> resetLocalProgress() async {
+    try {
+      _localCompletedQuizzes.clear();
+      await _saveLocalProgress();
+      
+      // إعادة تحميل الدروس لتحديث الحالات
+      await loadLessons(forceRefresh: true);
+      
+      print('🔄 تم إعادة تعيين التقدم المحلي للدروس');
+    } catch (e) {
+      print('❌ خطأ في إعادة تعيين التقدم المحلي للدروس: $e');
     }
   }
 

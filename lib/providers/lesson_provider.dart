@@ -348,8 +348,8 @@ class LessonProvider with ChangeNotifier {
         completedLessons: completedCount,
         isCompleted: isCompleted,
         isUnlocked: isUnlocked,
-        isLoaded: isLoaded,
-        isLoading: isLoading,
+        isLoaded: isLoaded, // إضافة حالة التحميل
+        isLoading: isLoading, // إضافة حالة التحميل الجاري
         lessons: unitLessons,
         lessonsWithStatus: lessonsWithStatus,
       ));
@@ -555,6 +555,166 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
+  /// الحصول على الدرس التالي المتاح للفتح
+  LessonModel? getNextAvailableLesson(List<String> completedQuizzes) {
+    final allCompletedQuizzes = <String>{};
+    allCompletedQuizzes.addAll(completedQuizzes);
+    allCompletedQuizzes.addAll(_localCompletedQuizzes);
+    
+    final availableUnits = _unitLessons.keys.toList()..sort();
+    
+    for (int unit in availableUnits) {
+      final unitLessons = _unitLessons[unit] ?? [];
+      unitLessons.sort((a, b) => a.order.compareTo(b.order));
+      
+      for (var lesson in unitLessons) {
+        // إذا لم يكن الدرس مكتملاً وكان متاحاً للفتح
+        if (!allCompletedQuizzes.contains(lesson.id)) {
+          final previousLesson = _getPreviousLesson(lesson);
+          if (previousLesson == null || allCompletedQuizzes.contains(previousLesson.id)) {
+            return lesson;
+          }
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /// فتح الدرس التالي بعد إكمال درس معين
+  Future<LessonModel?> unlockNextLesson(String completedLessonId, List<String> completedQuizzes) async {
+    try {
+      final completedLesson = _loadedLessons[completedLessonId];
+      if (completedLesson == null) return null;
+      
+      // البحث عن الدرس التالي في نفس الوحدة
+      final unitLessons = _unitLessons[completedLesson.unit] ?? [];
+      unitLessons.sort((a, b) => a.order.compareTo(b.order));
+      
+      final currentIndex = unitLessons.indexWhere((l) => l.id == completedLessonId);
+      
+      // إذا كان هناك درس تالي في نفس الوحدة
+      if (currentIndex >= 0 && currentIndex < unitLessons.length - 1) {
+        final nextLesson = unitLessons[currentIndex + 1];
+        
+        // تحديث وقت الوصول للدرس التالي
+        _lessonAccessTime[nextLesson.id] = DateTime.now();
+        
+        print('✅ تم فتح الدرس التالي: ${nextLesson.title}');
+        notifyListeners();
+        return nextLesson;
+      }
+      
+      // إذا انتهت الوحدة، فتح أول درس في الوحدة التالية
+      final nextUnit = completedLesson.unit + 1;
+      
+      // التأكد من تحميل الوحدة التالية
+      if (!_loadedUnits.contains(nextUnit)) {
+        await _loadUnitProgressively(nextUnit);
+      }
+      
+      final nextUnitLessons = _unitLessons[nextUnit] ?? [];
+      if (nextUnitLessons.isNotEmpty) {
+        nextUnitLessons.sort((a, b) => a.order.compareTo(b.order));
+        final firstLessonInNextUnit = nextUnitLessons.first;
+        
+        // تحديث وقت الوصول
+        _lessonAccessTime[firstLessonInNextUnit.id] = DateTime.now();
+        
+        print('✅ تم فتح أول درس في الوحدة التالية: ${firstLessonInNextUnit.title}');
+        notifyListeners();
+        return firstLessonInNextUnit;
+      }
+      
+      return null;
+    } catch (e) {
+      print('❌ خطأ في فتح الدرس التالي: $e');
+      return null;
+    }
+  }
+
+  /// تحديث حالة الدرس فوراً بعد إكمال الاختبار
+  Future<void> updateLessonStateAfterCompletion(String lessonId, String userId, bool passed) async {
+    try {
+      if (passed) {
+        // تسجيل الإكمال محلياً
+        await markQuizCompletedLocally(lessonId);
+        
+        // تحديث حالة الدرس في الذاكرة
+        if (_loadedLessons.containsKey(lessonId)) {
+          final lesson = _loadedLessons[lessonId]!;
+          // يمكن إضافة خاصية completed للدرس إذا لزم الأمر
+        }
+        
+        // إشعار فوري للواجهة
+        notifyListeners();
+        
+        print('✅ تم تحديث حالة الدرس بعد النجاح: $lessonId');
+      }
+    } catch (e) {
+      print('❌ خطأ في تحديث حالة الدرس: $e');
+    }
+  }
+
+  /// التحقق من إمكانية الوصول للدرس
+  bool canAccessLesson(String lessonId, List<String> completedQuizzes) {
+    final lesson = _loadedLessons[lessonId];
+    if (lesson == null) return false;
+    
+    // الدرس الأول في الوحدة الأولى متاح دائماً
+    if (lesson.unit == 1 && lesson.order == 1) {
+      return true;
+    }
+    
+    final allCompletedQuizzes = <String>{};
+    allCompletedQuizzes.addAll(completedQuizzes);
+    allCompletedQuizzes.addAll(_localCompletedQuizzes);
+    
+    // التحقق من إكمال الدرس السابق
+    final previousLesson = _getPreviousLesson(lesson);
+    return previousLesson == null || allCompletedQuizzes.contains(previousLesson.id);
+  }
+
+  /// الحصول على إحصائيات التقدم للوحدة
+  UnitProgressStats getUnitProgressStats(int unit, List<String> completedQuizzes) {
+    final unitLessons = _unitLessons[unit] ?? [];
+    if (unitLessons.isEmpty) {
+      return UnitProgressStats(
+        unit: unit,
+        totalLessons: 0,
+        completedLessons: 0,
+        availableLessons: 0,
+        lockedLessons: 0,
+      );
+    }
+    
+    final allCompletedQuizzes = <String>{};
+    allCompletedQuizzes.addAll(completedQuizzes);
+    allCompletedQuizzes.addAll(_localCompletedQuizzes);
+    
+    int completed = 0;
+    int available = 0;
+    int locked = 0;
+    
+    for (var lesson in unitLessons) {
+      if (allCompletedQuizzes.contains(lesson.id)) {
+        completed++;
+      } else if (canAccessLesson(lesson.id, completedQuizzes)) {
+        available++;
+      } else {
+        locked++;
+      }
+    }
+    
+    return UnitProgressStats(
+      unit: unit,
+      totalLessons: unitLessons.length,
+      completedLessons: completed,
+      availableLessons: available,
+      lockedLessons: locked,
+    );
+  }
+
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
@@ -641,4 +801,27 @@ class MemoryStats {
 
   bool get isMemoryFull => loadedLessons >= maxLoadedLessons;
   bool get isUnitsLimitReached => loadedUnits >= maxLoadedUnits;
+}
+
+/// إحصائيات التقدم للوحدة
+class UnitProgressStats {
+  final int unit;
+  final int totalLessons;
+  final int completedLessons;
+  final int availableLessons;
+  final int lockedLessons;
+
+  UnitProgressStats({
+    required this.unit,
+    required this.totalLessons,
+    required this.completedLessons,
+    required this.availableLessons,
+    required this.lockedLessons,
+  });
+
+  double get completionPercentage => 
+      totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+
+  bool get isCompleted => completedLessons == totalLessons;
+  bool get hasAvailableLessons => availableLessons > 0;
 }

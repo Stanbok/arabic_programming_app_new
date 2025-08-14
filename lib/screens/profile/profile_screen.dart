@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:share_plus/share_plus.dart';
 import 'dart:async';
 import 'dart:io';
 import '../../providers/user_provider.dart';
@@ -19,24 +18,25 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserver {
+class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   int _currentIndex = 1;
-  bool _isSharing = false;
-  DateTime? _shareStartTime;
+  // bool _isSharing = false;
+  // DateTime? _shareStartTime;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
+    // WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    // WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
+  /*
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -53,6 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
       }
     }
   }
+  */
 
   Future<void> _changeProfileImage() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
@@ -124,6 +125,7 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
     }
   }
 
+  /*
   Future<void> _shareApp() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
@@ -190,7 +192,9 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
       }
     }
   }
+  */
 
+  /*
   Future<void> _handleShareReturn(bool actuallyShared) async {
     if (!_isSharing) return;
     
@@ -239,6 +243,7 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
       );
     }
   }
+  */
 
   @override
   Widget build(BuildContext context) {
@@ -539,28 +544,14 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
         
         const SizedBox(height: 16),
         
-        Row(
-          children: [
-            Expanded(
-              child: CustomButton(
-                text: _isSharing ? 'جاري المشاركة...' : 'مشاركة التطبيق',
-                onPressed: _isSharing ? null : _shareApp,
-                icon: _isSharing ? Icons.hourglass_empty : Icons.share,
-                isOutlined: true,
-              ),
-            ),
-            
-            const SizedBox(width: 12),
-            
-            Expanded(
-              child: CustomButton(
-                text: 'الإعدادات',
-                onPressed: () => context.push('/settings'),
-                icon: Icons.settings,
-                isOutlined: true,
-              ),
-            ),
-          ],
+        SizedBox(
+          width: double.infinity,
+          child: CustomButton(
+            text: 'الإعدادات',
+            onPressed: () => context.push('/settings'),
+            icon: Icons.settings,
+            isOutlined: true,
+          ),
         ),
       ],
     );

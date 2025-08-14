@@ -11,7 +11,6 @@ import '../../services/firebase_service.dart';
 import '../../services/reward_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../models/progress_model.dart';
-import '../../models/reward_info_model.dart';
 import '../../models/retake_stats_model.dart';
 
 class QuizScreen extends StatefulWidget {

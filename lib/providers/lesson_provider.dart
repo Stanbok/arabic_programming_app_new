@@ -201,20 +201,12 @@ class LessonProvider with ChangeNotifier {
   }
 
   /// الحصول على معلومات الوحدات للعرض
-  Future<List<UnitInfo>> getUnitsInfo(List<String> completedQuizzes, String userId) async {
+  List<UnitInfo> getUnitsInfo(List<String> completedLessons) {
     if (_lessons.isEmpty) return [];
     
     final allCompletedQuizzes = <String>{};
-    allCompletedQuizzes.addAll(completedQuizzes);
+    allCompletedQuizzes.addAll(completedLessons);
     allCompletedQuizzes.addAll(_localCompletedQuizzes);
-    
-    // إضافة الدروس المكتملة من الإحصائيات
-    for (var lesson in _lessons) {
-      final stats = await StatisticsService.getLessonStatistics(lesson.id, userId);
-      if (stats.isCompleted) {
-        allCompletedQuizzes.add(lesson.id);
-      }
-    }
     
     final availableUnits = _lessons.map((l) => l.unit).toSet().toList()..sort();
     final unitsInfo = <UnitInfo>[];
@@ -237,7 +229,7 @@ class LessonProvider with ChangeNotifier {
           status = LessonStatus.completed;
         } else {
           // فحص إذا كان الدرس السابق مكتمل
-          final previousLesson = await _getPreviousLesson(lesson);
+          final previousLesson = _getPreviousLessonSync(lesson);
           if (previousLesson == null || allCompletedQuizzes.contains(previousLesson.id)) {
             status = LessonStatus.open;
           } else {
@@ -263,8 +255,8 @@ class LessonProvider with ChangeNotifier {
     return unitsInfo;
   }
 
-  /// الحصول على الدرس السابق
-  Future<LessonModel?> _getPreviousLesson(LessonModel lesson) async {
+  /// الحصول على الدرس السابق (نسخة متزامنة)
+  LessonModel? _getPreviousLessonSync(LessonModel lesson) {
     final unitLessons = _lessons.where((l) => l.unit == lesson.unit).toList();
     unitLessons.sort((a, b) => a.order.compareTo(b.order));
     
@@ -284,6 +276,9 @@ class LessonProvider with ChangeNotifier {
     
     return null;
   }
+
+  /// الحصول على الدرس السابق
+  
 
   /// الحصول على عنوان الوحدة
   String _getUnitTitle(int unit) {

@@ -1,3 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+/// Model for tracking individual lesson attempts and statistics
 class LessonAttemptModel {
   final String id;
   final String lessonId;
@@ -7,12 +10,12 @@ class LessonAttemptModel {
   final int totalQuestions;
   final List<int> answers;
   final DateTime attemptedAt;
-  final int attemptNumber;
+  final int attemptNumber; // 1st, 2nd, 3rd attempt etc.
   final bool isPassed;
-  final bool isFirstPass;
+  final bool isFirstPass; // True if this is the first time user passed this lesson
   final int xpAwarded;
   final int gemsAwarded;
-  final int scoringTimeMs;
+  final int scoringTimeMs; // Time taken to compute score
   final String status; // 'passed', 'failed', 'retake_after_pass'
 
   LessonAttemptModel({
@@ -42,7 +45,7 @@ class LessonAttemptModel {
       'correctAnswers': correctAnswers,
       'totalQuestions': totalQuestions,
       'answers': answers,
-      'attemptedAt': attemptedAt.millisecondsSinceEpoch,
+      'attemptedAt': Timestamp.fromDate(attemptedAt),
       'attemptNumber': attemptNumber,
       'isPassed': isPassed,
       'isFirstPass': isFirstPass,
@@ -58,36 +61,50 @@ class LessonAttemptModel {
       id: map['id'] ?? '',
       lessonId: map['lessonId'] ?? '',
       userId: map['userId'] ?? '',
-      score: map['score']?.toInt() ?? 0,
-      correctAnswers: map['correctAnswers']?.toInt() ?? 0,
-      totalQuestions: map['totalQuestions']?.toInt() ?? 0,
+      score: map['score'] ?? 0,
+      correctAnswers: map['correctAnswers'] ?? 0,
+      totalQuestions: map['totalQuestions'] ?? 0,
       answers: List<int>.from(map['answers'] ?? []),
-      attemptedAt: DateTime.fromMillisecondsSinceEpoch(map['attemptedAt'] ?? 0),
-      attemptNumber: map['attemptNumber']?.toInt() ?? 1,
+      attemptedAt: (map['attemptedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      attemptNumber: map['attemptNumber'] ?? 1,
       isPassed: map['isPassed'] ?? false,
       isFirstPass: map['isFirstPass'] ?? false,
-      xpAwarded: map['xpAwarded']?.toInt() ?? 0,
-      gemsAwarded: map['gemsAwarded']?.toInt() ?? 0,
-      scoringTimeMs: map['scoringTimeMs']?.toInt() ?? 0,
+      xpAwarded: map['xpAwarded'] ?? 0,
+      gemsAwarded: map['gemsAwarded'] ?? 0,
+      scoringTimeMs: map['scoringTimeMs'] ?? 0,
       status: map['status'] ?? 'failed',
     );
   }
+
+  String get grade {
+    if (score >= 95) return 'ممتاز';
+    if (score >= 85) return 'جيد جداً';
+    if (score >= 75) return 'جيد';
+    if (score >= 70) return 'مقبول';
+    return 'راسب';
+  }
+  
+  int get stars {
+    if (score >= 95) return 3;
+    if (score >= 85) return 2;
+    if (score >= 70) return 1;
+    return 0;
+  }
 }
 
+/// Statistics summary for a lesson
 class LessonStatistics {
   final String lessonId;
   final int totalAttempts;
   final int passedAttempts;
   final int failedAttempts;
-  final double bestScore;
+  final int bestScore;
   final double averageScore;
   final DateTime? firstAttemptAt;
   final DateTime? lastAttemptAt;
   final DateTime? firstPassAt;
   final bool isCompleted;
-  final int totalXPEarned;
-  final int totalGemsEarned;
-  final double averageScoringTime;
+  final int postPassRetakes; // Number of retakes after first pass
 
   LessonStatistics({
     required this.lessonId,
@@ -100,9 +117,7 @@ class LessonStatistics {
     this.lastAttemptAt,
     this.firstPassAt,
     required this.isCompleted,
-    required this.totalXPEarned,
-    required this.totalGemsEarned,
-    required this.averageScoringTime,
+    required this.postPassRetakes,
   });
 
   factory LessonStatistics.fromAttempts(String lessonId, List<LessonAttemptModel> attempts) {
@@ -112,25 +127,32 @@ class LessonStatistics {
         totalAttempts: 0,
         passedAttempts: 0,
         failedAttempts: 0,
-        bestScore: 0.0,
+        bestScore: 0,
         averageScore: 0.0,
         isCompleted: false,
-        totalXPEarned: 0,
-        totalGemsEarned: 0,
-        averageScoringTime: 0.0,
+        postPassRetakes: 0,
       );
     }
 
+    attempts.sort((a, b) => a.attemptedAt.compareTo(b.attemptedAt));
+    
     final passedAttempts = attempts.where((a) => a.isPassed).length;
     final failedAttempts = attempts.length - passedAttempts;
-    final bestScore = attempts.map((a) => a.score).reduce((a, b) => a > b ? a : b).toDouble();
+    final bestScore = attempts.map((a) => a.score).reduce((a, b) => a > b ? a : b);
     final averageScore = attempts.map((a) => a.score).reduce((a, b) => a + b) / attempts.length;
-    final totalXP = attempts.map((a) => a.xpAwarded).reduce((a, b) => a + b);
-    final totalGems = attempts.map((a) => a.gemsAwarded).reduce((a, b) => a + b);
-    final averageScoringTime = attempts.map((a) => a.scoringTimeMs).reduce((a, b) => a + b) / attempts.length;
+    final firstPassAt = attempts.firstWhere((a) => a.isPassed, orElse: () => attempts.first).attemptedAt;
+    final isCompleted = passedAttempts > 0;
     
-    attempts.sort((a, b) => a.attemptedAt.compareTo(b.attemptedAt));
-    final firstPass = attempts.where((a) => a.isPassed).firstOrNull;
+    // Count post-pass retakes
+    int postPassRetakes = 0;
+    bool hasPassedBefore = false;
+    for (var attempt in attempts) {
+      if (attempt.isPassed && !hasPassedBefore) {
+        hasPassedBefore = true;
+      } else if (hasPassedBefore) {
+        postPassRetakes++;
+      }
+    }
 
     return LessonStatistics(
       lessonId: lessonId,
@@ -141,11 +163,9 @@ class LessonStatistics {
       averageScore: averageScore,
       firstAttemptAt: attempts.first.attemptedAt,
       lastAttemptAt: attempts.last.attemptedAt,
-      firstPassAt: firstPass?.attemptedAt,
-      isCompleted: passedAttempts > 0,
-      totalXPEarned: totalXP,
-      totalGemsEarned: totalGems,
-      averageScoringTime: averageScoringTime,
+      firstPassAt: isCompleted ? firstPassAt : null,
+      isCompleted: isCompleted,
+      postPassRetakes: postPassRetakes,
     );
   }
 }

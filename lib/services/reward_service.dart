@@ -1,97 +1,204 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../models/lesson_model.dart';
 import '../services/statistics_service.dart';
 
-/// Service for calculating rewards (XP and Gems) from lesson data
-/// This is the SINGLE SOURCE OF TRUTH for all reward calculations
+/// خدمة إدارة المكافآت - المصدر الوحيد لحساب وتوزيع XP والجواهر
+/// تم إزالة ميزة المشاركة بالكامل
 class RewardService {
-  /// Calculate rewards for completing a lesson quiz
-  /// Returns a map with 'xp' and 'gems' keys
-  static Future<Map<String, int>> calculateQuizRewards({
-    required LessonModel lesson,
-    required int score,
-    required bool isPassed,
-    required String userId,
-  }) async {
-    // Base rewards come ONLY from lesson JSON data
-    final baseXP = lesson.xpReward;
-    final baseGems = lesson.gemsReward;
+  static const String _completedQuizzesKey = 'completed_quizzes_secure';
+  
+  /// الحصول على مكافآت الدرس من JSON مع دعم نظام إعادة المحاولة
+  static Future<RewardInfo> getLessonRewards(
+    LessonModel lesson, 
+    int quizScore, 
+    String userId,
+    bool isFirstPass,
+  ) async {
+    // استخدام القيم من JSON كما هي
+    int baseXP = lesson.xpReward;
+    int baseGems = lesson.gemsReward;
     
-    if (!isPassed) {
-      // No rewards for failed attempts
-      return {'xp': 0, 'gems': 0};
+    // مكافأة إضافية بناءً على الأداء (من JSON أيضاً)
+    double performanceMultiplier = 1.0;
+    if (quizScore >= 95) {
+      performanceMultiplier = 1.5; // 50% إضافية للأداء الممتاز
+    } else if (quizScore >= 85) {
+      performanceMultiplier = 1.25; // 25% إضافية للأداء الجيد
+    } else if (quizScore >= 70) {
+      performanceMultiplier = 1.0; // المكافأة الأساسية للنجاح
+    } else {
+      performanceMultiplier = 0.0; // لا مكافأة للرسوب
     }
-    
-    // Check if this is a retake after previous pass
-    final attempts = await StatisticsService.getAttempts(lesson.id, userId);
-    final hasPassedBefore = attempts.any((a) => a.isPassed);
-    
-    if (!hasPassedBefore) {
-      // First pass - full rewards
-      print('🎉 أول نجاح - مكافآت كاملة: ${baseXP} XP, ${baseGems} جوهرة');
-      return {'xp': baseXP, 'gems': baseGems};
+
+    // تطبيق نظام تقليل المكافآت لإعادة المحاولة بعد النجاح
+    double retakeMultiplier = 1.0;
+    if (!isFirstPass && quizScore >= 70) {
+      retakeMultiplier = await StatisticsService.calculateRetakeMultiplier(lesson.id, userId);
     }
+
+    final finalXP = (baseXP * performanceMultiplier * retakeMultiplier).round();
+    final finalGems = (baseGems * performanceMultiplier * retakeMultiplier).round();
     
-    // This is a retake after pass - apply decay multiplier
-    final multiplier = await StatisticsService.calculateRetakeMultiplier(lesson.id, userId);
-    final finalXP = (baseXP * multiplier).round();
-    final finalGems = (baseGems * multiplier).round();
-    
-    print('🔄 إعادة محاولة بعد النجاح - مضاعف: ${(multiplier * 100).toInt()}%');
-    print('💎 مكافآت مخفضة: ${finalXP} XP, ${finalGems} جوهرة');
-    
-    return {'xp': finalXP, 'gems': finalGems};
+    return RewardInfo(
+      xp: finalXP,
+      gems: finalGems,
+      source: isFirstPass ? 'lesson_completion' : 'lesson_retake',
+      lessonId: lesson.id,
+      score: quizScore,
+      isFirstPass: isFirstPass,
+      retakeMultiplier: retakeMultiplier,
+    );
   }
   
-  /// Validate lesson data has required reward fields
-  static bool validateLessonRewards(Map<String, dynamic> lessonData) {
-    if (!lessonData.containsKey('xpReward') || !lessonData.containsKey('gemsReward')) {
-      print('⚠️ تحذير: بيانات الدرس لا تحتوي على مكافآت محددة');
+  /// التحقق من إكمال الاختبار مسبقاً
+  static Future<bool> isQuizCompleted(String lessonId, String userId) async {
+    try {
+      final attempts = await StatisticsService.getAttempts(lessonId, userId);
+      return attempts.any((attempt) => attempt.isPassed);
+    } catch (e) {
+      print('خطأ في التحقق من إكمال الاختبار: $e');
       return false;
     }
-    
-    final xp = lessonData['xpReward'];
-    final gems = lessonData['gemsReward'];
-    
-    if (xp is! int || gems is! int) {
-      print('⚠️ تحذير: قيم المكافآت يجب أن تكون أرقام صحيحة');
-      return false;
-    }
-    
-    if (xp < 0 || gems < 0) {
-      print('⚠️ تحذير: قيم المكافآت لا يمكن أن تكون سالبة');
-      return false;
-    }
-    
-    return true;
   }
   
-  /// Get default rewards if lesson data is missing reward info
-  static Map<String, int> getDefaultRewards() {
-    return {'xp': 10, 'gems': 5}; // Default fallback values
+  /// تسجيل إكمال الاختبار بشكل آمن
+  static Future<void> markQuizCompleted(String lessonId, String userId, int score) async {
+    try {
+      final quizKey = _generateQuizKey(userId, lessonId);
+      final completedQuizzes = await _getSecureCompletedQuizzes();
+      
+      if (!completedQuizzes.contains(quizKey)) {
+        completedQuizzes.add(quizKey);
+        await _saveSecureCompletedQuizzes(completedQuizzes);
+        
+        // حفظ تفاصيل إضافية للتحقق
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('quiz_${quizKey}_score', score.toString());
+        await prefs.setString('quiz_${quizKey}_timestamp', DateTime.now().toIso8601String());
+      }
+    } catch (e) {
+      print('خطأ في تسجيل إكمال الاختبار: $e');
+    }
   }
   
-  /// Log reward calculation for debugging
-  static void logRewardCalculation({
-    required String lessonId,
-    required String userId,
-    required int baseXP,
-    required int baseGems,
-    required int finalXP,
-    required int finalGems,
-    required bool isRetake,
-    double? multiplier,
-  }) {
-    print('📊 حساب المكافآت:');
-    print('   الدرس: $lessonId');
-    print('   المستخدم: $userId');
-    print('   XP الأساسي: $baseXP');
-    print('   الجواهر الأساسية: $baseGems');
-    print('   XP النهائي: $finalXP');
-    print('   الجواهر النهائية: $finalGems');
-    print('   إعادة محاولة: $isRetake');
-    if (multiplier != null) {
-      print('   المضاعف: ${(multiplier * 100).toInt()}%');
+  /// إنشاء مفتاح آمن للاختبار
+  static String _generateQuizKey(String userId, String lessonId) {
+    final input = '$userId:$lessonId:${DateTime.now().toIso8601String().substring(0, 10)}';
+    final bytes = utf8.encode(input);
+    final digest = sha256.convert(bytes);
+    return digest.toString().substring(0, 16); // استخدام أول 16 حرف فقط
+  }
+  
+  /// الحصول على قائمة الاختبارات المكتملة بشكل آمن
+  static Future<List<String>> _getSecureCompletedQuizzes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encryptedData = prefs.getString(_completedQuizzesKey);
+      
+      if (encryptedData == null) {
+        return [];
+      }
+      
+      // فك التشفير البسيط (يمكن تحسينه لاحقاً)
+      final decodedData = utf8.decode(base64.decode(encryptedData));
+      final List<dynamic> jsonList = json.decode(decodedData);
+      
+      return jsonList.cast<String>();
+    } catch (e) {
+      print('خطأ في قراءة الاختبارات المكتملة: $e');
+      return [];
     }
+  }
+  
+  /// حفظ قائمة الاختبارات المكتملة بشكل آمن
+  static Future<void> _saveSecureCompletedQuizzes(List<String> completedQuizzes) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // تشفير بسيط (يمكن تحسينه لاحقاً)
+      final jsonData = json.encode(completedQuizzes);
+      final encodedData = base64.encode(utf8.encode(jsonData));
+      
+      await prefs.setString(_completedQuizzesKey, encodedData);
+    } catch (e) {
+      print('خطأ في حفظ الاختبارات المكتملة: $e');
+    }
+  }
+  
+  /// التحقق من صحة النتيجة
+  static bool isValidScore(int score, int totalQuestions) {
+    return score >= 0 && score <= 100 && totalQuestions > 0;
+  }
+  
+  /// حساب النتيجة بناءً على الإجابات الصحيحة
+  static int calculateScore(int correctAnswers, int totalQuestions) {
+    if (totalQuestions <= 0) return 0;
+    return ((correctAnswers / totalQuestions) * 100).round();
+  }
+  
+  /// إعادة تعيين جميع المكافآت (للاختبار فقط)
+  static Future<void> resetAllRewards(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // إزالة جميع البيانات المتعلقة بالمكافآت
+      await prefs.remove(_completedQuizzesKey);
+      
+      // إزالة تفاصيل الاختبارات
+      final keys = prefs.getKeys();
+      for (String key in keys) {
+        if (key.startsWith('quiz_') && (key.contains('_score') || key.contains('_timestamp'))) {
+          await prefs.remove(key);
+        }
+      }
+      
+      // إعادة تعيين الإحصائيات
+      await StatisticsService.resetAllStatistics(userId);
+      
+      print('تم إعادة تعيين جميع المكافآت للمستخدم: $userId');
+    } catch (e) {
+      print('خطأ في إعادة تعيين المكافآت: $e');
+    }
+  }
+}
+
+/// معلومات المكافأة المحدثة
+class RewardInfo {
+  final int xp;
+  final int gems;
+  final String source;
+  final String? lessonId;
+  final int? score;
+  final bool isFirstPass;
+  final double retakeMultiplier;
+  
+  RewardInfo({
+    required this.xp,
+    required this.gems,
+    required this.source,
+    this.lessonId,
+    this.score,
+    this.isFirstPass = true,
+    this.retakeMultiplier = 1.0,
+  });
+  
+  Map<String, dynamic> toMap() {
+    return {
+      'xp': xp,
+      'gems': gems,
+      'source': source,
+      'lessonId': lessonId,
+      'score': score,
+      'isFirstPass': isFirstPass,
+      'retakeMultiplier': retakeMultiplier,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+  
+  @override
+  String toString() {
+    return 'RewardInfo(xp: $xp, gems: $gems, source: $source, lessonId: $lessonId, score: $score, isFirstPass: $isFirstPass, retakeMultiplier: $retakeMultiplier)';
   }
 }

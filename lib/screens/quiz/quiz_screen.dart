@@ -262,7 +262,7 @@ class _QuizScreenState extends State<QuizScreen> {
         try {
           final nextLesson = await lessonProvider.unlockNextLesson(
             widget.lessonId, 
-            authProvider.user?.completedLessons ?? []
+            userProvider.user?.completedLessons ?? []
           );
           
           if (nextLesson != null && mounted) {

@@ -132,38 +132,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 
                 const SizedBox(height: 24),
                 
-                // Pending Rewards Indicator
-                if (userProvider.hasPendingRewards)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.sync, color: Colors.blue),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'يتم مزامنة المكافآت مع الخادم...',
-                            style: TextStyle(color: Colors.blue),
-                          ),
-                        ),
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ],
-                    ),
-                  ),
-                
-                const SizedBox(height: 24),
-                
                 // Achievements Section
                 _buildAchievementsSection(user),
               ],

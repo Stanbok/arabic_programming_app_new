@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../services/firebase_service.dart';
 import '../services/local_service.dart';
 import '../services/cache_service.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
+import '../models/decay_tracker_model.dart';
 
 class LessonProvider with ChangeNotifier {
   List<LessonModel> _lessons = [];
@@ -18,6 +20,8 @@ class LessonProvider with ChangeNotifier {
   
   // تتبع محلي للاختبارات المكتملة فقط (بدون XP/Gems منفصلة)
   Set<String> _localCompletedQuizzes = {};
+
+  Map<String, DecayTrackerModel> _decayTrackers = {};
 
   List<LessonModel> get lessons => _lessons;
   List<LessonModel> get localLessons => _localLessons;
@@ -211,14 +215,10 @@ class LessonProvider with ChangeNotifier {
       // تحديد حالة كل درس
       final lessonsWithStatus = unitLessons.map((lesson) {
         LessonStatus status;
-        if (lesson.unit == 1 && lesson.order == 1) {
-          // الدرس الأول دائماً مفتوح
-          status = LessonStatus.open;
-        } else if (allCompletedQuizzes.contains(lesson.id)) {
-          // الدرس مكتمل
+        if (allCompletedQuizzes.contains(lesson.id)) {
           status = LessonStatus.completed;
         } else {
-          // فحص إذا كان الدرس السابق مكتمل
+          // فحص إذا كان الدرس السابق مكتمل أو هو الدرس الأول
           final previousLesson = _getPreviousLesson(lesson);
           if (previousLesson == null || allCompletedQuizzes.contains(previousLesson.id)) {
             status = LessonStatus.open;
@@ -294,16 +294,18 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  /// حفظ نتيجة الاختبار في Firebase
+  /// حفظ نتيجة الاختبار في Firebase - مع فحص النجاح
   Future<void> saveQuizResult(String userId, String lessonId, QuizResultModel result) async {
     try {
       await FirebaseService.saveQuizResult(userId, lessonId, result);
       
-      // تسجيل الإكمال محلياً
-      await markQuizCompletedLocally(lessonId);
-      
-      // مزامنة مع Firebase في الخلفية
-      _syncQuizCompletionWithFirebase(userId, lessonId);
+      if (result.isPassed) {
+        await markQuizCompletedLocally(lessonId);
+        _syncQuizCompletionWithFirebase(userId, lessonId);
+        
+        // تحديث تتبع الاضمحلال
+        await _updateDecayTracker(lessonId);
+      }
     } catch (e) {
       print('❌ خطأ في حفظ نتيجة الاختبار: $e');
     }
@@ -367,9 +369,12 @@ class LessonProvider with ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final completedQuizzes = prefs.getStringList('local_completed_quizzes') ?? [];
       _localCompletedQuizzes = completedQuizzes.toSet();
+      
+      await _loadDecayTrackers();
     } catch (e) {
       print('❌ خطأ في تحميل التقدم المحلي: $e');
       _localCompletedQuizzes = {};
+      _decayTrackers = {};
     }
   }
 
@@ -390,6 +395,68 @@ class LessonProvider with ChangeNotifier {
       print('🔄 تم مزامنة إكمال الاختبار مع Firebase: $lessonId');
     } catch (e) {
       print('⚠️ فشل في مزامنة إكمال الاختبار مع Firebase: $e');
+    }
+  }
+
+  /// تحديث تتبع الاضمحلال للدرس
+  Future<void> _updateDecayTracker(String lessonId) async {
+    try {
+      final now = DateTime.now();
+      
+      if (_decayTrackers.containsKey(lessonId)) {
+        // درس تم إكماله مسبقاً - تحديث الإعادة
+        final currentTracker = _decayTrackers[lessonId]!;
+        final updatedTracker = currentTracker.withDailyReset().withNewRetake();
+        _decayTrackers[lessonId] = updatedTracker;
+      } else {
+        // درس جديد - إنشاء تتبع جديد
+        _decayTrackers[lessonId] = DecayTrackerModel(
+          lessonId: lessonId,
+          firstCompletionDate: now,
+          lastRetakeDate: now,
+          retakeCount: 0, // أول مرة
+        );
+      }
+      
+      await _saveDecayTrackers();
+    } catch (e) {
+      print('❌ خطأ في تحديث تتبع الاضمحلال: $e');
+    }
+  }
+
+  /// الحصول على تتبع الاضمحلال لدرس معين
+  DecayTrackerModel? getDecayTracker(String lessonId) {
+    return _decayTrackers[lessonId];
+  }
+
+  /// حفظ تتبع الاضمحلال محلياً
+  Future<void> _saveDecayTrackers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final trackersJson = _decayTrackers.map(
+        (key, value) => MapEntry(key, value.toMap()),
+      );
+      await prefs.setString('decay_trackers', json.encode(trackersJson));
+    } catch (e) {
+      print('❌ خطأ في حفظ تتبع الاضمحلال: $e');
+    }
+  }
+
+  /// تحميل تتبع الاضمحلال محلياً
+  Future<void> _loadDecayTrackers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final trackersString = prefs.getString('decay_trackers');
+      
+      if (trackersString != null) {
+        final trackersJson = json.decode(trackersString) as Map<String, dynamic>;
+        _decayTrackers = trackersJson.map(
+          (key, value) => MapEntry(key, DecayTrackerModel.fromMap(value)),
+        );
+      }
+    } catch (e) {
+      print('❌ خطأ في تحميل تتبع الاضمحلال: $e');
+      _decayTrackers = {};
     }
   }
 

@@ -157,20 +157,26 @@ class _QuizScreenState extends State<QuizScreen> {
         await lessonProvider.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
         
         if (_result!.isPassed) {
-          // Using RewardService instead of direct calculation
-          final rewards = RewardService.calculateTotalRewards(lesson, score.toDouble());
+          final decayTracker = lessonProvider.getDecayTracker(widget.lessonId);
+          final rewards = RewardService.calculateTotalRewards(
+            lesson, 
+            score.toDouble(),
+            decayTracker: decayTracker,
+          );
+          
           final xpReward = rewards['xp']!;
           final gemsReward = rewards['gems']!;
           
-          // Adding rewards directly via Firebase
-          await FirebaseService.addXPAndGems(
-            authProvider.user!.uid, 
-            xpReward, 
-            gemsReward, 
-            'إكمال درس: ${lesson.title} ($score%)'
-          );
-          
-          print('✅ تم إضافة المكافآت: XP=$xpReward, Gems=$gemsReward');
+          if (xpReward > 0 || gemsReward > 0) {
+            await FirebaseService.addXPAndGems(
+              authProvider.user!.uid, 
+              xpReward, 
+              gemsReward, 
+              'إكمال درس: ${lesson.title} ($score%)'
+            );
+            
+            print('✅ تم إضافة المكافآت مع الاضمحلال: XP=$xpReward, Gems=$gemsReward');
+          }
         }
       } catch (e) {
         print('❌ خطأ في حفظ النتيجة: $e');
@@ -508,12 +514,22 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildResultScreen(LessonModel lesson, QuizResultModel result) {
+    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
+    final decayTracker = lessonProvider.getDecayTracker(widget.lessonId);
+    
     final rewards = result.isPassed 
-        ? RewardService.calculateTotalRewards(lesson, result.score.toDouble())
+        ? RewardService.calculateTotalRewards(
+            lesson, 
+            result.score.toDouble(),
+            decayTracker: decayTracker,
+          )
         : {'xp': 0, 'gems': 0};
     
     final xpReward = rewards['xp']!;
     final gemsReward = rewards['gems']!;
+    
+    final isRetake = decayTracker != null && decayTracker.retakeCount > 0;
+    final decayMultiplier = decayTracker?.getDecayMultiplier() ?? 1.0;
     
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -688,6 +704,45 @@ class _QuizScreenState extends State<QuizScreen> {
             ),
           
           const SizedBox(height: 32),
+          
+          // Decay Information (if retake)
+          if (result.isPassed && isRetake)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Column(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.orange),
+                  const SizedBox(height: 8),
+                  Text(
+                    'إعادة اختبار',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange[700],
+                    ),
+                  ),
+                  Text(
+                    'المكافآت مقللة إلى ${(decayMultiplier * 100).round()}%',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.orange[600],
+                    ),
+                  ),
+                  if (gemsReward == 0)
+                    Text(
+                      'لا جواهر في الإعادات',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.orange[600],
+                      ),
+                    ),
+                ],
+              ),
+            ),
           
           // Action Buttons
           Column(

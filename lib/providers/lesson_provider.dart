@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 import '../services/local_service.dart';
 import '../services/cache_service.dart';
-import '../services/reward_service.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
 

@@ -8,9 +8,8 @@ import '../../providers/auth_provider.dart';
 import '../../models/lesson_model.dart';
 import '../../models/quiz_result_model.dart';
 import '../../services/firebase_service.dart';
-import '../../services/reward_service.dart';
+import '../../services/reward_service.dart'; // Import RewardService
 import '../../widgets/custom_button.dart';
-import '../../models/progress_model.dart';
 
 class QuizScreen extends StatefulWidget {
   final String lessonId;
@@ -32,12 +31,10 @@ class _QuizScreenState extends State<QuizScreen> {
   int _timeRemaining = 300; // 5 minutes
   bool _isCompleted = false;
   QuizResultModel? _result;
-  bool _alreadyCompleted = false;
 
   @override
   void initState() {
     super.initState();
-    _checkIfAlreadyCompleted();
     _loadLesson();
     _startTimer();
   }
@@ -47,18 +44,6 @@ class _QuizScreenState extends State<QuizScreen> {
     _timer?.cancel();
     _pageController.dispose();
     super.dispose();
-  }
-
-  /// التحقق من إكمال الاختبار مسبقاً
-  Future<void> _checkIfAlreadyCompleted() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userId = authProvider.user?.uid ?? 'guest';
-    
-    _alreadyCompleted = await RewardService.isQuizCompleted(widget.lessonId, userId);
-    
-    if (_alreadyCompleted) {
-      print('⚠️ تم إكمال هذا الاختبار مسبقاً');
-    }
   }
 
   Future<void> _loadLesson() async {
@@ -141,32 +126,8 @@ class _QuizScreenState extends State<QuizScreen> {
     if (lesson == null) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
     final userId = authProvider.user?.uid ?? 'guest';
-
-    // التحقق من عدم إكمال الاختبار مسبقاً
-    if (await RewardService.isQuizCompleted(widget.lessonId, userId)) {
-      setState(() {
-        _isCompleted = true;
-        _result = QuizResultModel(
-          lessonId: widget.lessonId,
-          score: 0,
-          correctAnswers: 0,
-          totalQuestions: lesson.quiz.length,
-          answers: _selectedAnswers,
-          completedAt: DateTime.now(),
-        );
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إكمال هذا الاختبار مسبقاً'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
 
     // حساب النتائج
     int correctAnswers = 0;
@@ -176,13 +137,7 @@ class _QuizScreenState extends State<QuizScreen> {
       }
     }
 
-    final score = RewardService.calculateScore(correctAnswers, lesson.quiz.length);
-    
-    // التحقق من صحة النتيجة
-    if (!RewardService.isValidScore(score, lesson.quiz.length)) {
-      print('❌ نتيجة غير صحيحة: $score');
-      return;
-    }
+    final score = lesson.quiz.isNotEmpty ? ((correctAnswers / lesson.quiz.length) * 100).round() : 0;
 
     _result = QuizResultModel(
       lessonId: widget.lessonId,
@@ -198,31 +153,28 @@ class _QuizScreenState extends State<QuizScreen> {
     // حفظ النتيجة وإضافة المكافآت
     if (!authProvider.isGuestUser && authProvider.user != null) {
       try {
-        // حفظ نتيجة الاختبار
-        await FirebaseService.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
+        // حفظ نتيجة الاختبار في Firebase
+        await lessonProvider.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
         
-        // تسجيل إكمال الاختبار
-        await RewardService.markQuizCompleted(widget.lessonId, userId, score);
-        
-        // إضافة المكافآت إذا نجح
         if (_result!.isPassed) {
-          final rewardInfo = RewardService.getLessonRewards(lesson, score);
-          final userProvider = Provider.of<UserProvider>(context, listen: false);
+          // Using RewardService instead of direct calculation
+          final rewards = RewardService.calculateTotalRewards(lesson, score.toDouble());
+          final xpReward = rewards['xp']!;
+          final gemsReward = rewards['gems']!;
           
-          final success = await userProvider.addReward(rewardInfo, authProvider.user!.uid);
+          // Adding rewards directly via Firebase
+          await FirebaseService.addXPAndGems(
+            authProvider.user!.uid, 
+            xpReward, 
+            gemsReward, 
+            'إكمال درس: ${lesson.title} ($score%)'
+          );
           
-          if (success) {
-            print('✅ تم إضافة المكافآت: $rewardInfo');
-          } else {
-            print('❌ فشل في إضافة المكافآت');
-          }
+          print('✅ تم إضافة المكافآت: XP=$xpReward, Gems=$gemsReward');
         }
       } catch (e) {
         print('❌ خطأ في حفظ النتيجة: $e');
       }
-    } else {
-      // للضيوف - تسجيل الإكمال محلياً فقط
-      await RewardService.markQuizCompleted(widget.lessonId, userId, score);
     }
 
     setState(() {
@@ -324,27 +276,6 @@ class _QuizScreenState extends State<QuizScreen> {
                   const Text('لا يوجد اختبار لهذا الدرس'),
                   const SizedBox(height: 8),
                   Text('الدرس: ${lesson.title}'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.pop(),
-                    child: const Text('العودة'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          // عرض تحذير إذا تم إكمال الاختبار مسبقاً
-          if (_alreadyCompleted && !_isCompleted) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_circle, size: 64, color: Colors.green),
-                  const SizedBox(height: 16),
-                  const Text('تم إكمال هذا الاختبار مسبقاً'),
-                  const SizedBox(height: 8),
-                  const Text('لا يمكن إعادة الاختبار للحصول على مكافآت إضافية'),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => context.pop(),
@@ -577,7 +508,12 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildResultScreen(LessonModel lesson, QuizResultModel result) {
-    final rewardInfo = result.isPassed ? RewardService.getLessonRewards(lesson, result.score) : null;
+    final rewards = result.isPassed 
+        ? RewardService.calculateTotalRewards(lesson, result.score.toDouble())
+        : {'xp': 0, 'gems': 0};
+    
+    final xpReward = rewards['xp']!;
+    final gemsReward = rewards['gems']!;
     
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -693,11 +629,11 @@ class _QuizScreenState extends State<QuizScreen> {
                       value: '${result.totalQuestions - result.correctAnswers}',
                       color: Colors.red,
                     ),
-                    if (rewardInfo != null)
+                    if (result.isPassed)
                       _buildResultItem(
                         icon: Icons.star,
                         label: 'XP مكتسب',
-                        value: '${rewardInfo.xp}',
+                        value: '$xpReward',
                         color: Colors.amber,
                       ),
                   ],
@@ -709,7 +645,7 @@ class _QuizScreenState extends State<QuizScreen> {
           const SizedBox(height: 32),
           
           // Rewards (if passed)
-          if (result.isPassed && rewardInfo != null)
+          if (result.isPassed)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -741,7 +677,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${rewardInfo.xp} نقطة خبرة + ${rewardInfo.gems} جوهرة',
+                    '$xpReward نقطة خبرة + $gemsReward جوهرة',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Colors.amber[700],
                       fontWeight: FontWeight.w600,
@@ -769,9 +705,19 @@ class _QuizScreenState extends State<QuizScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
-                    text: 'العودة للدرس',
-                    onPressed: () => context.pop(),
-                    icon: Icons.school,
+                    text: 'إعادة المحاولة',
+                    onPressed: () {
+                      setState(() {
+                        _isCompleted = false;
+                        _result = null;
+                        _selectedAnswers = List.filled(lesson.quiz.length, -1);
+                        _currentQuestionIndex = 0;
+                        _timeRemaining = 300;
+                      });
+                      _pageController = PageController();
+                      _startTimer();
+                    },
+                    icon: Icons.refresh,
                   ),
                 ),
               

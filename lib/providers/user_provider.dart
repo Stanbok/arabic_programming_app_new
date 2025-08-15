@@ -3,56 +3,30 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../services/firebase_service.dart';
-import '../services/reward_service.dart';
 import '../models/user_model.dart';
-import '../models/quiz_result_model.dart';
 
 class UserProvider with ChangeNotifier {
   UserModel? _user;
-  List<QuizResultModel> _quizResults = [];
   bool _isLoading = false;
   String? _errorMessage;
   StreamSubscription<UserModel?>? _userSubscription;
   bool _isListening = false;
   
-  // تتبع محلي للمكافآت المعلقة (في انتظار المزامنة)
-  List<RewardInfo> _pendingRewards = [];
-  bool _hasPendingRewards = false;
-
+  
   UserModel? get user => _user;
-  List<QuizResultModel> get quizResults => _quizResults;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isListening => _isListening;
-  bool get hasPendingRewards => _hasPendingRewards;
   
-  // حساب إجمالي XP والجواهر مع المكافآت المعلقة
-  int get totalXP {
-    int baseXP = _user?.xp ?? 0;
-    int pendingXP = _pendingRewards.fold(0, (sum, reward) => sum + reward.xp);
-    return baseXP + pendingXP;
-  }
-  
-  int get totalGems {
-    int baseGems = _user?.gems ?? 0;
-    int pendingGems = _pendingRewards.fold(0, (sum, reward) => sum + reward.gems);
-    return baseGems + pendingGems;
-  }
-  
-  int get currentLevel {
-    if (_user == null) return 1;
-    return _calculateLevelFromXP(totalXP);
-  }
+  int get totalXP => _user?.xp ?? 0;
+  int get totalGems => _user?.gems ?? 0;
+  int get currentLevel => _user?.currentLevel ?? 1;
 
   // تحميل فوري لبيانات المستخدم
   Future<void> loadUserDataInstantly(String userId) async {
     try {
       _setLoading(true);
       _clearError();
-      
-      // تحميل المكافآت المعلقة فوراً
-      await _loadPendingRewards();
-      notifyListeners();
       
       // تحميل بيانات Firebase في الخلفية
       _loadFirebaseUserDataInBackground(userId);
@@ -80,9 +54,6 @@ class UserProvider with ChangeNotifier {
         // إنشاء مستخدم جديد بالقيم الافتراضية
         await _createNewUser(userId);
       }
-      
-      // مزامنة المكافآت المعلقة مع Firebase
-      await _syncPendingRewardsWithFirebase(userId);
       
       notifyListeners();
     } catch (e) {
@@ -112,94 +83,6 @@ class UserProvider with ChangeNotifier {
       print('✅ تم إنشاء مستخدم جديد بالقيم الافتراضية');
     } catch (e) {
       print('⚠️ فشل في إنشاء المستخدم الجديد: $e');
-    }
-  }
-
-  /// إضافة مكافأة - المصدر الوحيد لإضافة XP والجواهر
-  Future<bool> addReward(RewardInfo rewardInfo, String userId) async {
-    try {
-      print('💎 إضافة مكافأة: $rewardInfo');
-      
-      // التحقق من صحة المكافأة
-      if (!_isValidReward(rewardInfo)) {
-        print('❌ مكافأة غير صحيحة: $rewardInfo');
-        return false;
-      }
-      
-      // إضافة المكافأة للقائمة المعلقة
-      _pendingRewards.add(rewardInfo);
-      _hasPendingRewards = true;
-      
-      // حفظ محلياً
-      await _savePendingRewards();
-      
-      // تحديث الواجهة فوراً
-      notifyListeners();
-      
-      // مزامنة مع Firebase في الخلفية
-      _syncRewardWithFirebaseInBackground(rewardInfo, userId);
-      
-      return true;
-    } catch (e) {
-      print('❌ خطأ في إضافة المكافأة: $e');
-      return false;
-    }
-  }
-  
-  /// مزامنة مكافأة واحدة مع Firebase في الخلفية
-  Future<void> _syncRewardWithFirebaseInBackground(RewardInfo rewardInfo, String userId) async {
-    try {
-      await FirebaseService.addXPAndGems(
-        userId, 
-        rewardInfo.xp, 
-        rewardInfo.gems, 
-        _getRewardDescription(rewardInfo)
-      ).timeout(const Duration(seconds: 10));
-      
-      // إزالة المكافأة من القائمة المعلقة بعد المزامنة الناجحة
-      _pendingRewards.removeWhere((r) => 
-        r.xp == rewardInfo.xp && 
-        r.gems == rewardInfo.gems && 
-        r.source == rewardInfo.source &&
-        r.lessonId == rewardInfo.lessonId
-      );
-      
-      _hasPendingRewards = _pendingRewards.isNotEmpty;
-      await _savePendingRewards();
-      
-      print('🔄 تم مزامنة المكافأة مع Firebase: $rewardInfo');
-      notifyListeners();
-    } catch (e) {
-      print('⚠️ فشل في المزامنة مع Firebase: $e');
-    }
-  }
-
-  /// مزامنة جميع المكافآت المعلقة مع Firebase
-  Future<void> _syncPendingRewardsWithFirebase(String userId) async {
-    if (_pendingRewards.isEmpty) return;
-    
-    try {
-      print('🔄 مزامنة ${_pendingRewards.length} مكافأة معلقة...');
-      
-      for (RewardInfo reward in List.from(_pendingRewards)) {
-        await FirebaseService.addXPAndGems(
-          userId, 
-          reward.xp, 
-          reward.gems, 
-          _getRewardDescription(reward)
-        ).timeout(const Duration(seconds: 10));
-        
-        // إزالة المكافأة بعد المزامنة الناجحة
-        _pendingRewards.remove(reward);
-      }
-      
-      _hasPendingRewards = false;
-      await _savePendingRewards();
-      
-      print('✅ تم مزامنة جميع المكافآت المعلقة');
-      notifyListeners();
-    } catch (e) {
-      print('⚠️ فشل في مزامنة المكافآت المعلقة: $e');
     }
   }
 
@@ -241,7 +124,6 @@ class UserProvider with ChangeNotifier {
       
       // جلب البيانات مرة واحدة للتحميل السريع
       _user = await FirebaseService.getUserData(userId);
-      _quizResults = await FirebaseService.getQuizResults(userId);
       
       notifyListeners();
     } catch (e) {
@@ -299,11 +181,6 @@ class UserProvider with ChangeNotifier {
     try {
       _setLoading(true);
       
-      // إعادة تعيين المكافآت المحلية
-      await RewardService.resetAllRewards(_user!.id);
-      _pendingRewards.clear();
-      _hasPendingRewards = false;
-      await _savePendingRewards();
       
       // إعادة تعيين البيانات في Firebase
       await FirebaseService.resetUserProgress(_user!.id);
@@ -313,90 +190,6 @@ class UserProvider with ChangeNotifier {
       _setError(e.toString());
     } finally {
       _setLoading(false);
-    }
-  }
-
-  Map<String, dynamic> get userStats {
-    if (_user == null || _quizResults.isEmpty) {
-      return {
-        'totalQuizzes': 0,
-        'averageScore': 0.0,
-        'totalTimeSpent': 0,
-        'completionRate': 0.0,
-      };
-    }
-
-    final totalQuizzes = _quizResults.length;
-    final averageScore = _quizResults.map((r) => r.score).reduce((a, b) => a + b) / totalQuizzes;
-    final completionRate = (_user!.completedLessons.length / 50.0) * 100; // Assuming 50 total lessons
-
-    return {
-      'totalQuizzes': totalQuizzes,
-      'averageScore': averageScore,
-      'totalTimeSpent': 0, // Would need to calculate from progress data
-      'completionRate': completionRate,
-    };
-  }
-
-  /// حفظ المكافآت المعلقة محلياً
-  Future<void> _savePendingRewards() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final rewardsJson = _pendingRewards.map((r) => r.toMap()).toList();
-      await prefs.setString('pending_rewards', rewardsJson.toString());
-      await prefs.setBool('has_pending_rewards', _hasPendingRewards);
-    } catch (e) {
-      print('❌ خطأ في حفظ المكافآت المعلقة: $e');
-    }
-  }
-
-  /// تحميل المكافآت المعلقة محلياً
-  Future<void> _loadPendingRewards() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _hasPendingRewards = prefs.getBool('has_pending_rewards') ?? false;
-      
-      // يمكن تحسين هذا لاحقاً لتحميل المكافآت الفعلية
-      // حالياً نعتمد على النظام الجديد
-      _pendingRewards = [];
-    } catch (e) {
-      print('❌ خطأ في تحميل المكافآت المعلقة: $e');
-      _pendingRewards = [];
-      _hasPendingRewards = false;
-    }
-  }
-
-  /// التحقق من صحة المكافأة
-  bool _isValidReward(RewardInfo rewardInfo) {
-    // التحقق من القيم الأساسية
-    if (rewardInfo.xp < 0 || rewardInfo.gems < 0) {
-      return false;
-    }
-    
-    // التحقق من المصدر
-    if (rewardInfo.source.isEmpty) {
-      return false;
-    }
-    
-    // التحقق من النتيجة إذا كانت من اختبار
-    if (rewardInfo.source == 'lesson_completion' && rewardInfo.score != null) {
-      if (rewardInfo.score! < 0 || rewardInfo.score! > 100) {
-        return false;
-      }
-    }
-    
-    return true;
-  }
-
-  /// الحصول على وصف المكافأة
-  String _getRewardDescription(RewardInfo rewardInfo) {
-    switch (rewardInfo.source) {
-      case 'lesson_completion':
-        return 'إكمال درس: ${rewardInfo.lessonId} (${rewardInfo.score}%)';
-      case 'app_share':
-        return 'مشاركة التطبيق';
-      default:
-        return 'مكافأة: ${rewardInfo.source}';
     }
   }
 
@@ -413,14 +206,6 @@ class UserProvider with ChangeNotifier {
   void _clearError() {
     _errorMessage = null;
     notifyListeners();
-  }
-
-  int _calculateLevelFromXP(int xp) {
-    if (xp < 100) return 1;
-    if (xp < 300) return 2;
-    if (xp < 600) return 3;
-    if (xp < 1000) return 4;
-    return (xp / 500).floor() + 1;
   }
 
   @override

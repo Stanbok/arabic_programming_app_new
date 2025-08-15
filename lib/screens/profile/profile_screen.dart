@@ -3,13 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:share_plus/share_plus.dart';
-import 'dart:async';
-import 'dart:io';
 import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firebase_service.dart';
-import '../../services/reward_service.dart';
 import '../../widgets/custom_button.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -19,39 +15,18 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserver {
+class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   int _currentIndex = 1;
-  bool _isSharing = false;
-  DateTime? _shareStartTime;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    
-    // التحقق من العودة للتطبيق بعد المشاركة
-    if (state == AppLifecycleState.resumed && _isSharing && _shareStartTime != null) {
-      final timeDifference = DateTime.now().difference(_shareStartTime!).inSeconds;
-      
-      // إذا كان المستخدم خارج التطبيق لأكثر من 3 ثوانٍ، نعتبر أنه شارك
-      if (timeDifference > 3) {
-        _handleShareReturn(true);
-      } else {
-        _handleShareReturn(false);
-      }
-    }
   }
 
   Future<void> _changeProfileImage() async {
@@ -124,122 +99,6 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
     }
   }
 
-  Future<void> _shareApp() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    
-    if (authProvider.isGuestUser) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يجب تسجيل الدخول للحصول على مكافأة المشاركة'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-
-    try {
-      // التحقق من إمكانية الحصول على المكافأة
-      final userId = authProvider.user?.uid ?? 'guest';
-      final canClaim = await RewardService.canClaimShareReward(userId);
-      
-      if (!canClaim && !authProvider.isGuestUser) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم الحصول على مكافأة المشاركة مسبقاً (مرة واحدة كل 24 ساعة)'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // بدء عملية المشاركة
-      setState(() {
-        _isSharing = true;
-        _shareStartTime = DateTime.now();
-      });
-
-      // تنفيذ المشاركة
-      await Share.share(
-        'تعلم البايثون بالعربية مع تطبيق Python in Arabic! 🐍\n'
-        'تطبيق تفاعلي ممتع لتعلم البرمجة بطريقة سهلة ومبسطة.\n'
-        'حمل التطبيق الآن واستمتع بالتعلم!',
-        subject: 'Python in Arabic - تعلم البايثون بالعربية',
-      );
-
-      // إعطاء وقت للمشاركة
-      Timer(const Duration(seconds: 1), () {
-        if (_isSharing) {
-          // إذا لم يتم استدعاء didChangeAppLifecycleState، نعتبر أنه لم يشارك
-          _handleShareReturn(false);
-        }
-      });
-
-    } catch (e) {
-      setState(() {
-        _isSharing = false;
-        _shareStartTime = null;
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('حدث خطأ في المشاركة'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleShareReturn(bool actuallyShared) async {
-    if (!_isSharing) return;
-    
-    setState(() {
-      _isSharing = false;
-      _shareStartTime = null;
-    });
-
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final userId = authProvider.user?.uid ?? 'guest';
-
-    if (actuallyShared && !authProvider.isGuestUser) {
-      try {
-        // منح المكافأة
-        final rewardInfo = await RewardService.claimShareReward(userId, true);
-        
-        if (rewardInfo != null) {
-          final success = await userProvider.addReward(rewardInfo, userId);
-          
-          if (success && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('شكراً لمشاركة التطبيق! حصلت على ${rewardInfo.gems} جوهرة 💎'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('حدث خطأ في منح المكافأة'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } else if (!actuallyShared && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('لم يتم إكمال المشاركة'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -263,8 +122,6 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
           if (user == null) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          final stats = userProvider.userStats;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -304,14 +161,6 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
                       ],
                     ),
                   ),
-                
-                // Stats Cards
-                _buildStatsSection(user, stats),
-                
-                const SizedBox(height: 24),
-                
-                // Action Buttons
-                _buildActionButtons(),
                 
                 const SizedBox(height: 24),
                 
@@ -475,97 +324,6 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
     );
   }
 
-  Widget _buildStatsSection(user, Map<String, dynamic> stats) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'الإحصائيات',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        
-        const SizedBox(height: 16),
-        
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.2,
-          children: [
-            _buildStatsCard(
-              icon: Icons.school,
-              title: 'الدروس المكتملة',
-              value: '${user.completedLessons.length}',
-              color: Colors.blue,
-            ),
-            _buildStatsCard(
-              icon: Icons.quiz,
-              title: 'الاختبارات',
-              value: '${stats['totalQuizzes']}',
-              color: Colors.green,
-            ),
-            _buildStatsCard(
-              icon: Icons.trending_up,
-              title: 'متوسط النتائج',
-              value: '${stats['averageScore'].toStringAsFixed(1)}%',
-              color: Colors.orange,
-            ),
-            _buildStatsCard(
-              icon: Icons.timeline,
-              title: 'معدل الإكمال',
-              value: '${stats['completionRate'].toStringAsFixed(1)}%',
-              color: Colors.purple,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButtons() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'الإجراءات',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        
-        const SizedBox(height: 16),
-        
-        Row(
-          children: [
-            Expanded(
-              child: CustomButton(
-                text: _isSharing ? 'جاري المشاركة...' : 'مشاركة التطبيق',
-                onPressed: _isSharing ? null : _shareApp,
-                icon: _isSharing ? Icons.hourglass_empty : Icons.share,
-                isOutlined: true,
-              ),
-            ),
-            
-            const SizedBox(width: 12),
-            
-            Expanded(
-              child: CustomButton(
-                text: 'الإعدادات',
-                onPressed: () => context.push('/settings'),
-                icon: Icons.settings,
-                isOutlined: true,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   Widget _buildAchievementsSection(user) {
     final achievements = _getAchievements(user);
     
@@ -647,50 +405,6 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildStatsCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 32,
-            color: color,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
     );
   }
 

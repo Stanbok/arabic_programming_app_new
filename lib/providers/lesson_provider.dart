@@ -460,6 +460,26 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
+  /// إعادة تعيين جميع البيانات المحلية
+  Future<void> resetLocalData() async {
+    try {
+      _localCompletedQuizzes.clear();
+      _decayTrackers.clear();
+      
+      // حذف البيانات من SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('local_completed_quizzes');
+      await prefs.remove('decay_trackers');
+      
+      // إشعار بالتحديث
+      notifyListeners();
+      
+      print('✅ تم إعادة تعيين جميع البيانات المحلية');
+    } catch (e) {
+      print('❌ خطأ في إعادة تعيين البيانات المحلية: $e');
+    }
+  }
+
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();

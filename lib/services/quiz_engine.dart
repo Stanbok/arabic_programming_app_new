@@ -1,6 +1,6 @@
 import '../models/lesson_model.dart';
 import '../models/enhanced_quiz_result.dart';
-// import '../models/question_type.dart'; - تم حذف هذا السطر
+import '../models/question_type.dart'; // استored import statement
 
 class QuizEngine {
   static const double _passingScore = 70.0;
@@ -16,35 +16,35 @@ class QuizEngine {
     bool isCorrect = false;
     
     switch (question.type) {
-      case 'multipleChoice':
+      case QuestionType.multipleChoice:
         isCorrect = _evaluateMultipleChoice(question, userAnswer);
         break;
-      case 'reorderCode':
+      case QuestionType.reorderCode:
         isCorrect = _evaluateReorderCode(question, userAnswer);
         break;
-      case 'findBug':
+      case QuestionType.findBug:
         isCorrect = _evaluateFindBug(question, userAnswer);
         break;
-      case 'fillInBlank':
+      case QuestionType.fillInBlank:
         isCorrect = _evaluateFillInBlank(question, userAnswer);
         break;
-      case 'trueFalse':
+      case QuestionType.trueFalse:
         isCorrect = _evaluateTrueFalse(question, userAnswer);
         break;
-      case 'matchPairs':
+      case QuestionType.matchPairs:
         isCorrect = _evaluateMatchPairs(question, userAnswer);
         break;
-      case 'codeOutput':
+      case QuestionType.codeOutput:
         isCorrect = _evaluateCodeOutput(question, userAnswer);
         break;
-      case 'completeCode':
+      case QuestionType.completeCode:
         isCorrect = _evaluateCompleteCode(question, userAnswer);
         break;
     }
     
     return QuestionResult(
       questionId: question.id,
-      type: question.type,
+      type: question.type.displayName,
       isCorrect: isCorrect,
       userAnswer: userAnswer,
       correctAnswer: _getCorrectAnswer(question),
@@ -206,20 +206,20 @@ class QuizEngine {
   /// الحصول على الإجابة الصحيحة
   static dynamic _getCorrectAnswer(QuizQuestionModel question) {
     switch (question.type) {
-      case 'multipleChoice':
+      case QuestionType.multipleChoice:
         return question.correctAnswerIndex;
-      case 'reorderCode':
+      case QuestionType.reorderCode:
         return question.correctOrder;
-      case 'findBug':
-      case 'completeCode':
+      case QuestionType.findBug:
+      case QuestionType.completeCode:
         return question.correctCode;
-      case 'fillInBlank':
+      case QuestionType.fillInBlank:
         return question.correctAnswers;
-      case 'trueFalse':
+      case QuestionType.trueFalse:
         return question.correctBoolean;
-      case 'matchPairs':
+      case QuestionType.matchPairs:
         return question.pairs;
-      case 'codeOutput':
+      case QuestionType.codeOutput:
         return question.expectedOutput;
     }
   }
@@ -332,35 +332,34 @@ class QuizEngine {
       hints.addAll(question.hints!);
     }
     
-    // إضافة تلميحات عامة حسب نوع السؤال
     switch (question.type) {
-      case 'multipleChoice':
+      case QuestionType.multipleChoice:
         hints.add('اقرأ السؤال بعناية واستبعد الخيارات الخاطئة أولاً');
         break;
-      case 'reorderCode':
+      case QuestionType.reorderCode:
         hints.add('فكر في التسلسل المنطقي لتنفيذ الكود');
         hints.add('ابدأ بالتعريفات والمتغيرات أولاً');
         break;
-      case 'findBug':
+      case QuestionType.findBug:
         hints.add('ابحث عن الأخطاء الإملائية في أسماء المتغيرات والدوال');
         hints.add('تحقق من علامات الترقيم والأقواس');
         break;
-      case 'fillInBlank':
+      case QuestionType.fillInBlank:
         hints.add('فكر في السياق العام للجملة');
         hints.add('استخدم المصطلحات التقنية المناسبة');
         break;
-      case 'trueFalse':
+      case QuestionType.trueFalse:
         hints.add('ابحث عن الكلمات المطلقة مثل "دائماً" أو "أبداً"');
         break;
-      case 'matchPairs':
+      case QuestionType.matchPairs:
         hints.add('ابدأ بالمطابقات التي تعرفها بثقة');
         hints.add('استخدم عملية الاستبعاد للخيارات المتبقية');
         break;
-      case 'codeOutput':
+      case QuestionType.codeOutput:
         hints.add('تتبع تنفيذ الكود خطوة بخطوة');
         hints.add('انتبه لقيم المتغيرات في كل خطوة');
         break;
-      case 'completeCode':
+      case QuestionType.completeCode:
         hints.add('فكر في الهدف من الكود والنتيجة المطلوبة');
         hints.add('استخدم الصيغة الصحيحة للغة Python');
         break;

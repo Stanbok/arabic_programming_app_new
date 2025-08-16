@@ -277,14 +277,14 @@ class FirebaseService {
       
       batch.set(enhancedQuizRef, result.toJson());
       
-      // حفظ النتيجة العادية للتوافق مع النظام القديم
       final basicResult = QuizResultModel(
         lessonId: lessonId,
         score: result.score,
+        correctAnswers: result.score, // استخدام score كعدد الإجابات الصحيحة
         totalQuestions: result.totalQuestions,
-        percentage: result.percentage,
+        answers: [], // قائمة فارغة للتوافق
         completedAt: result.completedAt,
-        isPassed: result.isPassed,
+        percentage: result.percentage,
       );
       
       final quizRef = _firestore

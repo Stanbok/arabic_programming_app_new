@@ -7,6 +7,7 @@ class QuizResultModel {
   final int totalQuestions;
   final List<int> answers; // user's selected answer indices
   final DateTime completedAt;
+  final double percentage;
 
   QuizResultModel({
     required this.lessonId,
@@ -15,7 +16,8 @@ class QuizResultModel {
     required this.totalQuestions,
     required this.answers,
     required this.completedAt,
-  });
+    double? percentage,
+  }) : percentage = percentage ?? score.toDouble();
 
   Map<String, dynamic> toMap() {
     return {
@@ -25,6 +27,7 @@ class QuizResultModel {
       'totalQuestions': totalQuestions,
       'answers': answers,
       'completedAt': Timestamp.fromDate(completedAt),
+      'percentage': percentage,
     };
   }
 
@@ -36,6 +39,7 @@ class QuizResultModel {
       totalQuestions: map['totalQuestions'] ?? 0,
       answers: List<int>.from(map['answers'] ?? []),
       completedAt: (map['completedAt'] as Timestamp).toDate(),
+      percentage: (map['percentage'] ?? map['score'] ?? 0).toDouble(),
     );
   }
 

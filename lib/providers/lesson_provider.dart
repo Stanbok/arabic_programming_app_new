@@ -10,7 +10,6 @@ import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
 import '../models/decay_tracker_model.dart';
 import '../models/enhanced_quiz_result.dart';
-import '../models/question_type.dart';
 import 'dart:math' as math;
 
 class LessonProvider with ChangeNotifier {
@@ -544,8 +543,8 @@ class LessonProvider with ChangeNotifier {
         userId: userId,
         totalQuizzes: analysis['totalQuizzes'] as int,
         averageScore: analysis['averageScore'] as double,
-        strongAreas: analysis['strongAreas'] as List<QuestionType>,
-        weakAreas: analysis['weakAreas'] as List<QuestionType>,
+        strongAreas: (analysis['strongAreas'] as List).cast<QuestionType>(),
+        weakAreas: (analysis['weakAreas'] as List).cast<QuestionType>(),
         improvementTrend: analysis['improvement'] as double,
         currentStreak: analysis['streakCount'] as int,
         lastUpdated: DateTime.now(),
@@ -839,26 +838,7 @@ class UserPerformanceStats {
   }
 
   static QuestionType _parseQuestionType(String typeString) {
-    switch (typeString) {
-      case 'QuestionType.multipleChoice':
-        return QuestionType.multipleChoice;
-      case 'QuestionType.reorderCode':
-        return QuestionType.reorderCode;
-      case 'QuestionType.findBug':
-        return QuestionType.findBug;
-      case 'QuestionType.fillInBlank':
-        return QuestionType.fillInBlank;
-      case 'QuestionType.trueFalse':
-        return QuestionType.trueFalse;
-      case 'QuestionType.matchPairs':
-        return QuestionType.matchPairs;
-      case 'QuestionType.codeOutput':
-        return QuestionType.codeOutput;
-      case 'QuestionType.completeCode':
-        return QuestionType.completeCode;
-      default:
-        return QuestionType.multipleChoice;
-    }
+    return QuestionTypeExtension.fromString(typeString);
   }
 }
 
@@ -898,30 +878,5 @@ class StudyStreak {
       lastStudyDate!.day,
     )).inDays;
     return daysSinceLastStudy <= 1;
-  }
-}
-
-extension QuestionTypeExtension on QuestionType {
-  static QuestionType fromString(String typeString) {
-    switch (typeString) {
-      case 'multipleChoice':
-        return QuestionType.multipleChoice;
-      case 'reorderCode':
-        return QuestionType.reorderCode;
-      case 'findBug':
-        return QuestionType.findBug;
-      case 'fillInBlank':
-        return QuestionType.fillInBlank;
-      case 'trueFalse':
-        return QuestionType.trueFalse;
-      case 'matchPairs':
-        return QuestionType.matchPairs;
-      case 'codeOutput':
-        return QuestionType.codeOutput;
-      case 'completeCode':
-        return QuestionType.completeCode;
-      default:
-        return QuestionType.multipleChoice;
-    }
   }
 }

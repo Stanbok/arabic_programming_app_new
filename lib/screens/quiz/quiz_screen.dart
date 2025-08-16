@@ -7,9 +7,10 @@ import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/lesson_model.dart';
 import '../../models/quiz_result_model.dart';
+import '../../models/enhanced_quiz_result.dart';
 import '../../services/firebase_service.dart';
 import '../../services/reward_service.dart';
-import '../../services/quiz_engine.dart'; // إضافة QuizEngine
+import '../../services/quiz_engine.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/quiz/multiple_choice_widget.dart';
 import '../../widgets/quiz/reorder_code_widget.dart';
@@ -36,14 +37,14 @@ class _QuizScreenState extends State<QuizScreen> {
   PageController _pageController = PageController();
   int _currentQuestionIndex = 0;
   List<dynamic> _selectedAnswers = [];
-  List<QuestionResult> _questionResults = []; // إضافة نتائج الأسئلة المفصلة
+  List<QuestionResult> _questionResults = [];
   Timer? _timer;
-  QuizTimer? _quizTimer; // استخدام QuizTimer الجديد
+  QuizTimer? _quizTimer;
   int _timeRemaining = 300; // 5 minutes
   bool _isCompleted = false;
-  EnhancedQuizResult? _result; // استخدام EnhancedQuizResult
-  Map<int, HintManager> _hintManagers = {}; // إضافة مدير التلميحات
-  Map<int, DateTime> _questionStartTimes = {}; // تتبع وقت بداية كل سؤال
+  EnhancedQuizResult? _result;
+  Map<int, HintManager> _hintManagers = {};
+  Map<int, DateTime> _questionStartTimes = {};
 
   @override
   void initState() {
@@ -193,7 +194,6 @@ class _QuizScreenState extends State<QuizScreen> {
       hintsUsed: hintsUsed,
     );
     
-    // إضافة أو تحديث النتيجة
     final existingIndex = _questionResults.indexWhere((r) => r.questionId == question.id);
     if (existingIndex >= 0) {
       _questionResults[existingIndex] = result;
@@ -228,7 +228,7 @@ class _QuizScreenState extends State<QuizScreen> {
       totalHintsUsed: totalHintsUsed,
     );
 
-    print('📊 نتيجة الاختبار: ${_result!.percentage}% (${_result!.correctAnswers}/${_result!.totalQuestions})');
+    print('📊 نتيجة الاختبار: ${_result!.percentage}% (${_result!.score}/${_result!.totalQuestions})');
 
     // حفظ النتيجة وإضافة المكافآت
     if (!authProvider.isGuestUser && authProvider.user != null) {
@@ -883,19 +883,19 @@ class _QuizScreenState extends State<QuizScreen> {
               _buildResultItem(
                 icon: Icons.check_circle,
                 label: 'إجابات صحيحة',
-                value: '${result.correctAnswers}',
+                value: '${result.score}',
                 color: Colors.green,
               ),
               _buildResultItem(
                 icon: Icons.cancel,
                 label: 'إجابات خاطئة',
-                value: '${result.totalQuestions - result.correctAnswers}',
+                value: '${result.totalQuestions - result.score}',
                 color: Colors.red,
               ),
               _buildResultItem(
                 icon: Icons.access_time,
                 label: 'الوقت المستغرق',
-                value: '${result.timeSpent.inMinutes}:${(result.timeSpent.inSeconds % 60).toString().padLeft(2, '0')}',
+                value: '${result.timeSpent ~/ 60}:${(result.timeSpent % 60).toString().padLeft(2, '0')}',
                 color: Colors.blue,
               ),
             ],

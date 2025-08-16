@@ -16,35 +16,35 @@ class QuizEngine {
     bool isCorrect = false;
     
     switch (question.type) {
-      case 'multiple_choice':
+      case QuestionType.multipleChoice:
         isCorrect = _evaluateMultipleChoice(question, userAnswer);
         break;
-      case 'reorder_code':
+      case QuestionType.reorderCode:
         isCorrect = _evaluateReorderCode(question, userAnswer);
         break;
-      case 'find_bug':
+      case QuestionType.findBug:
         isCorrect = _evaluateFindBug(question, userAnswer);
         break;
-      case 'fill_blank':
+      case QuestionType.fillInBlank:
         isCorrect = _evaluateFillInBlank(question, userAnswer);
         break;
-      case 'true_false':
+      case QuestionType.trueFalse:
         isCorrect = _evaluateTrueFalse(question, userAnswer);
         break;
-      case 'match_pairs':
+      case QuestionType.matchPairs:
         isCorrect = _evaluateMatchPairs(question, userAnswer);
         break;
-      case 'code_output':
+      case QuestionType.codeOutput:
         isCorrect = _evaluateCodeOutput(question, userAnswer);
         break;
-      case 'complete_code':
+      case QuestionType.completeCode:
         isCorrect = _evaluateCompleteCode(question, userAnswer);
         break;
     }
     
     return QuestionResult(
       questionId: question.id,
-      type: QuestionTypeExtension.fromString(question.type),
+      type: question.type,
       isCorrect: isCorrect,
       userAnswer: userAnswer,
       correctAnswer: _getCorrectAnswer(question),
@@ -71,7 +71,7 @@ class QuizEngine {
     final questionTypeStats = <String, int>{};
     for (final result in questionResults) {
       if (result.isCorrect) {
-        final typeKey = result.type.englishName;
+        final typeKey = result.type.toString();
         questionTypeStats[typeKey] = (questionTypeStats[typeKey] ?? 0) + 1;
       }
     }
@@ -85,7 +85,7 @@ class QuizEngine {
       final result = questionResults[i];
       questionResultsMap['question_$i'] = {
         'questionId': result.questionId,
-        'type': result.type.englishName,
+        'type': result.type.toString(),
         'isCorrect': result.isCorrect,
         'userAnswer': result.userAnswer,
         'correctAnswer': result.correctAnswer,
@@ -206,23 +206,21 @@ class QuizEngine {
   /// الحصول على الإجابة الصحيحة
   static dynamic _getCorrectAnswer(QuizQuestionModel question) {
     switch (question.type) {
-      case 'multiple_choice':
+      case QuestionType.multipleChoice:
         return question.correctAnswerIndex;
-      case 'reorder_code':
+      case QuestionType.reorderCode:
         return question.correctOrder;
-      case 'find_bug':
-      case 'complete_code':
+      case QuestionType.findBug:
+      case QuestionType.completeCode:
         return question.correctCode;
-      case 'fill_blank':
+      case QuestionType.fillInBlank:
         return question.correctAnswers;
-      case 'true_false':
+      case QuestionType.trueFalse:
         return question.correctBoolean;
-      case 'match_pairs':
+      case QuestionType.matchPairs:
         return question.pairs;
-      case 'code_output':
+      case QuestionType.codeOutput:
         return question.expectedOutput;
-      default:
-        return null;
     }
   }
   
@@ -336,33 +334,33 @@ class QuizEngine {
     
     // إضافة تلميحات عامة حسب نوع السؤال
     switch (question.type) {
-      case 'multiple_choice':
+      case QuestionType.multipleChoice:
         hints.add('اقرأ السؤال بعناية واستبعد الخيارات الخاطئة أولاً');
         break;
-      case 'reorder_code':
+      case QuestionType.reorderCode:
         hints.add('فكر في التسلسل المنطقي لتنفيذ الكود');
         hints.add('ابدأ بالتعريفات والمتغيرات أولاً');
         break;
-      case 'find_bug':
+      case QuestionType.findBug:
         hints.add('ابحث عن الأخطاء الإملائية في أسماء المتغيرات والدوال');
         hints.add('تحقق من علامات الترقيم والأقواس');
         break;
-      case 'fill_blank':
+      case QuestionType.fillInBlank:
         hints.add('فكر في السياق العام للجملة');
         hints.add('استخدم المصطلحات التقنية المناسبة');
         break;
-      case 'true_false':
+      case QuestionType.trueFalse:
         hints.add('ابحث عن الكلمات المطلقة مثل "دائماً" أو "أبداً"');
         break;
-      case 'match_pairs':
+      case QuestionType.matchPairs:
         hints.add('ابدأ بالمطابقات التي تعرفها بثقة');
         hints.add('استخدم عملية الاستبعاد للخيارات المتبقية');
         break;
-      case 'code_output':
+      case QuestionType.codeOutput:
         hints.add('تتبع تنفيذ الكود خطوة بخطوة');
         hints.add('انتبه لقيم المتغيرات في كل خطوة');
         break;
-      case 'complete_code':
+      case QuestionType.completeCode:
         hints.add('فكر في الهدف من الكود والنتيجة المطلوبة');
         hints.add('استخدم الصيغة الصحيحة للغة Python');
         break;

@@ -248,131 +248,56 @@ enum QuestionType {
   completeCode,      // أكمل الكود
 }
 
-class EnhancedQuizResult {
-  final String lessonId;
-  final String userId;
-  final int totalQuestions;
-  final int correctAnswers;
-  final double percentage;
-  final int xpEarned;
-  final int gemsEarned;
-  final Duration timeSpent;
-  final Map<QuestionType, int> questionTypeStats; // إحصائيات حسب نوع السؤال
-  final List<QuestionResult> questionResults;
-  final DateTime completedAt;
-  final int hintsUsed;
-  final bool isPerfectScore;
-
-  EnhancedQuizResult({
-    required this.lessonId,
-    required this.userId,
-    required this.totalQuestions,
-    required this.correctAnswers,
-    required this.percentage,
-    required this.xpEarned,
-    required this.gemsEarned,
-    required this.timeSpent,
-    required this.questionTypeStats,
-    required this.questionResults,
-    required this.completedAt,
-    this.hintsUsed = 0,
-    this.isPerfectScore = false,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'lessonId': lessonId,
-      'userId': userId,
-      'totalQuestions': totalQuestions,
-      'correctAnswers': correctAnswers,
-      'percentage': percentage,
-      'xpEarned': xpEarned,
-      'gemsEarned': gemsEarned,
-      'timeSpent': timeSpent.inSeconds,
-      'questionTypeStats': questionTypeStats.map((key, value) => MapEntry(key.toString(), value)),
-      'questionResults': questionResults.map((result) => result.toMap()).toList(),
-      'completedAt': Timestamp.fromDate(completedAt),
-      'hintsUsed': hintsUsed,
-      'isPerfectScore': isPerfectScore,
-    };
+extension QuestionTypeExtension on QuestionType {
+  String get displayName {
+    switch (this) {
+      case QuestionType.multipleChoice:
+        return 'اختيار من متعدد';
+      case QuestionType.reorderCode:
+        return 'ترتيب الكود';
+      case QuestionType.findBug:
+        return 'اكتشف الخطأ';
+      case QuestionType.fillInBlank:
+        return 'املأ الفراغ';
+      case QuestionType.trueFalse:
+        return 'صح أو خطأ';
+      case QuestionType.matchPairs:
+        return 'توصيل الأزواج';
+      case QuestionType.codeOutput:
+        return 'نتيجة الكود';
+      case QuestionType.completeCode:
+        return 'أكمل الكود';
+    }
   }
 
-  factory EnhancedQuizResult.fromMap(Map<String, dynamic> map) {
-    return EnhancedQuizResult(
-      lessonId: map['lessonId'] ?? '',
-      userId: map['userId'] ?? '',
-      totalQuestions: map['totalQuestions'] ?? 0,
-      correctAnswers: map['correctAnswers'] ?? 0,
-      percentage: (map['percentage'] ?? 0.0).toDouble(),
-      xpEarned: map['xpEarned'] ?? 0,
-      gemsEarned: map['gemsEarned'] ?? 0,
-      timeSpent: Duration(seconds: map['timeSpent'] ?? 0),
-      questionTypeStats: _parseQuestionTypeStats(map['questionTypeStats']),
-      questionResults: (map['questionResults'] as List<dynamic>?)
-          ?.map((result) => QuestionResult.fromMap(result))
-          .toList() ?? [],
-      completedAt: (map['completedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      hintsUsed: map['hintsUsed'] ?? 0,
-      isPerfectScore: map['isPerfectScore'] ?? false,
-    );
-  }
-
-  static Map<QuestionType, int> _parseQuestionTypeStats(dynamic stats) {
-    if (stats == null) return {};
-    
-    Map<QuestionType, int> result = {};
-    (stats as Map<String, dynamic>).forEach((key, value) {
-      QuestionType? type = QuizQuestionModel._parseQuestionType(key);
-      result[type] = value as int;
-    });
-    return result;
-  }
-}
-
-class QuestionResult {
-  final String questionId;
-  final QuestionType type;
-  final bool isCorrect;
-  final dynamic userAnswer; // يمكن أن يكون String, int, List, etc
-  final dynamic correctAnswer;
-  final Duration timeSpent;
-  final int hintsUsed;
-  final int attempts;
-
-  QuestionResult({
-    required this.questionId,
-    required this.type,
-    required this.isCorrect,
-    required this.userAnswer,
-    required this.correctAnswer,
-    required this.timeSpent,
-    this.hintsUsed = 0,
-    this.attempts = 1,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'questionId': questionId,
-      'type': type.toString(),
-      'isCorrect': isCorrect,
-      'userAnswer': userAnswer,
-      'correctAnswer': correctAnswer,
-      'timeSpent': timeSpent.inSeconds,
-      'hintsUsed': hintsUsed,
-      'attempts': attempts,
-    };
-  }
-
-  factory QuestionResult.fromMap(Map<String, dynamic> map) {
-    return QuestionResult(
-      questionId: map['questionId'] ?? '',
-      type: QuizQuestionModel._parseQuestionType(map['type']),
-      isCorrect: map['isCorrect'] ?? false,
-      userAnswer: map['userAnswer'],
-      correctAnswer: map['correctAnswer'],
-      timeSpent: Duration(seconds: map['timeSpent'] ?? 0),
-      hintsUsed: map['hintsUsed'] ?? 0,
-      attempts: map['attempts'] ?? 1,
-    );
+  static QuestionType fromString(String typeString) {
+    switch (typeString) {
+      case 'QuestionType.multipleChoice':
+      case 'multipleChoice':
+        return QuestionType.multipleChoice;
+      case 'QuestionType.reorderCode':
+      case 'reorderCode':
+        return QuestionType.reorderCode;
+      case 'QuestionType.findBug':
+      case 'findBug':
+        return QuestionType.findBug;
+      case 'QuestionType.fillInBlank':
+      case 'fillInBlank':
+        return QuestionType.fillInBlank;
+      case 'QuestionType.trueFalse':
+      case 'trueFalse':
+        return QuestionType.trueFalse;
+      case 'QuestionType.matchPairs':
+      case 'matchPairs':
+        return QuestionType.matchPairs;
+      case 'QuestionType.codeOutput':
+      case 'codeOutput':
+        return QuestionType.codeOutput;
+      case 'QuestionType.completeCode':
+      case 'completeCode':
+        return QuestionType.completeCode;
+      default:
+        return QuestionType.multipleChoice;
+    }
   }
 }

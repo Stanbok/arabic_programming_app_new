@@ -40,14 +40,6 @@ dependencies:
   # Icons & Animations
   cupertino_icons: ^1.0.8
   lottie: ^3.1.2
-  
-  # Code highlighting and execution
-  flutter_highlight: ^0.7.0
-  http: ^1.2.2
-  
-  # Interactive quiz components
-  flutter_reorderable_list: ^1.3.1
-  flutter_staggered_animations: ^1.1.1
 
 dev_dependencies:
   flutter_test:

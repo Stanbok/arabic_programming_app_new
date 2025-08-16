@@ -519,19 +519,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     if (!isLeft) _buildConnectionLine(),
                     Expanded(
                       flex: 2,
-                      child: GestureDetector(
-                        onLongPress: () {
-                          _showLessonOptions(context, lessonWithStatus.lesson);
+                      child: WorldMapLessonCard(
+                        lesson: lessonWithStatus.lesson,
+                        status: lessonWithStatus.status,
+                        onTap: () {
+                          if (lessonWithStatus.status != LessonStatus.locked) {
+                            context.push('/lesson/${lessonWithStatus.lesson.id}');
+                          }
                         },
-                        child: WorldMapLessonCard(
-                          lesson: lessonWithStatus.lesson,
-                          status: lessonWithStatus.status,
-                          onTap: () {
-                            if (lessonWithStatus.status != LessonStatus.locked) {
-                              context.push('/lesson/${lessonWithStatus.lesson.id}');
-                            }
-                          },
-                        ),
                       ),
                     ),
                     if (isLeft) _buildConnectionLine(),
@@ -578,45 +573,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
         borderRadius: BorderRadius.circular(1),
-      ),
-    );
-  }
-
-  void _showLessonOptions(BuildContext context, LessonModel lesson) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              lesson.title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.play_arrow),
-              title: const Text('الدرس العادي'),
-              subtitle: const Text('التجربة التقليدية'),
-              onTap: () {
-                Navigator.pop(context);
-                context.push('/lesson/${lesson.id}');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.interactive_space),
-              title: const Text('الدرس التفاعلي'),
-              subtitle: const Text('تجربة محسنة مع أنشطة تفاعلية'),
-              onTap: () {
-                Navigator.pop(context);
-                context.push('/enhanced-lesson/${lesson.id}');
-              },
-            ),
-          ],
-        ),
       ),
     );
   }

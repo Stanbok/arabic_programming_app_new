@@ -9,15 +9,12 @@ import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/lesson_provider.dart';
 import 'providers/theme_provider.dart';
-import 'providers/enhanced_lesson_provider.dart';
-import 'providers/hint_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/welcome_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/lesson/lesson_screen.dart';
-import 'screens/lesson/enhanced_lesson_screen.dart';
 import 'screens/quiz/quiz_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/settings/settings_screen.dart';
@@ -47,8 +44,6 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => LessonProvider()),
-        ChangeNotifierProvider(create: (_) => EnhancedLessonProvider()),
-        ChangeNotifierProvider(create: (_) => HintProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
@@ -108,12 +103,6 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/lesson/:lessonId',
       builder: (context, state) => LessonScreen(
-        lessonId: state.pathParameters['lessonId']!,
-      ),
-    ),
-    GoRoute(
-      path: '/enhanced-lesson/:lessonId',
-      builder: (context, state) => EnhancedLessonScreen(
         lessonId: state.pathParameters['lessonId']!,
       ),
     ),

@@ -31,7 +31,7 @@ class TrueFalseWidget extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
-            widget.question.question,
+            question.question,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -45,6 +45,7 @@ class TrueFalseWidget extends StatelessWidget {
           children: [
             Expanded(
               child: _buildOption(
+                context: context,
                 value: true,
                 label: 'صحيح',
                 icon: Icons.check_circle,
@@ -54,6 +55,7 @@ class TrueFalseWidget extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: _buildOption(
+                context: context,
                 value: false,
                 label: 'خطأ',
                 icon: Icons.cancel,
@@ -67,19 +69,20 @@ class TrueFalseWidget extends StatelessWidget {
   }
 
   Widget _buildOption({
+    required BuildContext context,
     required bool value,
     required String label,
     required IconData icon,
     required Color color,
   }) {
     final isSelected = selectedAnswer == value;
-    final isCorrectOption = widget.question.correctBoolean == value;
+    final isCorrectOption = question.correctBoolean == value;
     
     Color? backgroundColor;
     Color? borderColor;
     Color? textColor;
     
-    if (widget.showResult) {
+    if (showResult) {
       if (isCorrectOption) {
         backgroundColor = Colors.green.withOpacity(0.1);
         borderColor = Colors.green;
@@ -98,7 +101,7 @@ class TrueFalseWidget extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: widget.showResult ? null : () => onAnswerSelected(value),
+        onTap: showResult ? null : () => onAnswerSelected(value),
         borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -108,10 +111,10 @@ class TrueFalseWidget extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: borderColor ?? Colors.grey.withOpacity(0.3),
-              width: (isSelected || (widget.showResult && isCorrectOption)) ? 3 : 1,
+              width: (isSelected || (showResult && isCorrectOption)) ? 3 : 1,
             ),
             boxShadow: [
-              if (isSelected || (widget.showResult && isCorrectOption))
+              if (isSelected || (showResult && isCorrectOption))
                 BoxShadow(
                   color: (borderColor ?? color).withOpacity(0.2),
                   blurRadius: 8,
@@ -125,7 +128,7 @@ class TrueFalseWidget extends StatelessWidget {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: (isSelected || (widget.showResult && isCorrectOption))
+                  color: (isSelected || (showResult && isCorrectOption))
                       ? (borderColor ?? color)
                       : Colors.grey.withOpacity(0.2),
                   shape: BoxShape.circle,
@@ -133,7 +136,7 @@ class TrueFalseWidget extends StatelessWidget {
                 child: Icon(
                   icon,
                   size: 32,
-                  color: (isSelected || (widget.showResult && isCorrectOption))
+                  color: (isSelected || (showResult && isCorrectOption))
                       ? Colors.white
                       : Colors.grey,
                 ),
@@ -149,7 +152,7 @@ class TrueFalseWidget extends StatelessWidget {
                 ),
               ),
               
-              if (widget.showResult && isCorrectOption)
+              if (showResult && isCorrectOption)
                 Container(
                   margin: const EdgeInsets.only(top: 8),
                   child: const Icon(
@@ -159,7 +162,7 @@ class TrueFalseWidget extends StatelessWidget {
                   ),
                 ),
               
-              if (widget.showResult && isSelected && !isCorrectOption)
+              if (showResult && isSelected && !isCorrectOption)
                 Container(
                   margin: const EdgeInsets.only(top: 8),
                   child: const Icon(

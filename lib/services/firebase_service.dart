@@ -4,6 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../models/user_model.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
+import '../models/enhanced_quiz_result.dart';
 
 import 'dart:io';
 
@@ -262,6 +263,58 @@ class FirebaseService {
     }
   }
 
+  static Future<void> saveEnhancedQuizResult(
+      String userId, String lessonId, EnhancedQuizResult result) async {
+    try {
+      final batch = _firestore.batch();
+      
+      // حفظ النتيجة المحسنة
+      final enhancedQuizRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('enhancedQuizResults')
+          .doc(result.id);
+      
+      batch.set(enhancedQuizRef, result.toJson());
+      
+      // حفظ النتيجة العادية للتوافق مع النظام القديم
+      final basicResult = QuizResultModel(
+        lessonId: lessonId,
+        score: result.score,
+        totalQuestions: result.totalQuestions,
+        percentage: result.percentage,
+        completedAt: result.completedAt,
+        isPassed: result.isPassed,
+      );
+      
+      final quizRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('quizResults')
+          .doc(lessonId);
+      
+      batch.set(quizRef, basicResult.toMap());
+      
+      // تحديث بيانات المستخدم إذا نجح
+      if (result.isPassed) {
+        final userRef = _firestore.collection('users').doc(userId);
+        batch.update(userRef, {
+          'completedLessons': FieldValue.arrayUnion([lessonId]),
+          'lastActivityAt': FieldValue.serverTimestamp(),
+          'totalQuizzesTaken': FieldValue.increment(1),
+          'totalTimeSpent': FieldValue.increment(result.timeSpent),
+        });
+      }
+      
+      await batch.commit();
+      
+      // إبطال الكاش المتعلق بالمستخدم
+      _invalidateUserCache(userId);
+    } catch (e) {
+      throw Exception('خطأ في حفظ النتيجة المحسنة: ${e.toString()}');
+    }
+  }
+
   static Future<List<QuizResultModel>> getQuizResults(String userId, {int limit = 50}) async {
     final cacheKey = 'quiz_results_$userId';
     
@@ -286,6 +339,53 @@ class FirebaseService {
       return results;
     } catch (e) {
       throw Exception('خطأ في جلب نتائج الاختبارات: ${e.toString()}');
+    }
+  }
+
+  static Future<List<EnhancedQuizResult>> getEnhancedQuizResults(
+      String userId, {int limit = 50}) async {
+    final cacheKey = 'enhanced_quiz_results_$userId';
+    
+    if (_isCacheValid(cacheKey)) {
+      return List<EnhancedQuizResult>.from(_queryCache[cacheKey]);
+    }
+    
+    try {
+      QuerySnapshot snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('enhancedQuizResults')
+          .orderBy('completedAt', descending: true)
+          .limit(limit)
+          .get(const GetOptions(source: Source.serverAndCache));
+      
+      final results = snapshot.docs
+          .map((doc) => EnhancedQuizResult.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+      
+      _updateCache(cacheKey, results);
+      return results;
+    } catch (e) {
+      throw Exception('خطأ في جلب النتائج المحسنة: ${e.toString()}');
+    }
+  }
+
+  static Future<List<EnhancedQuizResult>> getEnhancedQuizResultsForLesson(
+      String userId, String lessonId) async {
+    try {
+      QuerySnapshot snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('enhancedQuizResults')
+          .where('lessonId', isEqualTo: lessonId)
+          .orderBy('completedAt', descending: true)
+          .get(const GetOptions(source: Source.serverAndCache));
+      
+      return snapshot.docs
+          .map((doc) => EnhancedQuizResult.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      throw Exception('خطأ في جلب نتائج الدرس: ${e.toString()}');
     }
   }
 

@@ -1,4 +1,6 @@
 import '../models/lesson_model.dart';
+import '../models/enhanced_quiz_result.dart';
+import '../models/question_type.dart';
 
 class QuizEngine {
   static const double _passingScore = 70.0;
@@ -14,35 +16,35 @@ class QuizEngine {
     bool isCorrect = false;
     
     switch (question.type) {
-      case QuestionType.multipleChoice:
+      case 'multiple_choice':
         isCorrect = _evaluateMultipleChoice(question, userAnswer);
         break;
-      case QuestionType.reorderCode:
+      case 'reorder_code':
         isCorrect = _evaluateReorderCode(question, userAnswer);
         break;
-      case QuestionType.findBug:
+      case 'find_bug':
         isCorrect = _evaluateFindBug(question, userAnswer);
         break;
-      case QuestionType.fillInBlank:
+      case 'fill_blank':
         isCorrect = _evaluateFillInBlank(question, userAnswer);
         break;
-      case QuestionType.trueFalse:
+      case 'true_false':
         isCorrect = _evaluateTrueFalse(question, userAnswer);
         break;
-      case QuestionType.matchPairs:
+      case 'match_pairs':
         isCorrect = _evaluateMatchPairs(question, userAnswer);
         break;
-      case QuestionType.codeOutput:
+      case 'code_output':
         isCorrect = _evaluateCodeOutput(question, userAnswer);
         break;
-      case QuestionType.completeCode:
+      case 'complete_code':
         isCorrect = _evaluateCompleteCode(question, userAnswer);
         break;
     }
     
     return QuestionResult(
       questionId: question.id,
-      type: question.type,
+      type: QuestionTypeExtension.fromString(question.type),
       isCorrect: isCorrect,
       userAnswer: userAnswer,
       correctAnswer: _getCorrectAnswer(question),
@@ -66,30 +68,52 @@ class QuizEngine {
     final isPerfectScore = correctAnswers == questions.length;
     
     // حساب إحصائيات حسب نوع السؤال
-    final questionTypeStats = <QuestionType, int>{};
+    final questionTypeStats = <String, int>{};
     for (final result in questionResults) {
       if (result.isCorrect) {
-        questionTypeStats[result.type] = (questionTypeStats[result.type] ?? 0) + 1;
+        final typeKey = result.type.englishName;
+        questionTypeStats[typeKey] = (questionTypeStats[typeKey] ?? 0) + 1;
       }
     }
     
     // حساب المكافآت
     final rewards = _calculateRewards(percentage, questions.length, isPerfectScore);
     
+    // تحويل questionResults إلى Map
+    final questionResultsMap = <String, dynamic>{};
+    for (int i = 0; i < questionResults.length; i++) {
+      final result = questionResults[i];
+      questionResultsMap['question_$i'] = {
+        'questionId': result.questionId,
+        'type': result.type.englishName,
+        'isCorrect': result.isCorrect,
+        'userAnswer': result.userAnswer,
+        'correctAnswer': result.correctAnswer,
+        'timeSpent': result.timeSpent.inSeconds,
+        'hintsUsed': result.hintsUsed,
+        'attempts': result.attempts,
+      };
+    }
+    
+    // تحليل نقاط القوة والضعف
+    final analysis = _analyzeQuestionTypes(questionResults);
+    
     return EnhancedQuizResult(
+      id: '${lessonId}_${userId}_${DateTime.now().millisecondsSinceEpoch}',
       lessonId: lessonId,
       userId: userId,
+      score: correctAnswers,
       totalQuestions: questions.length,
-      correctAnswers: correctAnswers,
       percentage: percentage,
-      xpEarned: rewards['xp']!,
-      gemsEarned: rewards['gems']!,
-      timeSpent: totalTimeSpent ?? const Duration(minutes: 5),
-      questionTypeStats: questionTypeStats,
-      questionResults: questionResults,
       completedAt: DateTime.now(),
+      timeSpent: (totalTimeSpent ?? const Duration(minutes: 5)).inSeconds,
+      questionResults: questionResultsMap,
+      questionTypeStats: questionTypeStats,
       hintsUsed: totalHintsUsed,
-      isPerfectScore: isPerfectScore,
+      weakAreas: analysis['weakAreas'] as List<String>,
+      strongAreas: analysis['strongAreas'] as List<String>,
+      difficultyRating: _calculateDifficultyRating(questions, questionResults),
+      isPassed: isPassing(percentage),
     );
   }
   
@@ -182,21 +206,23 @@ class QuizEngine {
   /// الحصول على الإجابة الصحيحة
   static dynamic _getCorrectAnswer(QuizQuestionModel question) {
     switch (question.type) {
-      case QuestionType.multipleChoice:
+      case 'multiple_choice':
         return question.correctAnswerIndex;
-      case QuestionType.reorderCode:
+      case 'reorder_code':
         return question.correctOrder;
-      case QuestionType.findBug:
-      case QuestionType.completeCode:
+      case 'find_bug':
+      case 'complete_code':
         return question.correctCode;
-      case QuestionType.fillInBlank:
+      case 'fill_blank':
         return question.correctAnswers;
-      case QuestionType.trueFalse:
+      case 'true_false':
         return question.correctBoolean;
-      case QuestionType.matchPairs:
+      case 'match_pairs':
         return question.pairs;
-      case QuestionType.codeOutput:
+      case 'code_output':
         return question.expectedOutput;
+      default:
+        return null;
     }
   }
   
@@ -310,33 +336,33 @@ class QuizEngine {
     
     // إضافة تلميحات عامة حسب نوع السؤال
     switch (question.type) {
-      case QuestionType.multipleChoice:
+      case 'multiple_choice':
         hints.add('اقرأ السؤال بعناية واستبعد الخيارات الخاطئة أولاً');
         break;
-      case QuestionType.reorderCode:
+      case 'reorder_code':
         hints.add('فكر في التسلسل المنطقي لتنفيذ الكود');
         hints.add('ابدأ بالتعريفات والمتغيرات أولاً');
         break;
-      case QuestionType.findBug:
+      case 'find_bug':
         hints.add('ابحث عن الأخطاء الإملائية في أسماء المتغيرات والدوال');
         hints.add('تحقق من علامات الترقيم والأقواس');
         break;
-      case QuestionType.fillInBlank:
+      case 'fill_blank':
         hints.add('فكر في السياق العام للجملة');
         hints.add('استخدم المصطلحات التقنية المناسبة');
         break;
-      case QuestionType.trueFalse:
+      case 'true_false':
         hints.add('ابحث عن الكلمات المطلقة مثل "دائماً" أو "أبداً"');
         break;
-      case QuestionType.matchPairs:
+      case 'match_pairs':
         hints.add('ابدأ بالمطابقات التي تعرفها بثقة');
         hints.add('استخدم عملية الاستبعاد للخيارات المتبقية');
         break;
-      case QuestionType.codeOutput:
+      case 'code_output':
         hints.add('تتبع تنفيذ الكود خطوة بخطوة');
         hints.add('انتبه لقيم المتغيرات في كل خطوة');
         break;
-      case QuestionType.completeCode:
+      case 'complete_code':
         hints.add('فكر في الهدف من الكود والنتيجة المطلوبة');
         hints.add('استخدم الصيغة الصحيحة للغة Python');
         break;
@@ -365,9 +391,14 @@ class QuizEngine {
     final typePerformance = <QuestionType, List<double>>{};
     
     for (final quiz in quizHistory) {
-      for (final result in quiz.questionResults) {
-        typePerformance.putIfAbsent(result.type, () => []);
-        typePerformance[result.type]!.add(result.isCorrect ? 100.0 : 0.0);
+      for (final entry in quiz.questionResults.entries) {
+        final questionData = entry.value as Map<String, dynamic>;
+        final typeString = questionData['type'] as String;
+        final isCorrect = questionData['isCorrect'] as bool;
+        final type = QuestionTypeExtension.fromString(typeString);
+        
+        typePerformance.putIfAbsent(type, () => []);
+        typePerformance[type]!.add(isCorrect ? 100.0 : 0.0);
       }
     }
     
@@ -386,9 +417,15 @@ class QuizEngine {
     
     // حساب التحسن
     double improvement = 0.0;
-    if (quizHistory.length >= 2) {
-      final recent = quizHistory.takeLast(3).map((q) => q.percentage).reduce((a, b) => a + b) / 3;
-      final older = quizHistory.take(quizHistory.length - 3).map((q) => q.percentage).reduce((a, b) => a + b) / (quizHistory.length - 3);
+    if (quizHistory.length >= 6) {
+      // أخذ آخر 3 نتائج
+      final recentResults = quizHistory.sublist(quizHistory.length - 3);
+      final recent = recentResults.map((q) => q.percentage).reduce((a, b) => a + b) / 3;
+      
+      // أخذ النتائج الأقدم
+      final olderResults = quizHistory.sublist(0, quizHistory.length - 3);
+      final older = olderResults.map((q) => q.percentage).reduce((a, b) => a + b) / olderResults.length;
+      
       improvement = recent - older;
     }
     
@@ -411,6 +448,67 @@ class QuizEngine {
       'streakCount': streakCount,
     };
   }
+  
+  static Map<String, dynamic> _analyzeQuestionTypes(List<QuestionResult> questionResults) {
+    final typeStats = <QuestionType, List<bool>>{};
+    
+    for (final result in questionResults) {
+      typeStats.putIfAbsent(result.type, () => []);
+      typeStats[result.type]!.add(result.isCorrect);
+    }
+    
+    final strongAreas = <String>[];
+    final weakAreas = <String>[];
+    
+    typeStats.forEach((type, results) {
+      final correctCount = results.where((correct) => correct).length;
+      final percentage = correctCount / results.length * 100;
+      
+      if (percentage >= 80) {
+        strongAreas.add(type.displayName);
+      } else if (percentage < 60) {
+        weakAreas.add(type.displayName);
+      }
+    });
+    
+    return {
+      'strongAreas': strongAreas,
+      'weakAreas': weakAreas,
+    };
+  }
+  
+  static double _calculateDifficultyRating(List<QuizQuestionModel> questions, List<QuestionResult> results) {
+    if (questions.isEmpty || results.isEmpty) return 1.0;
+    
+    final correctCount = results.where((r) => r.isCorrect).length;
+    final successRate = correctCount / results.length;
+    
+    // كلما قل معدل النجاح، زادت الصعوبة
+    return (1.0 - successRate) * 5.0; // تقييم من 0 إلى 5
+  }
+}
+
+/// نتيجة سؤال واحد
+class QuestionResult {
+  final String questionId;
+  final QuestionType type;
+  final bool isCorrect;
+  final dynamic userAnswer;
+  final dynamic correctAnswer;
+  final Duration timeSpent;
+  final int hintsUsed;
+  final int attempts;
+
+  QuestionResult({
+    required this.questionId,
+    required this.type,
+    required this.isCorrect,
+    required this.userAnswer,
+    required this.correctAnswer,
+    required this.timeSpent,
+    required this.hintsUsed,
+    required this.attempts,
+  });
 }
 
 /// فئة مساعدة لإدارة الوقت في الاختبارات

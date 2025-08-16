@@ -5,6 +5,7 @@ import 'dart:convert';
 import '../services/firebase_service.dart';
 import '../services/local_service.dart';
 import '../services/cache_service.dart';
+import '../services/quiz_engine.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
 import '../models/decay_tracker_model.dart';
@@ -561,7 +562,7 @@ class LessonProvider with ChangeNotifier {
       
       // حفظ تاريخ الاختبارات
       final historyJson = _quizHistory.map((key, value) => 
-        MapEntry(key, value.map((result) => result.toMap()).toList()));
+        MapEntry(key, value.map((result) => result.toJson()).toList()));
       await prefs.setString('quiz_history', json.encode(historyJson));
       
       // حفظ إحصائيات الأداء
@@ -584,7 +585,7 @@ class LessonProvider with ChangeNotifier {
         final historyJson = json.decode(historyString) as Map<String, dynamic>;
         _quizHistory = historyJson.map((key, value) => MapEntry(
           key, 
-          (value as List).map((item) => EnhancedQuizResult.fromMap(item)).toList()
+          (value as List).map((item) => EnhancedQuizResult.fromJson(item)).toList()
         ));
       }
       
@@ -624,9 +625,14 @@ class LessonProvider with ChangeNotifier {
     final typeStats = <QuestionType, List<bool>>{};
     
     for (final result in userResults) {
-      for (final questionResult in result.questionResults) {
-        typeStats.putIfAbsent(questionResult.type, () => []);
-        typeStats[questionResult.type]!.add(questionResult.isCorrect);
+      for (final entry in result.questionResults.entries) {
+        final questionData = entry.value as Map<String, dynamic>;
+        final typeString = questionData['type'] as String;
+        final isCorrect = questionData['isCorrect'] as bool;
+        final type = QuestionTypeExtension.fromString(typeString);
+        
+        typeStats.putIfAbsent(type, () => []);
+        typeStats[type]!.add(isCorrect);
       }
     }
     
@@ -892,5 +898,30 @@ class StudyStreak {
       lastStudyDate!.day,
     )).inDays;
     return daysSinceLastStudy <= 1;
+  }
+}
+
+extension QuestionTypeExtension on QuestionType {
+  static QuestionType fromString(String typeString) {
+    switch (typeString) {
+      case 'multipleChoice':
+        return QuestionType.multipleChoice;
+      case 'reorderCode':
+        return QuestionType.reorderCode;
+      case 'findBug':
+        return QuestionType.findBug;
+      case 'fillInBlank':
+        return QuestionType.fillInBlank;
+      case 'trueFalse':
+        return QuestionType.trueFalse;
+      case 'matchPairs':
+        return QuestionType.matchPairs;
+      case 'codeOutput':
+        return QuestionType.codeOutput;
+      case 'completeCode':
+        return QuestionType.completeCode;
+      default:
+        return QuestionType.multipleChoice;
+    }
   }
 }

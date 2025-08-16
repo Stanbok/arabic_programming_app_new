@@ -261,12 +261,16 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<bool> resetPassword(String email) async {
-    final result = await _executeWithErrorHandling(
-      () => FirebaseService.sendPasswordResetEmail(email),
+    bool success = false;
+    await _executeWithErrorHandling(
+      () async {
+        await FirebaseService.sendPasswordResetEmail(email);
+        success = true; // إذا لم يحدث خطأ، فالعملية نجحت
+      },
       'إرسال رابط إعادة تعيين كلمة المرور',
       timeout: const Duration(seconds: 8),
     );
-    return result != null;
+    return success;
   }
 
   Future<void> signOut() async {

@@ -8,6 +8,9 @@ import '../services/cache_service.dart';
 import '../models/lesson_model.dart';
 import '../models/quiz_result_model.dart';
 import '../models/decay_tracker_model.dart';
+import '../models/enhanced_quiz_result.dart';
+import '../models/question_type.dart';
+import 'dart:math' as math;
 
 class LessonProvider with ChangeNotifier {
   List<LessonModel> _lessons = [];
@@ -23,6 +26,9 @@ class LessonProvider with ChangeNotifier {
   
   final Map<String, LessonModel> _lessonCache = {};
   final Map<int, List<LessonModel>> _unitLessonsCache = {};
+
+  Map<String, List<EnhancedQuizResult>> _quizHistory = {};
+  Map<String, UserPerformanceStats> _performanceStats = {};
 
   List<LessonModel> get lessons => _lessons;
   List<LessonModel> get localLessons => _localLessons;
@@ -332,6 +338,24 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
+  Future<void> saveEnhancedQuizResult(String userId, String lessonId, EnhancedQuizResult result) async {
+    try {
+      await FirebaseService.saveEnhancedQuizResult(userId, lessonId, result);
+      
+      if (QuizEngine.isPassing(result.percentage)) {
+        await markQuizCompletedLocally(lessonId);
+        _syncQuizCompletionWithFirebase(userId, lessonId);
+        await _updateDecayTracker(lessonId);
+      }
+      
+      // حفظ الإحصائيات المحلية
+      await _saveQuizStatistics(lessonId, result);
+      
+    } catch (e) {
+      print('❌ خطأ في حفظ نتيجة الاختبار المحسنة: $e');
+    }
+  }
+
   Future<void> loadLesson(String lessonId, String userId) async {
     try {
       _setLoading(true);
@@ -372,6 +396,7 @@ class LessonProvider with ChangeNotifier {
       final futures = [
         prefs.setStringList('local_completed_quizzes', _localCompletedQuizzes.toList()),
         _saveDecayTrackers(),
+        _saveStatisticsToLocal(),
       ];
       await Future.wait(futures);
     } catch (e) {
@@ -386,10 +411,13 @@ class LessonProvider with ChangeNotifier {
       _localCompletedQuizzes = completedQuizzes.toSet();
       
       await _loadDecayTrackers();
+      await _loadStatisticsFromLocal();
     } catch (e) {
       print('❌ خطأ في تحميل التقدم المحلي: $e');
       _localCompletedQuizzes = {};
       _decayTrackers = {};
+      _quizHistory = {};
+      _performanceStats = {};
     }
   }
 
@@ -476,6 +504,237 @@ class LessonProvider with ChangeNotifier {
     _lessonCache.clear();
     _unitLessonsCache.clear();
     _lastCacheUpdate = null;
+    _quizHistory.clear();
+    _performanceStats.clear();
+  }
+
+  Future<void> _saveQuizStatistics(String lessonId, EnhancedQuizResult result) async {
+    try {
+      // إضافة النتيجة لتاريخ الاختبارات
+      _quizHistory.putIfAbsent(lessonId, () => []);
+      _quizHistory[lessonId]!.add(result);
+      
+      // الاحتفاظ بآخر 10 نتائج فقط
+      if (_quizHistory[lessonId]!.length > 10) {
+        _quizHistory[lessonId]!.removeAt(0);
+      }
+      
+      // تحديث إحصائيات الأداء
+      await _updatePerformanceStats(result.userId);
+      
+      // حفظ البيانات محلياً
+      await _saveStatisticsToLocal();
+      
+    } catch (e) {
+      print('❌ خطأ في حفظ إحصائيات الاختبار: $e');
+    }
+  }
+
+  Future<void> _updatePerformanceStats(String userId) async {
+    try {
+      final allResults = _quizHistory.values.expand((results) => results).toList();
+      final userResults = allResults.where((r) => r.userId == userId).toList();
+      
+      if (userResults.isEmpty) return;
+      
+      final analysis = QuizEngine.analyzePerformance(userResults);
+      
+      _performanceStats[userId] = UserPerformanceStats(
+        userId: userId,
+        totalQuizzes: analysis['totalQuizzes'] as int,
+        averageScore: analysis['averageScore'] as double,
+        strongAreas: analysis['strongAreas'] as List<QuestionType>,
+        weakAreas: analysis['weakAreas'] as List<QuestionType>,
+        improvementTrend: analysis['improvement'] as double,
+        currentStreak: analysis['streakCount'] as int,
+        lastUpdated: DateTime.now(),
+      );
+      
+    } catch (e) {
+      print('❌ خطأ في تحديث إحصائيات الأداء: $e');
+    }
+  }
+
+  Future<void> _saveStatisticsToLocal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // حفظ تاريخ الاختبارات
+      final historyJson = _quizHistory.map((key, value) => 
+        MapEntry(key, value.map((result) => result.toMap()).toList()));
+      await prefs.setString('quiz_history', json.encode(historyJson));
+      
+      // حفظ إحصائيات الأداء
+      final statsJson = _performanceStats.map((key, value) => 
+        MapEntry(key, value.toMap()));
+      await prefs.setString('performance_stats', json.encode(statsJson));
+      
+    } catch (e) {
+      print('❌ خطأ في حفظ الإحصائيات محلياً: $e');
+    }
+  }
+
+  Future<void> _loadStatisticsFromLocal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // تحميل تاريخ الاختبارات
+      final historyString = prefs.getString('quiz_history');
+      if (historyString != null) {
+        final historyJson = json.decode(historyString) as Map<String, dynamic>;
+        _quizHistory = historyJson.map((key, value) => MapEntry(
+          key, 
+          (value as List).map((item) => EnhancedQuizResult.fromMap(item)).toList()
+        ));
+      }
+      
+      // تحميل إحصائيات الأداء
+      final statsString = prefs.getString('performance_stats');
+      if (statsString != null) {
+        final statsJson = json.decode(statsString) as Map<String, dynamic>;
+        _performanceStats = statsJson.map((key, value) => MapEntry(
+          key, 
+          UserPerformanceStats.fromMap(value)
+        ));
+      }
+      
+    } catch (e) {
+      print('❌ خطأ في تحميل الإحصائيات محلياً: $e');
+      _quizHistory = {};
+      _performanceStats = {};
+    }
+  }
+
+  List<EnhancedQuizResult> getQuizHistory(String lessonId) {
+    return _quizHistory[lessonId] ?? [];
+  }
+
+  UserPerformanceStats? getUserPerformanceStats(String userId) {
+    return _performanceStats[userId];
+  }
+
+  Map<QuestionType, double> getQuestionTypePerformance(String userId) {
+    final userResults = _quizHistory.values
+        .expand((results) => results)
+        .where((r) => r.userId == userId)
+        .toList();
+    
+    if (userResults.isEmpty) return {};
+    
+    final typeStats = <QuestionType, List<bool>>{};
+    
+    for (final result in userResults) {
+      for (final questionResult in result.questionResults) {
+        typeStats.putIfAbsent(questionResult.type, () => []);
+        typeStats[questionResult.type]!.add(questionResult.isCorrect);
+      }
+    }
+    
+    return typeStats.map((type, results) {
+      final correctCount = results.where((correct) => correct).length;
+      return MapEntry(type, correctCount / results.length * 100);
+    });
+  }
+
+  List<DailyProgress> getDailyProgress(String userId, {int days = 7}) {
+    final userResults = _quizHistory.values
+        .expand((results) => results)
+        .where((r) => r.userId == userId)
+        .toList();
+    
+    final now = DateTime.now();
+    final dailyProgress = <DailyProgress>[];
+    
+    for (int i = days - 1; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+      final dayStart = DateTime(date.year, date.month, date.day);
+      final dayEnd = dayStart.add(const Duration(days: 1));
+      
+      final dayResults = userResults.where((r) => 
+        r.completedAt.isAfter(dayStart) && r.completedAt.isBefore(dayEnd)
+      ).toList();
+      
+      final totalQuizzes = dayResults.length;
+      final passedQuizzes = dayResults.where((r) => QuizEngine.isPassing(r.percentage)).length;
+      final averageScore = totalQuizzes > 0 
+          ? dayResults.map((r) => r.percentage).reduce((a, b) => a + b) / totalQuizzes
+          : 0.0;
+      
+      dailyProgress.add(DailyProgress(
+        date: dayStart,
+        totalQuizzes: totalQuizzes,
+        passedQuizzes: passedQuizzes,
+        averageScore: averageScore,
+      ));
+    }
+    
+    return dailyProgress;
+  }
+
+  StudyStreak getStudyStreak(String userId) {
+    final userResults = _quizHistory.values
+        .expand((results) => results)
+        .where((r) => r.userId == userId)
+        .toList();
+    
+    if (userResults.isEmpty) {
+      return StudyStreak(currentStreak: 0, longestStreak: 0, lastStudyDate: null);
+    }
+    
+    // ترتيب النتائج حسب التاريخ
+    userResults.sort((a, b) => a.completedAt.compareTo(b.completedAt));
+    
+    int currentStreak = 0;
+    int longestStreak = 0;
+    int tempStreak = 0;
+    DateTime? lastDate;
+    
+    for (final result in userResults.reversed) {
+      final resultDate = DateTime(
+        result.completedAt.year,
+        result.completedAt.month,
+        result.completedAt.day,
+      );
+      
+      if (lastDate == null) {
+        tempStreak = 1;
+        lastDate = resultDate;
+      } else {
+        final daysDifference = lastDate.difference(resultDate).inDays;
+        
+        if (daysDifference == 1) {
+          tempStreak++;
+        } else if (daysDifference > 1) {
+          if (currentStreak == 0) currentStreak = tempStreak;
+          longestStreak = math.max(longestStreak, tempStreak);
+          tempStreak = 1;
+        }
+        
+        lastDate = resultDate;
+      }
+    }
+    
+    if (currentStreak == 0) currentStreak = tempStreak;
+    longestStreak = math.max(longestStreak, tempStreak);
+    
+    // التحقق من استمرارية السلسلة
+    final today = DateTime.now();
+    final lastStudyDate = userResults.last.completedAt;
+    final daysSinceLastStudy = today.difference(DateTime(
+      lastStudyDate.year,
+      lastStudyDate.month,
+      lastStudyDate.day,
+    )).inDays;
+    
+    if (daysSinceLastStudy > 1) {
+      currentStreak = 0;
+    }
+    
+    return StudyStreak(
+      currentStreak: currentStreak,
+      longestStreak: longestStreak,
+      lastStudyDate: lastStudyDate,
+    );
   }
 }
 
@@ -520,4 +779,118 @@ class LessonWithStatus {
     required this.lesson,
     required this.status,
   });
+}
+
+class UserPerformanceStats {
+  final String userId;
+  final int totalQuizzes;
+  final double averageScore;
+  final List<QuestionType> strongAreas;
+  final List<QuestionType> weakAreas;
+  final double improvementTrend;
+  final int currentStreak;
+  final DateTime lastUpdated;
+
+  UserPerformanceStats({
+    required this.userId,
+    required this.totalQuizzes,
+    required this.averageScore,
+    required this.strongAreas,
+    required this.weakAreas,
+    required this.improvementTrend,
+    required this.currentStreak,
+    required this.lastUpdated,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'userId': userId,
+      'totalQuizzes': totalQuizzes,
+      'averageScore': averageScore,
+      'strongAreas': strongAreas.map((type) => type.toString()).toList(),
+      'weakAreas': weakAreas.map((type) => type.toString()).toList(),
+      'improvementTrend': improvementTrend,
+      'currentStreak': currentStreak,
+      'lastUpdated': lastUpdated.toIso8601String(),
+    };
+  }
+
+  factory UserPerformanceStats.fromMap(Map<String, dynamic> map) {
+    return UserPerformanceStats(
+      userId: map['userId'] ?? '',
+      totalQuizzes: map['totalQuizzes'] ?? 0,
+      averageScore: (map['averageScore'] ?? 0.0).toDouble(),
+      strongAreas: (map['strongAreas'] as List<dynamic>?)
+          ?.map((type) => _parseQuestionType(type.toString()))
+          .toList() ?? [],
+      weakAreas: (map['weakAreas'] as List<dynamic>?)
+          ?.map((type) => _parseQuestionType(type.toString()))
+          .toList() ?? [],
+      improvementTrend: (map['improvementTrend'] ?? 0.0).toDouble(),
+      currentStreak: map['currentStreak'] ?? 0,
+      lastUpdated: DateTime.parse(map['lastUpdated'] ?? DateTime.now().toIso8601String()),
+    );
+  }
+
+  static QuestionType _parseQuestionType(String typeString) {
+    switch (typeString) {
+      case 'QuestionType.multipleChoice':
+        return QuestionType.multipleChoice;
+      case 'QuestionType.reorderCode':
+        return QuestionType.reorderCode;
+      case 'QuestionType.findBug':
+        return QuestionType.findBug;
+      case 'QuestionType.fillInBlank':
+        return QuestionType.fillInBlank;
+      case 'QuestionType.trueFalse':
+        return QuestionType.trueFalse;
+      case 'QuestionType.matchPairs':
+        return QuestionType.matchPairs;
+      case 'QuestionType.codeOutput':
+        return QuestionType.codeOutput;
+      case 'QuestionType.completeCode':
+        return QuestionType.completeCode;
+      default:
+        return QuestionType.multipleChoice;
+    }
+  }
+}
+
+class DailyProgress {
+  final DateTime date;
+  final int totalQuizzes;
+  final int passedQuizzes;
+  final double averageScore;
+
+  DailyProgress({
+    required this.date,
+    required this.totalQuizzes,
+    required this.passedQuizzes,
+    required this.averageScore,
+  });
+
+  double get successRate => totalQuizzes > 0 ? passedQuizzes / totalQuizzes : 0.0;
+}
+
+class StudyStreak {
+  final int currentStreak;
+  final int longestStreak;
+  final DateTime? lastStudyDate;
+
+  StudyStreak({
+    required this.currentStreak,
+    required this.longestStreak,
+    this.lastStudyDate,
+  });
+
+  bool get isActive {
+    if (lastStudyDate == null) return false;
+    final today = DateTime.now();
+    final daysSinceLastStudy = today.difference(DateTime(
+      lastStudyDate!.year,
+      lastStudyDate!.month,
+      lastStudyDate!.day,
+    )).inDays;
+    return daysSinceLastStudy <= 1;
+  }
 }

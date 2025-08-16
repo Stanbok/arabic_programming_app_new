@@ -8,8 +8,17 @@ import '../../providers/auth_provider.dart';
 import '../../models/lesson_model.dart';
 import '../../models/quiz_result_model.dart';
 import '../../services/firebase_service.dart';
-import '../../services/reward_service.dart'; // Import RewardService
+import '../../services/reward_service.dart';
+import '../../services/quiz_engine.dart'; // إضافة QuizEngine
 import '../../widgets/custom_button.dart';
+import '../../widgets/quiz/multiple_choice_widget.dart';
+import '../../widgets/quiz/reorder_code_widget.dart';
+import '../../widgets/quiz/find_bug_widget.dart';
+import '../../widgets/quiz/fill_blank_widget.dart';
+import '../../widgets/quiz/true_false_widget.dart';
+import '../../widgets/quiz/match_pairs_widget.dart';
+import '../../widgets/quiz/code_output_widget.dart';
+import '../../widgets/quiz/complete_code_widget.dart';
 
 class QuizScreen extends StatefulWidget {
   final String lessonId;
@@ -26,11 +35,15 @@ class QuizScreen extends StatefulWidget {
 class _QuizScreenState extends State<QuizScreen> {
   PageController _pageController = PageController();
   int _currentQuestionIndex = 0;
-  List<int> _selectedAnswers = [];
+  List<dynamic> _selectedAnswers = [];
+  List<QuestionResult> _questionResults = []; // إضافة نتائج الأسئلة المفصلة
   Timer? _timer;
+  QuizTimer? _quizTimer; // استخدام QuizTimer الجديد
   int _timeRemaining = 300; // 5 minutes
   bool _isCompleted = false;
-  QuizResultModel? _result;
+  EnhancedQuizResult? _result; // استخدام EnhancedQuizResult
+  Map<int, HintManager> _hintManagers = {}; // إضافة مدير التلميحات
+  Map<int, DateTime> _questionStartTimes = {}; // تتبع وقت بداية كل سؤال
 
   @override
   void initState() {
@@ -42,6 +55,7 @@ class _QuizScreenState extends State<QuizScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _quizTimer?.stop();
     _pageController.dispose();
     super.dispose();
   }
@@ -53,7 +67,6 @@ class _QuizScreenState extends State<QuizScreen> {
     print('🔍 بدء تحميل الدرس: ${widget.lessonId}');
     
     try {
-      // تحميل الدرس للمستخدمين المسجلين والضيوف
       String userId = authProvider.user?.uid ?? 'guest';
       await lessonProvider.loadLesson(widget.lessonId, userId);
       
@@ -63,7 +76,21 @@ class _QuizScreenState extends State<QuizScreen> {
       
       if (lesson != null && lesson.quiz.isNotEmpty) {
         setState(() {
-          _selectedAnswers = List.filled(lesson.quiz.length, -1);
+          _selectedAnswers = List.filled(lesson.quiz.length, null);
+          _questionResults = [];
+          
+          // تهيئة مدراء التلميحات
+          for (int i = 0; i < lesson.quiz.length; i++) {
+            final hints = QuizEngine.generateHints(lesson.quiz[i]);
+            _hintManagers[i] = HintManager(hints);
+          }
+          
+          // تهيئة QuizTimer
+          _quizTimer = QuizTimer(totalTime: const Duration(minutes: 5));
+          _quizTimer!.start();
+          
+          // تسجيل وقت بداية السؤال الأول
+          _questionStartTimes[0] = DateTime.now();
         });
         print('✅ تم تهيئة الإجابات: ${_selectedAnswers.length} سؤال');
       } else {
@@ -84,9 +111,9 @@ class _QuizScreenState extends State<QuizScreen> {
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timeRemaining > 0) {
+      if (_quizTimer != null && !_quizTimer!.isExpired) {
         setState(() {
-          _timeRemaining--;
+          _timeRemaining = _quizTimer!.remaining.inSeconds;
         });
       } else {
         _submitQuiz();
@@ -94,15 +121,45 @@ class _QuizScreenState extends State<QuizScreen> {
     });
   }
 
-  void _selectAnswer(int answerIndex) {
+  void _selectAnswer(dynamic answer) {
     setState(() {
-      _selectedAnswers[_currentQuestionIndex] = answerIndex;
+      _selectedAnswers[_currentQuestionIndex] = answer;
     });
+  }
+
+  void _showHint() {
+    final hintManager = _hintManagers[_currentQuestionIndex];
+    if (hintManager != null && hintManager.hasMoreHints) {
+      final hint = hintManager.getNextHint();
+      if (hint != null) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.lightbulb, color: Colors.amber),
+                SizedBox(width: 8),
+                Text('تلميح'),
+              ],
+            ),
+            content: Text(hint),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('فهمت'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   void _nextQuestion() {
     final lesson = _getCurrentLesson();
     if (lesson != null && _currentQuestionIndex < lesson.quiz.length - 1) {
+      _saveCurrentQuestionResult();
+      
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -119,48 +176,70 @@ class _QuizScreenState extends State<QuizScreen> {
     }
   }
 
+  void _saveCurrentQuestionResult() {
+    final lesson = _getCurrentLesson();
+    if (lesson == null || _currentQuestionIndex >= lesson.quiz.length) return;
+    
+    final question = lesson.quiz[_currentQuestionIndex];
+    final userAnswer = _selectedAnswers[_currentQuestionIndex];
+    final startTime = _questionStartTimes[_currentQuestionIndex] ?? DateTime.now();
+    final timeSpent = DateTime.now().difference(startTime);
+    final hintsUsed = _hintManagers[_currentQuestionIndex]?.hintsUsed ?? 0;
+    
+    final result = QuizEngine.evaluateQuestion(
+      question,
+      userAnswer,
+      timeSpent: timeSpent,
+      hintsUsed: hintsUsed,
+    );
+    
+    // إضافة أو تحديث النتيجة
+    final existingIndex = _questionResults.indexWhere((r) => r.questionId == question.id);
+    if (existingIndex >= 0) {
+      _questionResults[existingIndex] = result;
+    } else {
+      _questionResults.add(result);
+    }
+  }
+
   Future<void> _submitQuiz() async {
     _timer?.cancel();
+    _quizTimer?.stop();
     
     final lesson = _getCurrentLesson();
     if (lesson == null) return;
+
+    // حفظ نتيجة السؤال الأخير
+    _saveCurrentQuestionResult();
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
     final userId = authProvider.user?.uid ?? 'guest';
 
-    // حساب النتائج
-    int correctAnswers = 0;
-    for (int i = 0; i < lesson.quiz.length; i++) {
-      if (i < _selectedAnswers.length && _selectedAnswers[i] == lesson.quiz[i].correctAnswerIndex) {
-        correctAnswers++;
-      }
-    }
-
-    final score = lesson.quiz.isNotEmpty ? ((correctAnswers / lesson.quiz.length) * 100).round() : 0;
-
-    _result = QuizResultModel(
-      lessonId: widget.lessonId,
-      score: score,
-      correctAnswers: correctAnswers,
-      totalQuestions: lesson.quiz.length,
-      answers: _selectedAnswers,
-      completedAt: DateTime.now(),
+    final totalTimeSpent = _quizTimer?.elapsed ?? const Duration(minutes: 5);
+    final totalHintsUsed = _hintManagers.values.fold(0, (sum, manager) => sum + manager.hintsUsed);
+    
+    _result = QuizEngine.evaluateQuiz(
+      widget.lessonId,
+      userId,
+      lesson.quiz,
+      _questionResults,
+      totalTimeSpent: totalTimeSpent,
+      totalHintsUsed: totalHintsUsed,
     );
 
-    print('📊 نتيجة الاختبار: $score% (${correctAnswers}/${lesson.quiz.length})');
+    print('📊 نتيجة الاختبار: ${_result!.percentage}% (${_result!.correctAnswers}/${_result!.totalQuestions})');
 
     // حفظ النتيجة وإضافة المكافآت
     if (!authProvider.isGuestUser && authProvider.user != null) {
       try {
-        // حفظ نتيجة الاختبار في Firebase
-        await lessonProvider.saveQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
+        await lessonProvider.saveEnhancedQuizResult(authProvider.user!.uid, widget.lessonId, _result!);
         
-        if (_result!.isPassed) {
+        if (QuizEngine.isPassing(_result!.percentage)) {
           final decayTracker = lessonProvider.getDecayTracker(widget.lessonId);
           final rewards = RewardService.calculateTotalRewards(
             lesson, 
-            score.toDouble(),
+            _result!.percentage,
             decayTracker: decayTracker,
           );
           
@@ -172,10 +251,10 @@ class _QuizScreenState extends State<QuizScreen> {
               authProvider.user!.uid, 
               xpReward, 
               gemsReward, 
-              'إكمال درس: ${lesson.title} ($score%)'
+              'إكمال درس: ${lesson.title} (${_result!.percentage.round()}%)'
             );
             
-            print('✅ تم إضافة المكافآت مع الاضمحلال: XP=$xpReward, Gems=$gemsReward');
+            print('✅ تم إضافة المكافآت: XP=$xpReward, Gems=$gemsReward');
           }
         }
       } catch (e) {
@@ -252,7 +331,6 @@ class _QuizScreenState extends State<QuizScreen> {
 
           final lesson = lessonProvider.currentLesson;
           
-          // التحقق من وجود الدرس
           if (lesson == null) {
             return Center(
               child: Column(
@@ -271,7 +349,6 @@ class _QuizScreenState extends State<QuizScreen> {
             );
           }
           
-          // التحقق من وجود أسئلة الاختبار
           if (lesson.quiz.isEmpty) {
             return Center(
               child: Column(
@@ -298,16 +375,15 @@ class _QuizScreenState extends State<QuizScreen> {
 
           return Column(
             children: [
-              // Progress Bar
               _buildProgressBar(lesson),
               
-              // Questions
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
                   onPageChanged: (index) {
                     setState(() {
                       _currentQuestionIndex = index;
+                      _questionStartTimes[index] = DateTime.now();
                     });
                   },
                   itemCount: lesson.quiz.length,
@@ -317,7 +393,6 @@ class _QuizScreenState extends State<QuizScreen> {
                 ),
               ),
               
-              // Navigation Controls
               _buildNavigationControls(lesson),
             ],
           );
@@ -370,105 +445,121 @@ class _QuizScreenState extends State<QuizScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Question
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              question.question,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // Options
-          ...question.options.asMap().entries.map((entry) {
-            final optionIndex = entry.key;
-            final optionText = entry.value;
-            final isSelected = _selectedAnswers[questionIndex] == optionIndex;
-            
-            return Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _selectAnswer(optionIndex),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-                          : Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                        width: isSelected ? 2 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.transparent,
-                            border: Border.all(
-                              color: isSelected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.outline,
-                            ),
-                          ),
-                          child: isSelected
-                              ? const Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: Colors.white,
-                                )
-                              : null,
-                        ),
-                        
-                        const SizedBox(width: 12),
-                        
-                        Expanded(
-                          child: Text(
-                            optionText,
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: isSelected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : null,
-                              fontWeight: isSelected ? FontWeight.w600 : null,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'نوع السؤال: ${_getQuestionTypeLabel(question.type)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
-            );
-          }).toList(),
+              if (_hintManagers[questionIndex]?.hasMoreHints == true)
+                TextButton.icon(
+                  onPressed: _showHint,
+                  icon: const Icon(Icons.lightbulb_outline, size: 16),
+                  label: const Text('تلميح'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.amber[700],
+                  ),
+                ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          _buildQuestionWidget(question, questionIndex),
         ],
       ),
     );
   }
 
+  Widget _buildQuestionWidget(QuizQuestionModel question, int questionIndex) {
+    final userAnswer = _selectedAnswers[questionIndex];
+    
+    switch (question.type) {
+      case QuestionType.multipleChoice:
+        return MultipleChoiceWidget(
+          question: question,
+          selectedAnswer: userAnswer as int?,
+          onAnswerSelected: _selectAnswer,
+        );
+        
+      case QuestionType.reorderCode:
+        return ReorderCodeWidget(
+          question: question,
+          userOrder: userAnswer as List<int>?,
+          onOrderChanged: _selectAnswer,
+        );
+        
+      case QuestionType.findBug:
+        return FindBugWidget(
+          question: question,
+          userAnswer: userAnswer as String?,
+          onAnswerChanged: _selectAnswer,
+        );
+        
+      case QuestionType.fillInBlank:
+        return FillBlankWidget(
+          question: question,
+          userAnswers: userAnswer as List<String>?,
+          onAnswersChanged: _selectAnswer,
+        );
+        
+      case QuestionType.trueFalse:
+        return TrueFalseWidget(
+          question: question,
+          selectedAnswer: userAnswer as bool?,
+          onAnswerSelected: _selectAnswer,
+        );
+        
+      case QuestionType.matchPairs:
+        return MatchPairsWidget(
+          question: question,
+          userMatches: userAnswer as Map<String, String>?,
+          onMatchesChanged: _selectAnswer,
+        );
+        
+      case QuestionType.codeOutput:
+        return CodeOutputWidget(
+          question: question,
+          userAnswer: userAnswer as String?,
+          onAnswerChanged: _selectAnswer,
+        );
+        
+      case QuestionType.completeCode:
+        return CompleteCodeWidget(
+          question: question,
+          userAnswer: userAnswer as String?,
+          onAnswerChanged: _selectAnswer,
+        );
+    }
+  }
+
+  String _getQuestionTypeLabel(QuestionType type) {
+    switch (type) {
+      case QuestionType.multipleChoice:
+        return 'اختيار من متعدد';
+      case QuestionType.reorderCode:
+        return 'ترتيب الكود';
+      case QuestionType.findBug:
+        return 'اكتشف الخطأ';
+      case QuestionType.fillInBlank:
+        return 'املأ الفراغ';
+      case QuestionType.trueFalse:
+        return 'صح أو خطأ';
+      case QuestionType.matchPairs:
+        return 'توصيل الأزواج';
+      case QuestionType.codeOutput:
+        return 'نتيجة الكود';
+      case QuestionType.completeCode:
+        return 'أكمل الكود';
+    }
+  }
+
   Widget _buildNavigationControls(LessonModel lesson) {
     final isLastQuestion = _currentQuestionIndex == lesson.quiz.length - 1;
-    final hasAnswered = _selectedAnswers[_currentQuestionIndex] != -1;
+    final hasAnswered = _selectedAnswers[_currentQuestionIndex] != null;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -484,7 +575,6 @@ class _QuizScreenState extends State<QuizScreen> {
       ),
       child: Row(
         children: [
-          // Previous Button
           if (_currentQuestionIndex > 0)
             Expanded(
               child: CustomButton(
@@ -497,7 +587,6 @@ class _QuizScreenState extends State<QuizScreen> {
           
           if (_currentQuestionIndex > 0) const SizedBox(width: 12),
           
-          // Next/Submit Button
           Expanded(
             flex: 2,
             child: CustomButton(
@@ -513,14 +602,14 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
-  Widget _buildResultScreen(LessonModel lesson, QuizResultModel result) {
+  Widget _buildResultScreen(LessonModel lesson, EnhancedQuizResult result) {
     final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
     final decayTracker = lessonProvider.getDecayTracker(widget.lessonId);
     
-    final rewards = result.isPassed 
+    final rewards = QuizEngine.isPassing(result.percentage)
         ? RewardService.calculateTotalRewards(
             lesson, 
-            result.score.toDouble(),
+            result.percentage,
             decayTracker: decayTracker,
           )
         : {'xp': 0, 'gems': 0};
@@ -530,6 +619,8 @@ class _QuizScreenState extends State<QuizScreen> {
     
     final isRetake = decayTracker != null && decayTracker.retakeCount > 0;
     final decayMultiplier = decayTracker?.getDecayMultiplier() ?? 1.0;
+    final stars = QuizEngine.calculateStars(result.percentage);
+    final grade = QuizEngine.getGrade(result.percentage);
     
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -540,11 +631,11 @@ class _QuizScreenState extends State<QuizScreen> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: result.isPassed ? Colors.green : Colors.red,
+              color: QuizEngine.isPassing(result.percentage) ? Colors.green : Colors.red,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: (result.isPassed ? Colors.green : Colors.red).withOpacity(0.3),
+                  color: (QuizEngine.isPassing(result.percentage) ? Colors.green : Colors.red).withOpacity(0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -554,7 +645,7 @@ class _QuizScreenState extends State<QuizScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  '${result.score}%',
+                  '${result.percentage.round()}%',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -562,7 +653,7 @@ class _QuizScreenState extends State<QuizScreen> {
                   ),
                 ),
                 Text(
-                  result.grade,
+                  grade,
                   style: const TextStyle(
                     fontSize: 12,
                     color: Colors.white,
@@ -575,17 +666,17 @@ class _QuizScreenState extends State<QuizScreen> {
           const SizedBox(height: 24),
           
           Text(
-            result.isPassed ? 'تهانينا! 🎉' : 'حاول مرة أخرى 💪',
+            QuizEngine.isPassing(result.percentage) ? 'تهانينا! 🎉' : 'حاول مرة أخرى 💪',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: result.isPassed ? Colors.green : Colors.red,
+              color: QuizEngine.isPassing(result.percentage) ? Colors.green : Colors.red,
             ),
           ),
           
           const SizedBox(height: 16),
           
           Text(
-            result.isPassed
+            QuizEngine.isPassing(result.percentage)
                 ? 'لقد نجحت في الاختبار بتفوق!'
                 : 'لم تحصل على الدرجة المطلوبة للنجاح (70%)',
             style: Theme.of(context).textTheme.titleMedium,
@@ -599,7 +690,7 @@ class _QuizScreenState extends State<QuizScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(3, (index) {
               return Icon(
-                index < result.stars ? Icons.star : Icons.star_border,
+                index < stars ? Icons.star : Icons.star_border,
                 size: 32,
                 color: Colors.amber,
               );
@@ -608,60 +699,12 @@ class _QuizScreenState extends State<QuizScreen> {
           
           const SizedBox(height: 32),
           
-          // Results Summary
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              ),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'ملخص النتائج',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildResultItem(
-                      icon: Icons.check_circle,
-                      label: 'إجابات صحيحة',
-                      value: '${result.correctAnswers}',
-                      color: Colors.green,
-                    ),
-                    _buildResultItem(
-                      icon: Icons.cancel,
-                      label: 'إجابات خاطئة',
-                      value: '${result.totalQuestions - result.correctAnswers}',
-                      color: Colors.red,
-                    ),
-                    if (result.isPassed)
-                      _buildResultItem(
-                        icon: Icons.star,
-                        label: 'XP مكتسب',
-                        value: '$xpReward',
-                        color: Colors.amber,
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          _buildDetailedStats(result),
           
           const SizedBox(height: 32),
           
           // Rewards (if passed)
-          if (result.isPassed)
+          if (QuizEngine.isPassing(result.percentage))
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -699,6 +742,13 @@ class _QuizScreenState extends State<QuizScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (result.hintsUsed > 0)
+                    Text(
+                      'استخدمت ${result.hintsUsed} تلميح',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.orange[600],
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -706,7 +756,7 @@ class _QuizScreenState extends State<QuizScreen> {
           const SizedBox(height: 32),
           
           // Decay Information (if retake)
-          if (result.isPassed && isRetake)
+          if (QuizEngine.isPassing(result.percentage) && isRetake)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -747,7 +797,7 @@ class _QuizScreenState extends State<QuizScreen> {
           // Action Buttons
           Column(
             children: [
-              if (result.isPassed)
+              if (QuizEngine.isPassing(result.percentage))
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
@@ -765,9 +815,20 @@ class _QuizScreenState extends State<QuizScreen> {
                       setState(() {
                         _isCompleted = false;
                         _result = null;
-                        _selectedAnswers = List.filled(lesson.quiz.length, -1);
+                        _selectedAnswers = List.filled(lesson.quiz.length, null);
+                        _questionResults = [];
                         _currentQuestionIndex = 0;
                         _timeRemaining = 300;
+                        
+                        // إعادة تعيين مدراء التلميحات
+                        for (final manager in _hintManagers.values) {
+                          manager.reset();
+                        }
+                        
+                        // إعادة تشغيل المؤقت
+                        _quizTimer = QuizTimer(totalTime: const Duration(minutes: 5));
+                        _quizTimer!.start();
+                        _questionStartTimes[0] = DateTime.now();
                       });
                       _pageController = PageController();
                       _startTimer();
@@ -789,6 +850,71 @@ class _QuizScreenState extends State<QuizScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailedStats(EnhancedQuizResult result) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'ملخص النتائج',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildResultItem(
+                icon: Icons.check_circle,
+                label: 'إجابات صحيحة',
+                value: '${result.correctAnswers}',
+                color: Colors.green,
+              ),
+              _buildResultItem(
+                icon: Icons.cancel,
+                label: 'إجابات خاطئة',
+                value: '${result.totalQuestions - result.correctAnswers}',
+                color: Colors.red,
+              ),
+              _buildResultItem(
+                icon: Icons.access_time,
+                label: 'الوقت المستغرق',
+                value: '${result.timeSpent.inMinutes}:${(result.timeSpent.inSeconds % 60).toString().padLeft(2, '0')}',
+                color: Colors.blue,
+              ),
+            ],
+          ),
+          
+          if (result.hintsUsed > 0) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildResultItem(
+                  icon: Icons.lightbulb,
+                  label: 'تلميحات مستخدمة',
+                  value: '${result.hintsUsed}',
+                  color: Colors.amber,
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

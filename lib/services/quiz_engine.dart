@@ -1,6 +1,6 @@
 import '../models/lesson_model.dart';
 import '../models/enhanced_quiz_result.dart';
-import '../models/question_type.dart';
+// import '../models/question_type.dart'; - تم حذف هذا السطر
 
 class QuizEngine {
   static const double _passingScore = 70.0;
@@ -16,28 +16,28 @@ class QuizEngine {
     bool isCorrect = false;
     
     switch (question.type) {
-      case QuestionType.multipleChoice:
+      case 'multipleChoice':
         isCorrect = _evaluateMultipleChoice(question, userAnswer);
         break;
-      case QuestionType.reorderCode:
+      case 'reorderCode':
         isCorrect = _evaluateReorderCode(question, userAnswer);
         break;
-      case QuestionType.findBug:
+      case 'findBug':
         isCorrect = _evaluateFindBug(question, userAnswer);
         break;
-      case QuestionType.fillInBlank:
+      case 'fillInBlank':
         isCorrect = _evaluateFillInBlank(question, userAnswer);
         break;
-      case QuestionType.trueFalse:
+      case 'trueFalse':
         isCorrect = _evaluateTrueFalse(question, userAnswer);
         break;
-      case QuestionType.matchPairs:
+      case 'matchPairs':
         isCorrect = _evaluateMatchPairs(question, userAnswer);
         break;
-      case QuestionType.codeOutput:
+      case 'codeOutput':
         isCorrect = _evaluateCodeOutput(question, userAnswer);
         break;
-      case QuestionType.completeCode:
+      case 'completeCode':
         isCorrect = _evaluateCompleteCode(question, userAnswer);
         break;
     }
@@ -206,20 +206,20 @@ class QuizEngine {
   /// الحصول على الإجابة الصحيحة
   static dynamic _getCorrectAnswer(QuizQuestionModel question) {
     switch (question.type) {
-      case QuestionType.multipleChoice:
+      case 'multipleChoice':
         return question.correctAnswerIndex;
-      case QuestionType.reorderCode:
+      case 'reorderCode':
         return question.correctOrder;
-      case QuestionType.findBug:
-      case QuestionType.completeCode:
+      case 'findBug':
+      case 'completeCode':
         return question.correctCode;
-      case QuestionType.fillInBlank:
+      case 'fillInBlank':
         return question.correctAnswers;
-      case QuestionType.trueFalse:
+      case 'trueFalse':
         return question.correctBoolean;
-      case QuestionType.matchPairs:
+      case 'matchPairs':
         return question.pairs;
-      case QuestionType.codeOutput:
+      case 'codeOutput':
         return question.expectedOutput;
     }
   }
@@ -334,33 +334,33 @@ class QuizEngine {
     
     // إضافة تلميحات عامة حسب نوع السؤال
     switch (question.type) {
-      case QuestionType.multipleChoice:
+      case 'multipleChoice':
         hints.add('اقرأ السؤال بعناية واستبعد الخيارات الخاطئة أولاً');
         break;
-      case QuestionType.reorderCode:
+      case 'reorderCode':
         hints.add('فكر في التسلسل المنطقي لتنفيذ الكود');
         hints.add('ابدأ بالتعريفات والمتغيرات أولاً');
         break;
-      case QuestionType.findBug:
+      case 'findBug':
         hints.add('ابحث عن الأخطاء الإملائية في أسماء المتغيرات والدوال');
         hints.add('تحقق من علامات الترقيم والأقواس');
         break;
-      case QuestionType.fillInBlank:
+      case 'fillInBlank':
         hints.add('فكر في السياق العام للجملة');
         hints.add('استخدم المصطلحات التقنية المناسبة');
         break;
-      case QuestionType.trueFalse:
+      case 'trueFalse':
         hints.add('ابحث عن الكلمات المطلقة مثل "دائماً" أو "أبداً"');
         break;
-      case QuestionType.matchPairs:
+      case 'matchPairs':
         hints.add('ابدأ بالمطابقات التي تعرفها بثقة');
         hints.add('استخدم عملية الاستبعاد للخيارات المتبقية');
         break;
-      case QuestionType.codeOutput:
+      case 'codeOutput':
         hints.add('تتبع تنفيذ الكود خطوة بخطوة');
         hints.add('انتبه لقيم المتغيرات في كل خطوة');
         break;
-      case QuestionType.completeCode:
+      case 'completeCode':
         hints.add('فكر في الهدف من الكود والنتيجة المطلوبة');
         hints.add('استخدم الصيغة الصحيحة للغة Python');
         break;
@@ -375,8 +375,8 @@ class QuizEngine {
       return {
         'averageScore': 0.0,
         'totalQuizzes': 0,
-        'strongAreas': <QuestionType>[],
-        'weakAreas': <QuestionType>[],
+        'strongAreas': <String>[],
+        'weakAreas': <String>[],
         'improvement': 0.0,
         'streakCount': 0,
       };
@@ -386,23 +386,22 @@ class QuizEngine {
     final averageScore = quizHistory.map((quiz) => quiz.percentage).reduce((a, b) => a + b) / quizHistory.length;
     
     // تحليل الأداء حسب نوع السؤال
-    final typePerformance = <QuestionType, List<double>>{};
+    final typePerformance = <String, List<double>>{};
     
     for (final quiz in quizHistory) {
       for (final entry in quiz.questionResults.entries) {
         final questionData = entry.value as Map<String, dynamic>;
         final typeString = questionData['type'] as String;
         final isCorrect = questionData['isCorrect'] as bool;
-        final type = QuestionTypeExtension.fromString(typeString);
         
-        typePerformance.putIfAbsent(type, () => []);
-        typePerformance[type]!.add(isCorrect ? 100.0 : 0.0);
+        typePerformance.putIfAbsent(typeString, () => []);
+        typePerformance[typeString]!.add(isCorrect ? 100.0 : 0.0);
       }
     }
     
     // تحديد نقاط القوة والضعف
-    final strongAreas = <QuestionType>[];
-    final weakAreas = <QuestionType>[];
+    final strongAreas = <String>[];
+    final weakAreas = <String>[];
     
     typePerformance.forEach((type, scores) {
       final average = scores.reduce((a, b) => a + b) / scores.length;
@@ -448,11 +447,11 @@ class QuizEngine {
   }
   
   static Map<String, dynamic> _analyzeQuestionTypes(List<QuestionResult> questionResults) {
-    final typeStats = <QuestionType, List<bool>>{};
+    final typeStats = <String, List<bool>>{};
     
     for (final result in questionResults) {
-      typeStats.putIfAbsent(result.type, () => []);
-      typeStats[result.type]!.add(result.isCorrect);
+      typeStats.putIfAbsent(result.type.toString(), () => []);
+      typeStats[result.type.toString()]!.add(result.isCorrect);
     }
     
     final strongAreas = <String>[];
@@ -463,9 +462,9 @@ class QuizEngine {
       final percentage = correctCount / results.length * 100;
       
       if (percentage >= 80) {
-        strongAreas.add(type.displayName);
+        strongAreas.add(type);
       } else if (percentage < 60) {
-        weakAreas.add(type.displayName);
+        weakAreas.add(type);
       }
     });
     
@@ -489,7 +488,7 @@ class QuizEngine {
 /// نتيجة سؤال واحد
 class QuestionResult {
   final String questionId;
-  final QuestionType type;
+  final String type;
   final bool isCorrect;
   final dynamic userAnswer;
   final dynamic correctAnswer;

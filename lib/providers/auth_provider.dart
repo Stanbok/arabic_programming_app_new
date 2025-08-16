@@ -37,294 +37,247 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> signIn(String email, String password) async {
+  Future<T?> _executeWithErrorHandling<T>(
+    Future<T> Function() operation,
+    String operationName,
+    {Duration timeout = const Duration(seconds: 10)}
+  ) async {
     try {
       _setLoading(true);
       _clearError();
       
-      print('🔐 بدء تسجيل الدخول...');
+      print('🔐 بدء $operationName...');
       
-      // إضافة timeout لتجنب التأخير الطويل
-      final credential = await FirebaseService.signInWithEmailAndPassword(email, password)
-          .timeout(const Duration(seconds: 15), onTimeout: () {
-        throw Exception('انتهت مهلة الاتصال - تأكد من اتصال الإنترنت');
+      final result = await operation().timeout(timeout, onTimeout: () {
+        throw Exception('انتهت مهلة $operationName - تأكد من اتصال الإنترنت');
       });
       
-      if (credential != null) {
-        _user = credential.user;
-        _isGuestUser = false;
-        
-        print('✅ تم تسجيل الدخول بنجاح');
-        
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('is_guest_user', false);
-        await prefs.setBool('stay_logged_in', true);
-        
-        // Update last login time with timeout
-        if (_user != null) {
-          try {
-            await FirebaseService.updateUserData(_user!.uid, {
-              'lastLoginAt': FieldValue.serverTimestamp(),
-            }).timeout(const Duration(seconds: 5));
-          } catch (e) {
-            print('⚠️ فشل في تحديث وقت آخر دخول: $e');
-            // لا نفشل العملية بسبب هذا الخطأ
-          }
-        }
-        
-        notifyListeners();
-        return true;
-      }
-      return false;
+      print('✅ تم $operationName بنجاح');
+      return result;
     } catch (e) {
-      print('❌ خطأ في تسجيل الدخول: $e');
+      print('❌ خطأ في $operationName: $e');
       _setError(_getArabicErrorMessage(e.toString()));
-      return false;
+      return null;
     } finally {
       _setLoading(false);
     }
   }
 
-  Future<bool> signInWithGoogle() async {
+  Future<void> _updateUserDataSafely(String uid, Map<String, dynamic> data) async {
     try {
-      _setLoading(true);
-      _clearError();
-
-      print('🔐 بدء تسجيل الدخول عبر Google...');
-
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn()
-          .timeout(const Duration(seconds: 30), onTimeout: () {
-        throw Exception('انتهت مهلة تسجيل الدخول عبر Google');
-      });
-      
-      if (googleUser == null) return false;
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential)
-          .timeout(const Duration(seconds: 15));
-      
-      _user = userCredential.user;
-      _isGuestUser = false;
-
-      if (_user != null) {
-        print('✅ تم تسجيل الدخول عبر Google بنجاح');
-        
-        // إنشاء أو تحديث بيانات المستخدم مع timeout
-        try {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(_user!.uid)
-              .get()
-              .timeout(const Duration(seconds: 10));
-
-          if (!userDoc.exists) {
-            final userModel = UserModel(
-              id: _user!.uid,
-              name: _user!.displayName ?? 'مستخدم Google',
-              email: _user!.email ?? '',
-              createdAt: DateTime.now(),
-              lastLoginAt: DateTime.now(),
-            );
-            await FirebaseService.createUserDocument(userModel)
-                .timeout(const Duration(seconds: 10));
-          } else {
-            await FirebaseService.updateUserData(_user!.uid, {
-              'lastLoginAt': FieldValue.serverTimestamp(),
-            }).timeout(const Duration(seconds: 5));
-          }
-        } catch (e) {
-          print('⚠️ فشل في تحديث بيانات المستخدم: $e');
-          // لا نفشل العملية بسبب هذا الخطأ
-        }
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('is_guest_user', false);
-        await prefs.setBool('stay_logged_in', true);
-      }
-
-      notifyListeners();
-      return true;
+      await FirebaseService.updateUserData(uid, data)
+          .timeout(const Duration(seconds: 3));
     } catch (e) {
-      print('❌ خطأ في تسجيل الدخول عبر Google: $e');
-      _setError(_getArabicErrorMessage(e.toString()));
-      return false;
-    } finally {
-      _setLoading(false);
+      print('⚠️ فشل في تحديث بيانات المستخدم: $e');
+      // لا نفشل العملية بسبب هذا الخطأ
     }
   }
 
-  Future<bool> signInWithFacebook() async {
+  Future<void> _createOrUpdateUserDocument(String name) async {
+    if (_user == null) return;
+    
     try {
-      _setLoading(true);
-      _clearError();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_user!.uid)
+          .get()
+          .timeout(const Duration(seconds: 5));
 
-      print('🔐 بدء تسجيل الدخول عبر Facebook...');
-
-      final LoginResult result = await FacebookAuth.instance.login()
-          .timeout(const Duration(seconds: 30), onTimeout: () {
-        throw Exception('انتهت مهلة تسجيل الدخول عبر Facebook');
-      });
-      
-      if (result.status != LoginStatus.success) return false;
-
-      final OAuthCredential facebookAuthCredential = 
-          FacebookAuthProvider.credential(result.accessToken!.tokenString);
-
-      final userCredential = await FirebaseAuth.instance
-          .signInWithCredential(facebookAuthCredential)
-          .timeout(const Duration(seconds: 15));
-      
-      _user = userCredential.user;
-      _isGuestUser = false;
-
-      if (_user != null) {
-        print('✅ تم تسجيل الدخول عبر Facebook بنجاح');
-        
-        // إنشاء أو تحديث بيانات المستخدم مع timeout
-        try {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(_user!.uid)
-              .get()
-              .timeout(const Duration(seconds: 10));
-
-          if (!userDoc.exists) {
-            final userModel = UserModel(
-              id: _user!.uid,
-              name: _user!.displayName ?? 'مستخدم Facebook',
-              email: _user!.email ?? '',
-              createdAt: DateTime.now(),
-              lastLoginAt: DateTime.now(),
-            );
-            
-            await FirebaseService.createUserDocument(userModel)
-                .timeout(const Duration(seconds: 10));
-          } else {
-            await FirebaseService.updateUserData(_user!.uid, {
-              'lastLoginAt': FieldValue.serverTimestamp(),
-            }).timeout(const Duration(seconds: 5));
-          }
-        } catch (e) {
-          print('⚠️ فشل في تحديث بيانات المستخدم: $e');
-          // لا نفشل العملية بسبب هذا الخطأ
-        }
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('is_guest_user', false);
-        await prefs.setBool('stay_logged_in', true);
-      }
-
-      notifyListeners();
-      return true;
-    } catch (e) {
-      print('❌ خطأ في تسجيل الدخول عبر Facebook: $e');
-      _setError(_getArabicErrorMessage(e.toString()));
-      return false;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  Future<bool> signInAsGuest() async {
-    try {
-      _setLoading(true);
-      _clearError();
-
-      print('👤 تسجيل الدخول كضيف...');
-
-      _isGuestUser = true;
-      _user = null;
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_guest_user', true);
-      await prefs.setBool('stay_logged_in', true);
-
-      print('✅ تم تسجيل الدخول كضيف بنجاح');
-      notifyListeners();
-      return true;
-    } catch (e) {
-      print('❌ خطأ في تسجيل الدخول كضيف: $e');
-      _setError(_getArabicErrorMessage(e.toString()));
-      return false;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  Future<bool> register(String name, String email, String password) async {
-    try {
-      _setLoading(true);
-      _clearError();
-      
-      print('📝 بدء إنشاء حساب جديد...');
-      
-      final credential = await FirebaseService.createUserWithEmailAndPassword(email, password)
-          .timeout(const Duration(seconds: 15), onTimeout: () {
-        throw Exception('انتهت مهلة إنشاء الحساب - تأكد من اتصال الإنترنت');
-      });
-      
-      if (credential != null) {
-        _user = credential.user;
-        _isGuestUser = false;
-        
-        print('✅ تم إنشاء الحساب بنجاح');
-        
-        // Create user document in Firestore with timeout
+      if (!userDoc.exists) {
         final userModel = UserModel(
           id: _user!.uid,
           name: name,
-          email: email,
+          email: _user!.email ?? '',
           createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
         );
-        
         await FirebaseService.createUserDocument(userModel)
-            .timeout(const Duration(seconds: 10));
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('is_guest_user', false);
-        await prefs.setBool('stay_logged_in', true);
-        
-        notifyListeners();
-        return true;
+            .timeout(const Duration(seconds: 5));
+      } else {
+        await _updateUserDataSafely(_user!.uid, {
+          'lastLoginAt': FieldValue.serverTimestamp(),
+        });
       }
-      return false;
     } catch (e) {
-      print('❌ خطأ في إنشاء الحساب: $e');
-      _setError(_getArabicErrorMessage(e.toString()));
-      return false;
-    } finally {
-      _setLoading(false);
+      print('⚠️ فشل في إنشاء/تحديث مستند المستخدم: $e');
     }
   }
 
-  Future<bool> resetPassword(String email) async {
-    try {
-      _setLoading(true);
-      _clearError();
+  Future<void> _saveLoginState({bool isGuest = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_guest_user', isGuest);
+    await prefs.setBool('stay_logged_in', true);
+  }
+
+  Future<bool> signIn(String email, String password) async {
+    final credential = await _executeWithErrorHandling(
+      () => FirebaseService.signInWithEmailAndPassword(email, password),
+      'تسجيل الدخول',
+      timeout: const Duration(seconds: 12),
+    );
+    
+    if (credential != null) {
+      _user = credential.user;
+      _isGuestUser = false;
       
-      await FirebaseService.sendPasswordResetEmail(email)
-          .timeout(const Duration(seconds: 10));
+      if (_user != null) {
+        await _updateUserDataSafely(_user!.uid, {
+          'lastLoginAt': FieldValue.serverTimestamp(),
+        });
+      }
+      
+      await _saveLoginState();
+      notifyListeners();
       return true;
-    } catch (e) {
-      _setError(_getArabicErrorMessage(e.toString()));
-      return false;
-    } finally {
-      _setLoading(false);
     }
+    return false;
+  }
+
+  Future<bool> signInWithGoogle() async {
+    final googleUser = await _executeWithErrorHandling(
+      () async {
+        final user = await GoogleSignIn().signIn();
+        if (user == null) throw Exception('تم إلغاء تسجيل الدخول');
+        return user;
+      },
+      'تسجيل الدخول عبر Google',
+      timeout: const Duration(seconds: 25),
+    );
+    
+    if (googleUser == null) return false;
+
+    final result = await _executeWithErrorHandling(
+      () async {
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        return await FirebaseAuth.instance.signInWithCredential(credential);
+      },
+      'المصادقة عبر Google',
+    );
+
+    if (result != null) {
+      _user = result.user;
+      _isGuestUser = false;
+      
+      await _createOrUpdateUserDocument(_user!.displayName ?? 'مستخدم Google');
+      await _saveLoginState();
+      
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> signInWithFacebook() async {
+    final loginResult = await _executeWithErrorHandling(
+      () async {
+        final result = await FacebookAuth.instance.login();
+        if (result.status != LoginStatus.success) {
+          throw Exception('فشل في تسجيل الدخول عبر Facebook');
+        }
+        return result;
+      },
+      'تسجيل الدخول عبر Facebook',
+      timeout: const Duration(seconds: 25),
+    );
+    
+    if (loginResult == null) return false;
+
+    final result = await _executeWithErrorHandling(
+      () async {
+        final facebookAuthCredential = 
+            FacebookAuthProvider.credential(loginResult.accessToken!.tokenString);
+        return await FirebaseAuth.instance.signInWithCredential(facebookAuthCredential);
+      },
+      'المصادقة عبر Facebook',
+    );
+
+    if (result != null) {
+      _user = result.user;
+      _isGuestUser = false;
+      
+      await _createOrUpdateUserDocument(_user!.displayName ?? 'مستخدم Facebook');
+      await _saveLoginState();
+      
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> signInAsGuest() async {
+    final result = await _executeWithErrorHandling(
+      () async {
+        _isGuestUser = true;
+        _user = null;
+        return true;
+      },
+      'تسجيل الدخول كضيف',
+    );
+
+    if (result == true) {
+      await _saveLoginState(isGuest: true);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> register(String name, String email, String password) async {
+    final credential = await _executeWithErrorHandling(
+      () => FirebaseService.createUserWithEmailAndPassword(email, password),
+      'إنشاء حساب جديد',
+      timeout: const Duration(seconds: 12),
+    );
+    
+    if (credential != null) {
+      _user = credential.user;
+      _isGuestUser = false;
+      
+      // Create user document in Firestore
+      final userModel = UserModel(
+        id: _user!.uid,
+        name: name,
+        email: email,
+        createdAt: DateTime.now(),
+        lastLoginAt: DateTime.now(),
+      );
+      
+      try {
+        await FirebaseService.createUserDocument(userModel)
+            .timeout(const Duration(seconds: 8));
+      } catch (e) {
+        print('⚠️ فشل في إنشاء مستند المستخدم: $e');
+      }
+
+      await _saveLoginState();
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> resetPassword(String email) async {
+    final result = await _executeWithErrorHandling(
+      () => FirebaseService.sendPasswordResetEmail(email),
+      'إرسال رابط إعادة تعيين كلمة المرور',
+      timeout: const Duration(seconds: 8),
+    );
+    return result != null;
   }
 
   Future<void> signOut() async {
     try {
       if (!_isGuestUser) {
-        await FirebaseService.signOut();
-        await GoogleSignIn().signOut();
-        await FacebookAuth.instance.logOut();
+        // تنفيذ عمليات تسجيل الخروج بشكل متوازي لتحسين الأداء
+        await Future.wait([
+          FirebaseService.signOut().catchError((e) => print('خطأ في Firebase signOut: $e')),
+          GoogleSignIn().signOut().catchError((e) => print('خطأ في Google signOut: $e')),
+          FacebookAuth.instance.logOut().catchError((e) => print('خطأ في Facebook signOut: $e')),
+        ]);
       }
       
       _user = null;
@@ -340,22 +293,6 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> checkSavedLoginState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stayLoggedIn = prefs.getBool('stay_logged_in') ?? false;
-    final isGuest = prefs.getBool('is_guest_user') ?? false;
-    
-    if (stayLoggedIn) {
-      if (isGuest) {
-        _isGuestUser = true;
-        notifyListeners();
-        return true;
-      } else if (_user != null) {
-        return true;
-      }
-    }
-    return false;
-  }
 
   void _setLoading(bool loading) {
     _isLoading = loading;
@@ -373,23 +310,44 @@ class AuthProvider with ChangeNotifier {
   }
 
   String _getArabicErrorMessage(String error) {
-    if (error.contains('user-not-found')) {
-      return 'لا يوجد حساب مرتبط بهذا البريد الإلكتروني';
-    } else if (error.contains('wrong-password')) {
-      return 'كلمة المرور غير صحيحة';
-    } else if (error.contains('email-already-in-use')) {
-      return 'هذا البريد الإلكتروني مستخدم بالفعل';
-    } else if (error.contains('weak-password')) {
-      return 'كلمة المرور ضعيفة جداً';
-    } else if (error.contains('invalid-email')) {
-      return 'البريد الإلكتروني غير صحيح';
-    } else if (error.contains('network-request-failed') || error.contains('انتهت مهلة')) {
-      return 'خطأ في الاتصال بالإنترنت - تحقق من اتصالك وحاول مرة أخرى';
-    } else if (error.contains('too-many-requests')) {
-      return 'تم تجاوز عدد المحاولات المسموح - حاول مرة أخرى لاحقاً';
-    } else if (error.contains('operation-not-allowed')) {
-      return 'هذه الطريقة غير مفعلة حالياً';
+    final errorMap = {
+      'user-not-found': 'لا يوجد حساب مرتبط بهذا البريد الإلكتروني',
+      'wrong-password': 'كلمة المرور غير صحيحة',
+      'email-already-in-use': 'هذا البريد الإلكتروني مستخدم بالفعل',
+      'weak-password': 'كلمة المرور ضعيفة جداً',
+      'invalid-email': 'البريد الإلكتروني غير صحيح',
+      'too-many-requests': 'تم تجاوز عدد المحاولات المسموح - حاول مرة أخرى لاحقاً',
+      'operation-not-allowed': 'هذه الطريقة غير مفعلة حالياً',
+      'account-exists-with-different-credential': 'يوجد حساب بنفس البريد الإلكتروني بطريقة تسجيل دخول مختلفة',
+    };
+
+    for (final entry in errorMap.entries) {
+      if (error.contains(entry.key)) {
+        return entry.value;
+      }
     }
+
+    if (error.contains('network-request-failed') || error.contains('انتهت مهلة')) {
+      return 'خطأ في الاتصال بالإنترنت - تحقق من اتصالك وحاول مرة أخرى';
+    }
+
     return 'حدث خطأ غير متوقع - حاول مرة أخرى';
+  }
+
+  Future<bool> checkSavedLoginState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stayLoggedIn = prefs.getBool('stay_logged_in') ?? false;
+    final isGuest = prefs.getBool('is_guest_user') ?? false;
+    
+    if (stayLoggedIn) {
+      if (isGuest) {
+        _isGuestUser = true;
+        notifyListeners();
+        return true;
+      } else if (_user != null) {
+        return true;
+      }
+    }
+    return false;
   }
 }

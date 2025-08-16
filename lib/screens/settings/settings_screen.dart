@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
-import '../../providers/lesson_provider.dart'; // Import LessonProvider
 import '../../widgets/custom_button.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -39,9 +38,6 @@ class SettingsScreen extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       try {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-        final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
-        
-        await lessonProvider.resetLocalData();
         await userProvider.resetProgress();
         
         if (context.mounted) {
@@ -52,6 +48,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           );
           
+          // Navigate back to home
           context.go('/home');
         }
       } catch (e) {
@@ -90,8 +87,10 @@ class SettingsScreen extends StatelessWidget {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       
+      // Stop listening to user data
       userProvider.stopListening();
       
+      // Sign out
       await authProvider.signOut();
       
       if (context.mounted) {
@@ -111,21 +110,25 @@ class SettingsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Theme Section
             _buildSectionTitle(context, 'المظهر'),
             _buildThemeSettings(context),
             
             const SizedBox(height: 32),
             
+            // Account Section
             _buildSectionTitle(context, 'الحساب'),
             _buildAccountSettings(context),
             
             const SizedBox(height: 32),
             
+            // About Section
             _buildSectionTitle(context, 'حول التطبيق'),
             _buildAboutSettings(context),
             
             const SizedBox(height: 32),
             
+            // Danger Zone
             _buildSectionTitle(context, 'منطقة الخطر', color: Colors.red),
             _buildDangerZone(context),
           ],

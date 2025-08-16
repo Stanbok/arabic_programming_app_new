@@ -181,8 +181,6 @@ class UserProvider with ChangeNotifier {
     try {
       _setLoading(true);
       
-      // إعادة تعيين البيانات المحلية في LessonProvider
-      // سيتم استدعاؤها من الشاشة التي تحتوي على كلا المزودين
       
       // إعادة تعيين البيانات في Firebase
       await FirebaseService.resetUserProgress(_user!.id);

@@ -10,6 +10,8 @@ import '../../models/lesson_model.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/code_block_widget.dart';
 import '../../widgets/mixed_text_widget.dart';
+import '../../widgets/progressive_content_viewer.dart';
+import '../../widgets/lesson_summary_slide.dart';
 
 class LessonScreen extends StatefulWidget {
   final String lessonId;
@@ -29,12 +31,16 @@ class _LessonScreenState extends State<LessonScreen> {
   Timer? _timer;
   int _timeSpent = 0;
   bool _isCompleted = false;
+  Set<int> _viewedSlides = {};
+  bool _canSwipeToNext = false;
+  bool _currentSlideCompleted = false;
 
   @override
   void initState() {
     super.initState();
     _loadLesson();
     _startTimer();
+    _viewedSlides.add(0); // إضافة السلايد الأول كمقروء
   }
 
   @override
@@ -66,21 +72,52 @@ class _LessonScreenState extends State<LessonScreen> {
 
   void _nextSlide() {
     final lesson = _getCurrentLesson();
-    if (lesson != null && _currentSlideIndex < lesson.slides.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+    if (lesson != null) {
+      _viewedSlides.add(_currentSlideIndex);
+      
+      if (_currentSlideIndex < lesson.slides.length) {
+        final nextIndex = _currentSlideIndex + 1;
+        _viewedSlides.add(nextIndex);
+        
+        setState(() {
+          _canSwipeToNext = true;
+        });
+        
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOutCubic,
+        );
+      }
+    }
+  }
+
+  void _goToSlide(int index) {
+    if (_viewedSlides.contains(index)) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOutCubic,
       );
     }
   }
 
-  void _previousSlide() {
-    if (_currentSlideIndex > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+  void _onSlideCompleted() {
+    setState(() {
+      _currentSlideCompleted = true;
+      _canSwipeToNext = true;
+    });
+  }
+
+  bool _canSwipeToPage(int targetIndex) {
+    if (targetIndex < _currentSlideIndex) {
+      return _viewedSlides.contains(targetIndex);
     }
+    
+    if (targetIndex == _currentSlideIndex + 1) {
+      return _currentSlideCompleted && _canSwipeToNext;
+    }
+    
+    return false;
   }
 
   void _finishLesson() {
@@ -96,49 +133,48 @@ class _LessonScreenState extends State<LessonScreen> {
     return Provider.of<LessonProvider>(context, listen: false).currentLesson;
   }
 
-  Widget _buildImage(String imagePath) {
-    // التحقق من نوع المسار
-    if (imagePath.startsWith('assets/')) {
-      // صورة محلية
-      return Image.asset(
-        imagePath,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-            child: Icon(
-              Icons.image_not_supported,
-              size: 40,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          );
-        },
-      );
-    } else if (imagePath.startsWith('http')) {
-      // صورة من الإنترنت
-      return CachedNetworkImage(
-        imageUrl: imagePath,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          color: Theme.of(context).colorScheme.surface,
-          child: const Center(child: CircularProgressIndicator()),
-        ),
-        errorWidget: (context, url, error) => Container(
-          color: Theme.of(context).colorScheme.surface,
-          child: const Icon(Icons.error),
-        ),
-      );
-    } else {
-      // مسار غير معروف
-      return Container(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-        child: Icon(
-          Icons.image,
-          size: 40,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      );
+  List<String> _generateKeyPoints(LessonModel lesson) {
+    if (lesson.summary != null && lesson.summary!.keyPoints.isNotEmpty) {
+      return lesson.summary!.keyPoints;
     }
+    
+    List<String> keyPoints = [];
+    
+    for (final slide in lesson.slides) {
+      final content = slide.content.toLowerCase();
+      
+      if (content.contains('مهم') || content.contains('أساسي') || content.contains('رئيسي')) {
+        final sentences = slide.content.split('.');
+        for (final sentence in sentences) {
+          if (sentence.toLowerCase().contains('مهم') || 
+              sentence.toLowerCase().contains('أساسي') || 
+              sentence.toLowerCase().contains('رئيسي')) {
+            keyPoints.add(sentence.trim());
+            break;
+          }
+        }
+      }
+    }
+    
+    if (keyPoints.isEmpty) {
+      for (final slide in lesson.slides.take(5)) {
+        final firstSentence = slide.content.split('.').first.trim();
+        if (firstSentence.isNotEmpty && firstSentence.length > 20) {
+          keyPoints.add(firstSentence);
+        }
+      }
+    }
+    
+    if (keyPoints.isEmpty) {
+      keyPoints = [
+        'تعلمت أساسيات البرمجة بـ Python',
+        'فهمت كيفية كتابة الكود بشكل صحيح',
+        'تطبقت المفاهيم من خلال الأمثلة العملية',
+        'أصبحت جاهزاً للانتقال للمستوى التالي',
+      ];
+    }
+    
+    return keyPoints.take(6).toList();
   }
 
   @override
@@ -172,33 +208,64 @@ class _LessonScreenState extends State<LessonScreen> {
             );
           }
 
-          if (_isCompleted) {
-            return _buildCompletionScreen(lesson);
-          }
-
           return Column(
             children: [
-              // Progress Bar
-              _buildProgressBar(lesson),
+              _buildInteractiveProgressBar(lesson),
               
-              // Slide Content
               Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentSlideIndex = index;
-                    });
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    if (details.delta.dx > 0) {
+                      final targetIndex = _currentSlideIndex - 1;
+                      if (targetIndex >= 0 && !_canSwipeToPage(targetIndex)) {
+                        return;
+                      }
+                    } else if (details.delta.dx < 0) {
+                      final targetIndex = _currentSlideIndex + 1;
+                      if (!_canSwipeToPage(targetIndex)) {
+                        _showSwipeHint();
+                        return;
+                      }
+                    }
                   },
-                  itemCount: lesson.slides.length,
-                  itemBuilder: (context, index) {
-                    return _buildSlideContent(lesson.slides[index]);
-                  },
+                  child: PageView.builder(
+                    controller: _pageController,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentSlideIndex = index;
+                        _currentSlideCompleted = _viewedSlides.contains(index);
+                        _canSwipeToNext = _currentSlideCompleted;
+                      });
+                    },
+                    physics: _buildPageScrollPhysics(),
+                    itemCount: lesson.slides.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index < lesson.slides.length) {
+                        return ProgressiveContentViewer(
+                          title: lesson.slides[index].title,
+                          content: lesson.slides[index].content,
+                          imageUrl: lesson.slides[index].imageUrl,
+                          codeExample: lesson.slides[index].codeExample,
+                          isLastSlide: index == lesson.slides.length - 1,
+                          onCompleted: () {
+                            _onSlideCompleted();
+                            _nextSlide();
+                          },
+                        );
+                      } else {
+                        return LessonSummarySlide(
+                          lesson: lesson,
+                          timeSpent: _timeSpent,
+                          onStartQuiz: lesson.quiz.isNotEmpty 
+                              ? () => context.push('/quiz/${lesson.id}')
+                              : null,
+                          onGoHome: () => context.go('/home'),
+                        );
+                      }
+                    },
+                  ),
                 ),
               ),
-              
-              // Navigation Controls
-              _buildNavigationControls(lesson),
             ],
           );
         },
@@ -206,8 +273,43 @@ class _LessonScreenState extends State<LessonScreen> {
     );
   }
 
-  Widget _buildProgressBar(LessonModel lesson) {
-    final progress = (_currentSlideIndex + 1) / lesson.slides.length;
+  ScrollPhysics _buildPageScrollPhysics() {
+    return CustomPageScrollPhysics(
+      canScrollToNext: _canSwipeToNext,
+      canScrollToPrevious: _currentSlideIndex > 0 && _viewedSlides.length > 1,
+    );
+  }
+
+  void _showSwipeHint() {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'يجب إكمال قراءة الشريحة الحالية أولاً',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange[600],
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInteractiveProgressBar(LessonModel lesson) {
+    final totalSlides = lesson.slides.length + 1;
+    final progress = (_currentSlideIndex + 1) / totalSlides;
     
     return Container(
       padding: const EdgeInsets.all(16),
@@ -217,7 +319,9 @@ class _LessonScreenState extends State<LessonScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'الشريحة ${_currentSlideIndex + 1} من ${lesson.slides.length}',
+                _currentSlideIndex < lesson.slides.length 
+                    ? 'الشريحة ${_currentSlideIndex + 1} من ${lesson.slides.length}'
+                    : 'ملخص الدرس',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               Text(
@@ -230,277 +334,145 @@ class _LessonScreenState extends State<LessonScreen> {
             ],
           ),
           
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           
-          LinearProgressIndicator(
-            value: progress,
-            backgroundColor: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-            valueColor: AlwaysStoppedAnimation<Color>(
-              Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSlideContent(SlideModel slide) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Slide Title
-          MixedTextWidget(
-            text: slide.title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Slide Image
-          if (slide.imageUrl != null)
-            Container(
-              width: double.infinity,
-              height: 200,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: _buildImage(slide.imageUrl!),
-              ),
-            ),
-          
-          // Slide Content
-          MixedTextWidget(
-            text: slide.content,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              height: 1.6,
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Code Example
-          if (slide.codeExample != null)
-            CodeBlockWidget(
-              code: slide.codeExample!,
-              language: 'python',
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavigationControls(LessonModel lesson) {
-    final isLastSlide = _currentSlideIndex == lesson.slides.length - 1;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Previous Button
-          if (_currentSlideIndex > 0)
-            Expanded(
-              child: CustomButton(
-                text: 'السابق',
-                onPressed: _previousSlide,
-                isOutlined: true,
-                icon: Icons.arrow_back_ios,
-              ),
-            ),
-          
-          if (_currentSlideIndex > 0) const SizedBox(width: 12),
-          
-          // Next/Finish Button
-          Expanded(
-            flex: 2,
-            child: isLastSlide
-                ? CustomButton(
-                    text: 'إنهاء الدرس',
-                    onPressed: _finishLesson,
-                    icon: Icons.flag,
-                  )
-                : CustomButton(
-                    text: 'التالي',
-                    onPressed: _nextSlide,
-                    icon: Icons.arrow_forward_ios,
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompletionScreen(LessonModel lesson) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Congratulations Animation
           Container(
-            width: 120,
-            height: 120,
+            height: 8,
             decoration: BoxDecoration(
-              color: Colors.blue,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(4),
             ),
-            child: const Icon(
-              Icons.check,
-              size: 60,
-              color: Colors.white,
-            ),
-          ),
-          
-          const SizedBox(height: 32),
-          
-          Text(
-            'أحسنت! 👏',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Colors.blue,
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          Text(
-            'لقد أنهيت درس "${lesson.title}" بنجاح',
-            style: Theme.of(context).textTheme.titleMedium,
-            textAlign: TextAlign.center,
-          ),
-          
-          const SizedBox(height: 32),
-          
-          // Summary Card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              ),
-            ),
-            child: Column(
+            child: Stack(
               children: [
-                Text(
-                  'ملخص الدرس',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+                FractionallySizedBox(
+                  widthFactor: progress,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
-                
-                const SizedBox(height: 16),
                 
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildSummaryItem(
-                      icon: Icons.timer,
-                      label: 'الوقت المستغرق',
-                      value: '${(_timeSpent / 60).ceil()} دقيقة',
-                    ),
-                    _buildSummaryItem(
-                      icon: Icons.slideshow,
-                      label: 'الشرائح',
-                      value: '${lesson.slides.length}',
-                    ),
-                  ],
+                  children: List.generate(totalSlides, (index) {
+                    final isViewed = _viewedSlides.contains(index);
+                    final isCurrent = index == _currentSlideIndex;
+                    final canNavigate = isViewed;
+                    
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: canNavigate ? () => _goToSlide(index) : null,
+                        child: Container(
+                          height: 8,
+                          margin: EdgeInsets.only(
+                            right: index < totalSlides - 1 ? 2 : 0,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isCurrent
+                                ? Theme.of(context).colorScheme.primary
+                                : isViewed
+                                    ? Theme.of(context).colorScheme.primary.withOpacity(0.6)
+                                    : Colors.transparent,
+                            borderRadius: BorderRadius.circular(4),
+                            border: canNavigate
+                                ? Border.all(
+                                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                    width: 1,
+                                  )
+                                : null,
+                          ),
+                          child: isCurrent
+                              ? Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                  margin: const EdgeInsets.all(2),
+                                )
+                              : null,
+                        ),
+                      ),
+                    );
+                  }),
                 ),
               ],
             ),
           ),
           
-          const SizedBox(height: 32),
+          const SizedBox(height: 8),
           
-          // Action Buttons
-          Column(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (lesson.quiz.isNotEmpty)
-                SizedBox(
-                  width: double.infinity,
-                  child: CustomButton(
-                    text: 'ابدأ الاختبار',
-                    onPressed: () => context.push('/quiz/${lesson.id}'),
-                    icon: Icons.quiz,
+              if (_viewedSlides.length > 1) ...[
+                Icon(
+                  Icons.swipe,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'مرر للتنقل بين الشرائح المقروءة',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   ),
                 ),
-              
-              const SizedBox(height: 12),
-              
-              SizedBox(
-                width: double.infinity,
-                child: CustomButton(
-                  text: 'العودة للرئيسية',
-                  onPressed: () => context.go('/home'),
-                  isOutlined: true,
-                  icon: Icons.home,
+              ] else ...[
+                Icon(
+                  Icons.touch_app,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
-              ),
+                const SizedBox(width: 4),
+                Text(
+                  'انقر في أي مكان للمتابعة',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+              ],
             ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSummaryItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Column(
-      children: [
-        Icon(
-          icon,
-          size: 24,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-          ),
-        ),
-      ],
+class CustomPageScrollPhysics extends ScrollPhysics {
+  final bool canScrollToNext;
+  final bool canScrollToPrevious;
+
+  const CustomPageScrollPhysics({
+    super.parent,
+    required this.canScrollToNext,
+    required this.canScrollToPrevious,
+  });
+
+  @override
+  CustomPageScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return CustomPageScrollPhysics(
+      parent: buildParent(ancestor),
+      canScrollToNext: canScrollToNext,
+      canScrollToPrevious: canScrollToPrevious,
     );
+  }
+
+  @override
+  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
+    if (offset < 0 && !canScrollToNext) {
+      return 0.0;
+    }
+    if (offset > 0 && !canScrollToPrevious) {
+      return 0.0;
+    }
+    
+    return super.applyPhysicsToUserOffset(position, offset);
   }
 }

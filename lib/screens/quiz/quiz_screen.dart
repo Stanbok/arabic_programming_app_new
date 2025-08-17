@@ -17,9 +17,10 @@ import '../../widgets/quiz/reorder_code_widget.dart';
 import '../../widgets/quiz/find_bug_widget.dart';
 import '../../widgets/quiz/fill_blank_widget.dart';
 import '../../widgets/quiz/true_false_widget.dart';
-import '../../widgets/quiz/match_pairs_widget.dart';
 import '../../widgets/quiz/code_output_widget.dart';
 import '../../widgets/quiz/complete_code_widget.dart';
+import '../../widgets/floating_hint_button.dart';
+import '../../widgets/quiz/quiz_feedback_popup.dart';
 
 class QuizScreen extends StatefulWidget {
   final String lessonId;
@@ -33,11 +34,12 @@ class QuizScreen extends StatefulWidget {
   State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizScreenState extends State<QuizScreen> {
-  PageController _pageController = PageController();
+class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
+  final PageController _pageController = PageController();
   int _currentQuestionIndex = 0;
   List<dynamic> _selectedAnswers = [];
   List<QuestionResult> _questionResults = [];
+  List<bool> _answeredQuestions = [];
   Timer? _timer;
   QuizTimer? _quizTimer;
   int _timeRemaining = 300; // 5 minutes
@@ -78,6 +80,7 @@ class _QuizScreenState extends State<QuizScreen> {
       if (lesson != null && lesson.quiz.isNotEmpty) {
         setState(() {
           _selectedAnswers = List.filled(lesson.quiz.length, null);
+          _answeredQuestions = List.filled(lesson.quiz.length, false);
           _questionResults = [];
           
           // تهيئة مدراء التلميحات
@@ -123,37 +126,199 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void _selectAnswer(dynamic answer) {
+    // منع التعديل إذا تم الإجابة مسبقاً
+    if (_answeredQuestions[_currentQuestionIndex]) return;
+    
     setState(() {
       _selectedAnswers[_currentQuestionIndex] = answer;
     });
+    
+    // عرض الفيدباك الفوري
+    _showFeedbackPopup(answer);
   }
 
-  void _showHint() {
+  void _showFeedbackPopup(dynamic userAnswer) {
+    final lesson = _getCurrentLesson();
+    if (lesson == null) return;
+    
+    final question = lesson.quiz[_currentQuestionIndex];
+    final isCorrect = QuizEngine.isAnswerCorrect(question, userAnswer);
+    
+    // حفظ نتيجة السؤال
+    _saveCurrentQuestionResult();
+    
+    // تمييز السؤال كمجاب عليه
+    setState(() {
+      _answeredQuestions[_currentQuestionIndex] = true;
+    });
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => QuizFeedbackPopup(
+        question: question,
+        userAnswer: userAnswer,
+        isCorrect: isCorrect,
+        onContinue: () {
+          Navigator.of(context).pop();
+          _handleContinueAfterFeedback();
+        },
+      ),
+    );
+  }
+
+  void _handleContinueAfterFeedback() {
+    final lesson = _getCurrentLesson();
+    if (lesson == null) return;
+    
+    final isLastQuestion = _currentQuestionIndex == lesson.quiz.length - 1;
+    
+    if (isLastQuestion) {
+      _submitQuiz();
+    } else {
+      _nextQuestion();
+    }
+  }
+
+  void _showHint() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    if (authProvider.isGuestUser) {
+      _showGuestHintDialog();
+      return;
+    }
+    
+    if (!userProvider.hasHints) {
+      _showNoHintsDialog();
+      return;
+    }
+    
+    final success = await userProvider.useHint();
+    if (!success) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('خطأ في استخدام التلميح'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+    
     final hintManager = _hintManagers[_currentQuestionIndex];
     if (hintManager != null && hintManager.hasMoreHints) {
       final hint = hintManager.getNextHint();
       if (hint != null) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.lightbulb, color: Colors.amber),
-                SizedBox(width: 8),
-                Text('تلميح'),
-              ],
-            ),
-            content: Text(hint),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('فهمت'),
-              ),
-            ],
-          ),
-        );
+        _showHintDialog(hint);
       }
     }
+  }
+
+  void _showHintDialog(String hint) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.amber.withOpacity(0.1), Colors.orange.withOpacity(0.1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.lightbulb, color: Colors.amber, size: 24),
+              SizedBox(width: 8),
+              Text('تلميح مفيد'),
+            ],
+          ),
+        ),
+        content: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.amber.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.amber.withOpacity(0.2)),
+          ),
+          child: Text(
+            hint,
+            style: const TextStyle(
+              fontSize: 16,
+              height: 1.5,
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('فهمت، شكراً!'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGuestHintDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('تسجيل الدخول مطلوب'),
+          ],
+        ),
+        content: const Text(
+          'يجب تسجيل الدخول لاستخدام التلميحات والاستفادة من جميع ميزات التطبيق.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('حسناً'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNoHintsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.lightbulb_outline, color: Colors.grey),
+            SizedBox(width: 8),
+            Text('لا توجد تلميحات متاحة'),
+          ],
+        ),
+        content: const Text(
+          'لقد استنفدت جميع التلميحات المتاحة. يمكنك شراء المزيد من التلميحات باستخدام الجواهر.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('حسناً'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _nextQuestion() {
@@ -169,7 +334,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void _previousQuestion() {
-    if (_currentQuestionIndex > 0) {
+    if (_currentQuestionIndex > 0 && !_hasAnsweredPreviousQuestions()) {
       _pageController.previousPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -440,37 +605,37 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildQuestionContent(QuizQuestionModel question, int questionIndex) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'نوع السؤال: ${_getQuestionTypeLabel(question.type)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
-              ),
-              if (_hintManagers[questionIndex]?.hasMoreHints == true)
-                TextButton.icon(
-                  onPressed: _showHint,
-                  icon: const Icon(Icons.lightbulb_outline, size: 16),
-                  label: const Text('تلميح'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.amber[700],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'نوع السؤال: ${_getQuestionTypeLabel(question.type)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
                   ),
-                ),
+                ],
+              ),
+              
+              const SizedBox(height: 16),
+              
+              _buildQuestionWidget(question, questionIndex),
             ],
           ),
-          
-          const SizedBox(height: 16),
-          
-          _buildQuestionWidget(question, questionIndex),
-        ],
-      ),
+        ),
+        
+        FloatingHintButton(
+          onHintRequested: _showHint,
+          isEnabled: !_isCompleted,
+        ),
+      ],
     );
   }
 
@@ -513,13 +678,6 @@ class _QuizScreenState extends State<QuizScreen> {
           onAnswerSelected: _selectAnswer,
         );
         
-      case QuestionType.matchPairs:
-        return MatchPairsWidget(
-          question: question,
-          userMatches: userAnswer as Map<String, String>?,
-          onMatchesChanged: _selectAnswer,
-        );
-        
       case QuestionType.codeOutput:
         return CodeOutputWidget(
           question: question,
@@ -548,8 +706,6 @@ class _QuizScreenState extends State<QuizScreen> {
         return 'املأ الفراغ';
       case QuestionType.trueFalse:
         return 'صح أو خطأ';
-      case QuestionType.matchPairs:
-        return 'توصيل الأزواج';
       case QuestionType.codeOutput:
         return 'نتيجة الكود';
       case QuestionType.completeCode:
@@ -560,6 +716,12 @@ class _QuizScreenState extends State<QuizScreen> {
   Widget _buildNavigationControls(LessonModel lesson) {
     final isLastQuestion = _currentQuestionIndex == lesson.quiz.length - 1;
     final hasAnswered = _selectedAnswers[_currentQuestionIndex] != null;
+    final isAnswered = _answeredQuestions[_currentQuestionIndex];
+
+    // إخفاء أزرار التنقل إذا تم الإجابة على السؤال
+    if (isAnswered) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -575,7 +737,7 @@ class _QuizScreenState extends State<QuizScreen> {
       ),
       child: Row(
         children: [
-          if (_currentQuestionIndex > 0)
+          if (_currentQuestionIndex > 0 && !_hasAnsweredPreviousQuestions())
             Expanded(
               child: CustomButton(
                 text: 'السابق',
@@ -585,21 +747,27 @@ class _QuizScreenState extends State<QuizScreen> {
               ),
             ),
           
-          if (_currentQuestionIndex > 0) const SizedBox(width: 12),
+          if (_currentQuestionIndex > 0 && !_hasAnsweredPreviousQuestions()) 
+            const SizedBox(width: 12),
           
           Expanded(
             flex: 2,
             child: CustomButton(
-              text: isLastQuestion ? 'إنهاء الاختبار' : 'التالي',
-              onPressed: hasAnswered
-                  ? (isLastQuestion ? _submitQuiz : _nextQuestion)
-                  : null,
-              icon: isLastQuestion ? Icons.check : Icons.arrow_forward_ios,
+              text: 'تأكيد الإجابة',
+              onPressed: hasAnswered ? () => _selectAnswer(_selectedAnswers[_currentQuestionIndex]) : null,
+              icon: Icons.check,
             ),
           ),
         ],
       ),
     );
+  }
+
+  bool _hasAnsweredPreviousQuestions() {
+    for (int i = 0; i < _currentQuestionIndex; i++) {
+      if (_answeredQuestions[i]) return true;
+    }
+    return false;
   }
 
   Widget _buildResultScreen(LessonModel lesson, EnhancedQuizResult result) {

@@ -30,9 +30,6 @@ class QuizEngine {
       case QuestionType.trueFalse:
         isCorrect = _evaluateTrueFalse(question, userAnswer);
         break;
-      case QuestionType.matchPairs:
-        isCorrect = _evaluateMatchPairs(question, userAnswer);
-        break;
       case QuestionType.codeOutput:
         isCorrect = _evaluateCodeOutput(question, userAnswer);
         break;
@@ -172,20 +169,6 @@ class QuizEngine {
     return userAnswer == question.correctBoolean;
   }
   
-  /// تقييم توصيل الأزواج
-  static bool _evaluateMatchPairs(QuizQuestionModel question, dynamic userAnswer) {
-    if (userAnswer is! Map<String, String>) return false;
-    if (question.pairs == null) return false;
-    
-    if (userAnswer.length != question.pairs!.length) return false;
-    
-    for (final entry in question.pairs!.entries) {
-      if (userAnswer[entry.key] != entry.value) return false;
-    }
-    
-    return true;
-  }
-  
   /// تقييم نتيجة الكود
   static bool _evaluateCodeOutput(QuizQuestionModel question, dynamic userAnswer) {
     if (userAnswer is! String) return false;
@@ -216,8 +199,6 @@ class QuizEngine {
         return question.correctAnswers;
       case QuestionType.trueFalse:
         return question.correctBoolean;
-      case QuestionType.matchPairs:
-        return question.pairs;
       case QuestionType.codeOutput:
         return question.expectedOutput;
     }
@@ -349,10 +330,6 @@ class QuizEngine {
         break;
       case QuestionType.trueFalse:
         hints.add('ابحث عن الكلمات المطلقة مثل "دائماً" أو "أبداً"');
-        break;
-      case QuestionType.matchPairs:
-        hints.add('ابدأ بالمطابقات التي تعرفها بثقة');
-        hints.add('استخدم عملية الاستبعاد للخيارات المتبقية');
         break;
       case QuestionType.codeOutput:
         hints.add('تتبع تنفيذ الكود خطوة بخطوة');

@@ -14,6 +14,7 @@ class LessonModel {
   final List<QuizQuestionModel> quiz;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final LessonSummary? summary;
 
   LessonModel({
     required this.id,
@@ -29,6 +30,7 @@ class LessonModel {
     this.quiz = const [],
     required this.createdAt,
     required this.updatedAt,
+    this.summary,
   });
 
   Map<String, dynamic> toMap() {
@@ -46,6 +48,7 @@ class LessonModel {
       'quiz': quiz.map((question) => question.toMap()).toList(),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'summary': summary?.toMap(),
     };
   }
 
@@ -68,6 +71,7 @@ class LessonModel {
           .toList() ?? [],
       createdAt: _parseDateTime(map['createdAt']),
       updatedAt: _parseDateTime(map['updatedAt']),
+      summary: map['summary'] != null ? LessonSummary.fromMap(map['summary']) : null,
     );
   }
 
@@ -120,6 +124,48 @@ class SlideModel {
       imageUrl: map['imageUrl'],
       codeExample: map['codeExample'],
       order: map['order'] ?? 0,
+    );
+  }
+}
+
+class LessonSummary {
+  final String title;
+  final String description;
+  final List<String> keyPoints;
+  final List<String> achievements;
+  final String? nextStepHint;
+  final Map<String, dynamic>? additionalData;
+
+  LessonSummary({
+    required this.title,
+    required this.description,
+    required this.keyPoints,
+    this.achievements = const [],
+    this.nextStepHint,
+    this.additionalData,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'description': description,
+      'keyPoints': keyPoints,
+      'achievements': achievements,
+      'nextStepHint': nextStepHint,
+      'additionalData': additionalData,
+    };
+  }
+
+  factory LessonSummary.fromMap(Map<String, dynamic> map) {
+    return LessonSummary(
+      title: map['title'] ?? '',
+      description: map['description'] ?? '',
+      keyPoints: List<String>.from(map['keyPoints'] ?? []),
+      achievements: List<String>.from(map['achievements'] ?? []),
+      nextStepHint: map['nextStepHint'],
+      additionalData: map['additionalData'] != null 
+          ? Map<String, dynamic>.from(map['additionalData'])
+          : null,
     );
   }
 }
@@ -225,8 +271,6 @@ class QuizQuestionModel {
         return QuestionType.fillInBlank;
       case 'QuestionType.trueFalse':
         return QuestionType.trueFalse;
-      case 'QuestionType.matchPairs':
-        return QuestionType.matchPairs;
       case 'QuestionType.codeOutput':
         return QuestionType.codeOutput;
       case 'QuestionType.completeCode':
@@ -243,7 +287,6 @@ enum QuestionType {
   findBug,           // اكتشف الخطأ
   fillInBlank,       // املأ الفراغ
   trueFalse,         // صح أو خطأ
-  matchPairs,        // توصيل الأزواج
   codeOutput,        // ما هي نتيجة هذا الكود
   completeCode,      // أكمل الكود
 }
@@ -261,8 +304,6 @@ extension QuestionTypeExtension on QuestionType {
         return 'املأ الفراغ';
       case QuestionType.trueFalse:
         return 'صح أو خطأ';
-      case QuestionType.matchPairs:
-        return 'توصيل الأزواج';
       case QuestionType.codeOutput:
         return 'نتيجة الكود';
       case QuestionType.completeCode:
@@ -287,9 +328,6 @@ extension QuestionTypeExtension on QuestionType {
       case 'QuestionType.trueFalse':
       case 'trueFalse':
         return QuestionType.trueFalse;
-      case 'QuestionType.matchPairs':
-      case 'matchPairs':
-        return QuestionType.matchPairs;
       case 'QuestionType.codeOutput':
       case 'codeOutput':
         return QuestionType.codeOutput;

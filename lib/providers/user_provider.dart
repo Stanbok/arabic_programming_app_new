@@ -21,6 +21,9 @@ class UserProvider with ChangeNotifier {
   int get totalXP => _user?.xp ?? 0;
   int get totalGems => _user?.gems ?? 0;
   int get currentLevel => _user?.currentLevel ?? 1;
+  int get availableHints => _user?.availableHints ?? 0;
+  bool get hasHints => availableHints > 0;
+  bool get canBuyHints => (_user?.gems ?? 0) >= 50;
 
   // تحميل فوري لبيانات المستخدم
   Future<void> loadUserDataInstantly(String userId) async {
@@ -74,6 +77,7 @@ class UserProvider with ChangeNotifier {
         completedLessons: [],
         createdAt: DateTime.now(),
         lastLoginAt: DateTime.now(),
+        availableHints: 3,
       );
       
       await FirebaseService.createUserDocument(newUser)
@@ -190,6 +194,44 @@ class UserProvider with ChangeNotifier {
       _setError(e.toString());
     } finally {
       _setLoading(false);
+    }
+  }
+
+  Future<bool> useHint() async {
+    if (_user == null || _user!.availableHints <= 0) return false;
+    
+    try {
+      await updateUserData({
+        'availableHints': FieldValue.increment(-1),
+      });
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> purchaseHints() async {
+    if (_user == null || _user!.gems < 50) return false;
+    
+    try {
+      await updateUserData({
+        'gems': FieldValue.increment(-50),
+        'availableHints': FieldValue.increment(5),
+      });
+      
+      // إضافة سجل المعاملة
+      await FirebaseService.addXPAndGems(
+        _user!.id,
+        0,
+        -50,
+        'شراء 5 تلميحات',
+      );
+      
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      return false;
     }
   }
 

@@ -12,6 +12,7 @@ class UserModel {
   final Map<String, dynamic> settings;
   final DateTime createdAt;
   final DateTime? lastLoginAt;
+  final int availableHints;
 
   UserModel({
     required this.id,
@@ -25,6 +26,7 @@ class UserModel {
     this.settings = const {'theme': 'system', 'notifications': true},
     required this.createdAt,
     this.lastLoginAt,
+    this.availableHints = 3,
   });
 
   Map<String, dynamic> toMap() {
@@ -40,6 +42,7 @@ class UserModel {
       'settings': settings,
       'createdAt': Timestamp.fromDate(createdAt),
       'lastLoginAt': lastLoginAt != null ? Timestamp.fromDate(lastLoginAt!) : null,
+      'availableHints': availableHints,
     };
   }
 
@@ -58,6 +61,7 @@ class UserModel {
       lastLoginAt: map['lastLoginAt'] != null 
           ? (map['lastLoginAt'] as Timestamp).toDate() 
           : null,
+      availableHints: map['availableHints'] ?? 3,
     );
   }
 
@@ -73,6 +77,7 @@ class UserModel {
     Map<String, dynamic>? settings,
     DateTime? createdAt,
     DateTime? lastLoginAt,
+    int? availableHints,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -86,8 +91,12 @@ class UserModel {
       settings: settings ?? this.settings,
       createdAt: createdAt ?? this.createdAt,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
+      availableHints: availableHints ?? this.availableHints,
     );
   }
+
+  bool get hasHints => availableHints > 0;
+  bool get canBuyHints => gems >= 50;
 
   int get level {
     return currentLevel;

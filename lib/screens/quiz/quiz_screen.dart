@@ -71,7 +71,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     print('🔍 بدء تحميل الدرس: ${widget.lessonId}');
     
     try {
-      await lessonProvider.loadLesson(widget.lessonId, context);
+      await lessonProvider.loadLesson(widget.lessonId);
       final lesson = lessonProvider.currentLesson;
       
       if (lesson != null && lesson.quiz.isNotEmpty) {
@@ -183,20 +183,16 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       final startTime = _questionStartTimes[_currentQuestionIndex] ?? DateTime.now();
       final timeSpent = DateTime.now().difference(startTime);
       
-      final isCorrect = QuizEngine.evaluateQuestion(question, userAnswer);
-      final hintsUsed = _hintManagers[_currentQuestionIndex]?.usedHints ?? 0;
-      
-      final result = QuestionResult(
-        questionId: question.id,
-        userAnswer: userAnswer,
-        isCorrect: isCorrect,
+      final questionResult = QuizEngine.evaluateQuestion(
+        question, 
+        userAnswer,
         timeSpent: timeSpent,
-        hintsUsed: hintsUsed,
+        hintsUsed: _hintManagers[_currentQuestionIndex]?.hintsUsed ?? 0,
       );
       
       // إزالة النتيجة السابقة إن وجدت وإضافة الجديدة
       _questionResults.removeWhere((r) => r.questionId == question.id);
-      _questionResults.add(result);
+      _questionResults.add(questionResult);
     }
   }
 
@@ -225,11 +221,13 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     _quizTimer?.stop();
     
     try {
-      final result = await QuizEngine.evaluateQuiz(
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final result = QuizEngine.evaluateQuiz(
+        widget.lessonId,
+        authProvider.user?.uid ?? 'guest',
         lesson.quiz,
-        _selectedAnswers,
         _questionResults,
-        Duration(seconds: 300 - _timeRemaining), // إضافة معامل الوقت المستغرق
+        totalTimeSpent: Duration(seconds: 300 - _timeRemaining),
       );
       
       setState(() {
@@ -469,7 +467,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               
               // زر التلميح العائم
               FloatingHintButton(
-                isEnabled: _hintManagers[_currentQuestionIndex]?.hasHints ?? false,
+                isEnabled: _hintManagers[_currentQuestionIndex]?.hasMoreHints ?? false,
                 onHintRequested: () {
                   final hintManager = _hintManagers[_currentQuestionIndex];
                   if (hintManager != null) {
@@ -508,13 +506,13 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       case QuestionType.fillInBlank:
         return FillBlankWidget(
           question: question,
-          onAnswersSelected: _onAnswerSelected,
+          onAnswersChanged: _onAnswerSelected,
         );
       
       case QuestionType.reorderCode:
         return ReorderCodeWidget(
           question: question,
-          onOrderSelected: _onAnswerSelected,
+          onAnswerSelected: _onAnswerSelected,
         );
       
       case QuestionType.findBug:

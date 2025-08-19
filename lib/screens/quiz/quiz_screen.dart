@@ -71,7 +71,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     print('🔍 بدء تحميل الدرس: ${widget.lessonId}');
     
     try {
-      await lessonProvider.loadLesson(widget.lessonId);
+      await lessonProvider.loadLesson(widget.lessonId, context);
       final lesson = lessonProvider.currentLesson;
       
       if (lesson != null && lesson.quiz.isNotEmpty) {
@@ -82,10 +82,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
           
           // تهيئة مدراء التلميحات
           for (int i = 0; i < lesson.quiz.length; i++) {
-            _hintManagers[i] = HintManager(
-              hints: lesson.quiz[i].hints ?? [],
-              maxHints: 3,
-            );
+            _hintManagers[i] = HintManager(lesson.quiz[i].hints ?? []);
           }
           
           _questionStartTimes[0] = DateTime.now();
@@ -187,7 +184,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       final timeSpent = DateTime.now().difference(startTime);
       
       final isCorrect = QuizEngine.evaluateQuestion(question, userAnswer);
-      final hintsUsed = _hintManagers[_currentQuestionIndex]?.usedHintsCount ?? 0;
+      final hintsUsed = _hintManagers[_currentQuestionIndex]?.usedHints ?? 0;
       
       final result = QuestionResult(
         questionId: question.id,
@@ -195,7 +192,6 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
         isCorrect: isCorrect,
         timeSpent: timeSpent,
         hintsUsed: hintsUsed,
-        difficulty: question.difficulty,
       );
       
       // إزالة النتيجة السابقة إن وجدت وإضافة الجديدة
@@ -233,6 +229,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
         lesson.quiz,
         _selectedAnswers,
         _questionResults,
+        Duration(seconds: 300 - _timeRemaining), // إضافة معامل الوقت المستغرق
       );
       
       setState(() {
@@ -260,35 +257,21 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     if (authProvider.isGuestUser) return;
     
     try {
-      final firebaseService = FirebaseService();
-      
       // حفظ نتيجة الكويز
-      await firebaseService.saveQuizResult(
-        userId: authProvider.user!.uid,
-        lessonId: widget.lessonId,
-        result: QuizResultModel(
-          lessonId: widget.lessonId,
-          score: result.score,
-          totalQuestions: result.totalQuestions,
-          correctAnswers: result.correctAnswers,
-          timeSpent: result.totalTimeSpent,
-          completedAt: DateTime.now(),
-          xpEarned: result.xpEarned,
-          gemsEarned: result.gemsEarned,
-          isPassing: result.isPassing,
-        ),
+      await FirebaseService.saveEnhancedQuizResult(
+        authProvider.user!.uid,
+        widget.lessonId,
+        result,
       );
       
       // إضافة النقاط والجواهر
-      if (result.isPassing) {
-        await firebaseService.addXPAndGems(
-          userId: authProvider.user!.uid,
-          xp: result.xpEarned,
-          gems: result.gemsEarned,
+      if (result.isPassed) {
+        await FirebaseService.addXPAndGems(
+          authProvider.user!.uid,
+          result.score * 10, // XP based on score
+          result.score ~/ 10, // Gems based on score
+          'إكمال كويز ${widget.lessonId}',
         );
-        
-        // تحديث بيانات المستخدم
-        await userProvider.refreshUserData();
       }
       
     } catch (e) {
@@ -310,10 +293,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       // إعادة تهيئة مدراء التلميحات
       final lesson = _getCurrentLesson()!;
       for (int i = 0; i < lesson.quiz.length; i++) {
-        _hintManagers[i] = HintManager(
-          hints: lesson.quiz[i].hints ?? [],
-          maxHints: 3,
-        );
+        _hintManagers[i] = HintManager(lesson.quiz[i].hints ?? []);
       }
       
       _questionStartTimes.clear();
@@ -460,7 +440,6 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                           CustomButton(
                             text: 'السابق',
                             onPressed: _previousQuestion,
-                            variant: ButtonVariant.secondary,
                             icon: Icons.arrow_back,
                           )
                         else
@@ -490,7 +469,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               
               // زر التلميح العائم
               FloatingHintButton(
-                isEnabled: _hintManagers[_currentQuestionIndex]?.hasAvailableHints ?? false,
+                isEnabled: _hintManagers[_currentQuestionIndex]?.hasHints ?? false,
                 onHintRequested: () {
                   final hintManager = _hintManagers[_currentQuestionIndex];
                   if (hintManager != null) {
@@ -529,35 +508,30 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       case QuestionType.fillInBlank:
         return FillBlankWidget(
           question: question,
-          selectedAnswers: selectedAnswer as List<String>?,
           onAnswersSelected: _onAnswerSelected,
         );
       
       case QuestionType.reorderCode:
         return ReorderCodeWidget(
           question: question,
-          selectedOrder: selectedAnswer as List<int>?,
           onOrderSelected: _onAnswerSelected,
         );
       
       case QuestionType.findBug:
         return FindBugWidget(
           question: question,
-          selectedAnswer: selectedAnswer as String?,
           onAnswerSelected: _onAnswerSelected,
         );
       
       case QuestionType.codeOutput:
         return CodeOutputWidget(
           question: question,
-          selectedAnswer: selectedAnswer as String?,
           onAnswerSelected: _onAnswerSelected,
         );
       
       case QuestionType.completeCode:
         return CompleteCodeWidget(
           question: question,
-          selectedAnswer: selectedAnswer as String?,
           onAnswerSelected: _onAnswerSelected,
         );
       
@@ -597,7 +571,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     return Scaffold(
       appBar: AppBar(
         title: const Text('نتيجة الكويز'),
-        backgroundColor: result.isPassing ? Colors.green : Colors.red,
+        backgroundColor: result.isPassed ? Colors.green : Colors.red,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
       ),
@@ -613,23 +587,23 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                 child: Column(
                   children: [
                     Icon(
-                      result.isPassing ? Icons.celebration : Icons.sentiment_dissatisfied,
+                      result.isPassed ? Icons.celebration : Icons.sentiment_dissatisfied,
                       size: 64,
-                      color: result.isPassing ? Colors.green : Colors.red,
+                      color: result.isPassed ? Colors.green : Colors.red,
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      result.isPassing ? 'مبروك! لقد نجحت' : 'للأسف، لم تنجح',
+                      result.isPassed ? 'مبروك! لقد نجحت' : 'للأسف، لم تنجح',
                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: result.isPassing ? Colors.green : Colors.red,
+                        color: result.isPassed ? Colors.green : Colors.red,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${result.score}%',
+                      '${result.percentage.round()}%',
                       style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        color: result.isPassing ? Colors.green : Colors.red,
+                        color: result.isPassed ? Colors.green : Colors.red,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -660,19 +634,19 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                         _buildResultItem(
                           icon: Icons.check_circle,
                           label: 'إجابات صحيحة',
-                          value: '${result.correctAnswers}',
+                          value: '${result.score}',
                           color: Colors.green,
                         ),
                         _buildResultItem(
                           icon: Icons.cancel,
                           label: 'إجابات خاطئة',
-                          value: '${result.totalQuestions - result.correctAnswers}',
+                          value: '${result.totalQuestions - result.score}',
                           color: Colors.red,
                         ),
                         _buildResultItem(
                           icon: Icons.timer,
                           label: 'الوقت المستغرق',
-                          value: _formatDuration(result.totalTimeSpent),
+                          value: _formatDuration(Duration(seconds: result.timeSpent)),
                           color: Colors.blue,
                         ),
                       ],
@@ -682,7 +656,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               ),
             ),
             
-            if (result.isPassing) ...[
+            if (result.isPassed) ...[
               const SizedBox(height: 16),
               Card(
                 color: Colors.green[50],
@@ -704,13 +678,13 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                           _buildRewardItem(
                             icon: Icons.star,
                             label: 'نقاط الخبرة',
-                            value: '+${result.xpEarned}',
+                            value: '+${result.score * 10}',
                             color: Colors.amber,
                           ),
                           _buildRewardItem(
                             icon: Icons.diamond,
                             label: 'الجواهر',
-                            value: '+${result.gemsEarned}',
+                            value: '+${result.score ~/ 10}',
                             color: Colors.blue,
                           ),
                         ],
@@ -761,7 +735,6 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                 child: CustomButton(
                   text: 'العودة للدروس',
                   onPressed: () => context.pop(),
-                  variant: ButtonVariant.secondary,
                   icon: Icons.home,
                 ),
               ),

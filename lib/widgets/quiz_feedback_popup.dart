@@ -232,21 +232,30 @@ class _QuizFeedbackPopupState extends State<QuizFeedbackPopup>
   String _getCorrectAnswerText() {
     switch (widget.question.type) {
       case QuestionType.multipleChoice:
-        final correctIndex = widget.question.correctAnswer as int;
+        final correctIndex = widget.question.correctAnswerIndex ?? 0;
         return widget.question.options![correctIndex];
       
       case QuestionType.trueFalse:
-        return widget.question.correctAnswer == true ? 'صحيح' : 'خطأ';
+        return widget.question.correctBoolean == true ? 'صحيح' : 'خطأ';
       
-      case QuestionType.fillInTheBlank:
-        return widget.question.correctAnswer.toString();
+      case QuestionType.fillInBlank:
+        return widget.question.correctAnswers?.join(', ') ?? '';
       
       case QuestionType.reorderCode:
-        final correctOrder = widget.question.correctAnswer as List<int>;
-        return correctOrder.map((i) => widget.question.options![i]).join('\n');
+        final correctOrder = widget.question.correctOrder ?? [];
+        return correctOrder.map((i) => widget.question.codeBlocks![i]).join('\n');
+      
+      case QuestionType.findBug:
+        return widget.question.correctCode ?? '';
+      
+      case QuestionType.codeOutput:
+        return widget.question.expectedOutput ?? '';
+      
+      case QuestionType.completeCode:
+        return widget.question.codeTemplate ?? '';
       
       default:
-        return widget.question.correctAnswer.toString();
+        return 'غير محدد';
     }
   }
 }

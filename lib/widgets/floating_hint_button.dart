@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // إضافة استيراد cloud_firestore للحصول على FieldValue
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import 'hint_purchase_dialog.dart';

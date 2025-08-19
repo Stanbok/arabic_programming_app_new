@@ -518,19 +518,19 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       case QuestionType.findBug:
         return FindBugWidget(
           question: question,
-          onBugSelected: _onAnswerSelected,
+          onAnswerChanged: _onAnswerSelected,
         );
       
       case QuestionType.codeOutput:
         return CodeOutputWidget(
           question: question,
-          onOutputSelected: _onAnswerSelected,
+          onAnswerChanged: _onAnswerSelected,
         );
       
       case QuestionType.completeCode:
         return CompleteCodeWidget(
           question: question,
-          onCodeCompleted: _onAnswerSelected,
+          onAnswerChanged: _onAnswerSelected,
         );
       
       default:
@@ -727,16 +727,17 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                   ),
                 ),
               
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
               
-              Expanded(
-                child: CustomButton(
-                  text: 'العودة للدروس',
-                  onPressed: () => context.pop(),
-                  icon: Icons.home,
+                Expanded(
+                  child: CustomButton(
+                    text: 'العودة للدروس',
+                    onPressed: () => context.pop(),
+                    icon: Icons.home,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),

@@ -4,6 +4,26 @@ import '../models/enhanced_quiz_result.dart';
 class QuizEngine {
   static const double _passingScore = 70.0;
   
+  /// تحقق من صحة الإجابة (ميثود مبسط للتوافق مع الكود الموجود)
+  static bool isAnswerCorrect(QuizQuestionModel question, dynamic userAnswer) {
+    switch (question.type) {
+      case QuestionType.multipleChoice:
+        return _evaluateMultipleChoice(question, userAnswer);
+      case QuestionType.reorderCode:
+        return _evaluateReorderCode(question, userAnswer);
+      case QuestionType.findBug:
+        return _evaluateFindBug(question, userAnswer);
+      case QuestionType.fillInBlank:
+        return _evaluateFillInBlank(question, userAnswer);
+      case QuestionType.trueFalse:
+        return _evaluateTrueFalse(question, userAnswer);
+      case QuestionType.codeOutput:
+        return _evaluateCodeOutput(question, userAnswer);
+      case QuestionType.completeCode:
+        return _evaluateCompleteCode(question, userAnswer);
+    }
+  }
+  
   /// تقييم إجابة سؤال واحد
   static QuestionResult evaluateQuestion(
     QuizQuestionModel question,

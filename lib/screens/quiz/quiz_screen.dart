@@ -71,7 +71,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     print('🔍 بدء تحميل الدرس: ${widget.lessonId}');
     
     try {
-      await lessonProvider.loadLesson(widget.lessonId);
+      await lessonProvider.loadLesson(widget.lessonId, authProvider.user?.uid ?? 'guest');
       final lesson = lessonProvider.currentLesson;
       
       if (lesson != null && lesson.quiz.isNotEmpty) {
@@ -512,25 +512,25 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       case QuestionType.reorderCode:
         return ReorderCodeWidget(
           question: question,
-          onAnswerSelected: _onAnswerSelected,
+          onOrderChanged: _onAnswerSelected,
         );
       
       case QuestionType.findBug:
         return FindBugWidget(
           question: question,
-          onAnswerSelected: _onAnswerSelected,
+          onBugSelected: _onAnswerSelected,
         );
       
       case QuestionType.codeOutput:
         return CodeOutputWidget(
           question: question,
-          onAnswerSelected: _onAnswerSelected,
+          onOutputSelected: _onAnswerSelected,
         );
       
       case QuestionType.completeCode:
         return CompleteCodeWidget(
           question: question,
-          onAnswerSelected: _onAnswerSelected,
+          onCodeCompleted: _onAnswerSelected,
         );
       
       default:

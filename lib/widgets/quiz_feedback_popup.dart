@@ -33,20 +33,20 @@ class _QuizFeedbackPopupState extends State<QuizFeedbackPopup>
   void initState() {
     super.initState();
     _scaleController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 200),
       vsync: this,
     );
     _slideController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 150),
       vsync: this,
     );
 
     _scaleAnimation = CurvedAnimation(
       parent: _scaleController,
-      curve: Curves.elasticOut,
+      curve: Curves.easeOutBack,
     );
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
+      begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _slideController,
@@ -101,11 +101,10 @@ class _QuizFeedbackPopupState extends State<QuizFeedbackPopup>
                           : Colors.red.withOpacity(0.1),
                     ),
                     child: widget.isCorrect
-                        ? Lottie.asset(
-                            'assets/animations/success.json',
-                            width: 60,
-                            height: 60,
-                            repeat: false,
+                        ? Icon(
+                            Icons.check_circle_rounded,
+                            size: 40,
+                            color: Colors.green[600],
                           )
                         : Icon(
                             Icons.close_rounded,
@@ -118,7 +117,7 @@ class _QuizFeedbackPopupState extends State<QuizFeedbackPopup>
                   
                   // عنوان النتيجة
                   Text(
-                    widget.isCorrect ? 'إجابة صحيحة!' : 'إجابة خاطئة',
+                    widget.isCorrect ? 'إجابة صحيحة! 🎉' : 'إجابة خاطئة 😔',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: widget.isCorrect 
@@ -214,10 +213,30 @@ class _QuizFeedbackPopupState extends State<QuizFeedbackPopup>
                   // زر المتابعة
                   SizedBox(
                     width: double.infinity,
-                    child: CustomButton(
-                      text: 'متابعة',
+                    child: ElevatedButton(
                       onPressed: widget.onContinue,
-                      icon: Icons.arrow_forward_ios,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'متابعة',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_ios, size: 16),
+                        ],
+                      ),
                     ),
                   ),
                 ],

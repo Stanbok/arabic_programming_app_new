@@ -21,6 +21,7 @@ import '../../widgets/quiz/code_output_widget.dart';
 import '../../widgets/quiz/complete_code_widget.dart';
 import '../../widgets/floating_hint_button.dart';
 import '../../widgets/quiz_feedback_popup.dart';
+import '../../models/decay_tracker_model.dart';
 
 class QuizScreen extends StatefulWidget {
   final String lessonId;
@@ -47,6 +48,8 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   EnhancedQuizResult? _result;
   Map<int, HintManager> _hintManagers = {};
   Map<int, DateTime> _questionStartTimes = {};
+  bool _showFeedback = false;
+  bool _canContinue = false;
 
   @override
   void initState() {
@@ -148,6 +151,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     setState(() {
       _selectedAnswers[_currentQuestionIndex] = answer;
       _answeredQuestions[_currentQuestionIndex] = true;
+      _canContinue = true;
     });
   }
 
@@ -251,10 +255,24 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   Future<void> _saveQuizResult(EnhancedQuizResult result) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
     
     if (authProvider.isGuestUser) return;
     
     try {
+      final lesson = _getCurrentLesson();
+      if (lesson == null) return;
+      
+      // جلب بيانات الاضمحلال الحالية
+      final decayTracker = lessonProvider.getDecayTracker(widget.lessonId);
+      
+      // حساب المكافآت باستخدام RewardService مع نظام الاضمحلال
+      final rewards = RewardService.calculateTotalRewards(
+        lesson, 
+        result.percentage, 
+        decayTracker: decayTracker
+      );
+      
       // حفظ نتيجة الكويز
       await FirebaseService.saveEnhancedQuizResult(
         authProvider.user!.uid,
@@ -262,19 +280,50 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
         result,
       );
       
-      // إضافة النقاط والجواهر
-      if (result.isPassed) {
+      // إضافة المكافآت المحسوبة بشكل صحيح
+      if (result.isPassed && (rewards['xp']! > 0 || rewards['gems']! > 0)) {
         await FirebaseService.addXPAndGems(
           authProvider.user!.uid,
-          result.score * 10, // XP based on score
-          result.score ~/ 10, // Gems based on score
-          'إكمال كويز ${widget.lessonId}',
+          rewards['xp']!,
+          rewards['gems']!,
+          'إكمال كويز ${lesson.title}',
         );
+        
+        // عرض معلومات المكافآت والاضمحلال للمستخدم
+        final decayInfo = RewardService.getDecayInfo(decayTracker);
+        _showRewardInfo(rewards, decayInfo);
       }
+      
+      // حفظ النتيجة في LessonProvider لتحديث نظام الاضمحلال
+      await lessonProvider.saveEnhancedQuizResult(
+        authProvider.user!.uid,
+        widget.lessonId,
+        result,
+      );
       
     } catch (e) {
       print('خطأ في حفظ نتيجة الكويز: $e');
       rethrow;
+    }
+  }
+
+  void _showRewardInfo(Map<String, int> rewards, Map<String, dynamic> decayInfo) {
+    if (!decayInfo['isFirstTime'] && decayInfo['decayPercentage'] < 100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('تم تطبيق نظام الاضمحلال: ${decayInfo['decayPercentage']}%'),
+              Text('المكافآت: ${rewards['xp']} XP, ${rewards['gems']} جواهر'),
+              Text(decayInfo['nextResetInfo']),
+            ],
+          ),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -310,6 +359,50 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     final minutes = seconds ~/ 60;
     final remainingSeconds = seconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  void _continueToNext() {
+    final lesson = _getCurrentLesson();
+    if (lesson == null) return;
+
+    final question = lesson.quiz[_currentQuestionIndex];
+    
+    // عرض الفيدباك أولاً
+    _showQuestionFeedback(question);
+    
+    // الانتقال للسؤال التالي بعد 2 ثانية
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (_currentQuestionIndex < lesson.quiz.length - 1) {
+        _saveCurrentQuestionResult();
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        setState(() {
+          _canContinue = false;
+        });
+      } else {
+        _completeQuiz();
+      }
+    });
+  }
+
+  void _showQuestionFeedback(QuizQuestionModel question) {
+    final userAnswer = _selectedAnswers[_currentQuestionIndex];
+    final isCorrect = QuizEngine.isAnswerCorrect(question, userAnswer);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => QuizFeedbackPopup(
+        question: question,
+        userAnswer: userAnswer,
+        isCorrect: isCorrect,
+        onContinue: () {
+          Navigator.of(context).pop();
+        },
+      ),
+    );
   }
 
   @override
@@ -420,6 +513,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                     child: PageView.builder(
                       controller: _pageController,
                       onPageChanged: _onPageChanged,
+                      physics: const NeverScrollableScrollPhysics(),
                       itemCount: lesson.quiz.length,
                       itemBuilder: (context, index) {
                         final question = lesson.quiz[index];
@@ -428,56 +522,96 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   
-                  // أزرار التنقل
+                  // زر المتابعة الذكي
                   Container(
                     padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (_currentQuestionIndex > 0)
-                          CustomButton(
-                            text: 'السابق',
-                            onPressed: _previousQuestion,
-                            icon: Icons.arrow_back,
-                          )
-                        else
-                          const SizedBox(width: 100),
-                        
-                        if (_currentQuestionIndex < lesson.quiz.length - 1)
-                          CustomButton(
-                            text: 'التالي',
-                            onPressed: _answeredQuestions[_currentQuestionIndex] 
-                                ? _nextQuestion 
-                                : null,
-                            icon: Icons.arrow_forward,
-                          )
-                        else
-                          CustomButton(
-                            text: 'إنهاء الكويز',
-                            onPressed: _answeredQuestions[_currentQuestionIndex] 
-                                ? _completeQuiz 
-                                : null,
-                            icon: Icons.check,
+                    child: Center(
+                      child: AnimatedOpacity(
+                        opacity: _canContinue ? 1.0 : 0.3,
+                        duration: const Duration(milliseconds: 200),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _canContinue ? _continueToNext : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: _canContinue ? 4 : 0,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  _currentQuestionIndex < lesson.quiz.length - 1 
+                                      ? 'متابعة' 
+                                      : 'إنهاء الكويز',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  _currentQuestionIndex < lesson.quiz.length - 1 
+                                      ? Icons.arrow_forward 
+                                      : Icons.check,
+                                ),
+                              ],
+                            ),
                           ),
-                      ],
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
               
-              // زر التلميح العائم
-              FloatingHintButton(
-                isEnabled: _hintManagers[_currentQuestionIndex]?.hasMoreHints ?? false,
-                onHintRequested: () {
-                  final hintManager = _hintManagers[_currentQuestionIndex];
-                  if (hintManager != null) {
-                    final hint = hintManager.getNextHint();
-                    if (hint != null) {
-                      _showHint(hint);
-                    }
-                  }
-                },
-              ),
+              if (lesson.quiz[_currentQuestionIndex].showHint == true)
+                Positioned(
+                  top: 120,
+                  left: 16,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: (_hintManagers[_currentQuestionIndex]?.hasMoreHints ?? false) 
+                            ? () {
+                                final hintManager = _hintManagers[_currentQuestionIndex];
+                                if (hintManager != null) {
+                                  final hint = hintManager.getNextHint();
+                                  if (hint != null) {
+                                    _showHint(hint);
+                                  }
+                                }
+                              }
+                            : null,
+                        child: const Icon(
+                          Icons.lightbulb,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );

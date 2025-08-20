@@ -189,6 +189,7 @@ class QuizQuestionModel {
   final String? codeTemplate; // قالب الكود للإكمال
   final int difficulty; // مستوى الصعوبة 1-5
   final List<String>? hints; // تلميحات للمساعدة
+  final bool showHint; // للتحكم في ظهور زر التلميح
 
   QuizQuestionModel({
     required this.id,
@@ -209,6 +210,7 @@ class QuizQuestionModel {
     this.codeTemplate,
     this.difficulty = 1,
     this.hints,
+    this.showHint = true,
   });
 
   Map<String, dynamic> toMap() {
@@ -231,6 +233,7 @@ class QuizQuestionModel {
       'codeTemplate': codeTemplate,
       'difficulty': difficulty,
       'hints': hints,
+      'showHint': showHint,
     };
   }
 
@@ -254,6 +257,7 @@ class QuizQuestionModel {
       codeTemplate: map['codeTemplate'],
       difficulty: map['difficulty'] ?? 1,
       hints: map['hints'] != null ? List<String>.from(map['hints']) : null,
+      showHint: map['showHint'] ?? true,
     );
   }
 

@@ -1,5 +1,5 @@
 {
-  "id": "unit_05_lesson_001",
+  "id": "lesson_006",
   "title": "🔄 الحلقات التكرارية",
   "description": "تعلم كيفية تكرار العمليات باستخدام for وwhile",
   "imageUrl": null,
@@ -10,7 +10,7 @@
   "isPublished": true,
   "slides": [
     {
-      "id": "slide_051_1",
+      "id": "slide_006_1",
       "title": "🔄 قوة التكرار",
       "content": "لماذا نكرر الكود يدوياً؟ دع Python يفعل ذلك! 🔄\n\nالحلقات التكرارية توفر عليك الوقت والجهد:\n• for للتكرار عدد محدد من المرات\n• while للتكرار حسب شرط معين\n\nبدلاً من كتابة print() 100 مرة، اكتبها مرة واحدة واتركها تتكرر!",
       "imageUrl": null,
@@ -20,7 +20,7 @@
   ],
   "quiz": [
     {
-      "id": "q051_1",
+      "id": "q006_1",
       "type": "QuestionType.multipleChoice",
       "question": "🔄 أي حلقة نستخدم للتكرار عدد محدد من المرات؟",
       "options": ["for", "while", "repeat", "loop"],

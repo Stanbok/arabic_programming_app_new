@@ -263,38 +263,46 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       final lesson = _getCurrentLesson();
       if (lesson == null) return;
       
-      // جلب بيانات الاضمحلال الحالية
-      final decayTracker = lessonProvider.getDecayTracker(widget.lessonId);
+      // جلب بيانات الاضمحلال الحالية من LessonProvider
+      DecayTrackerModel? decayTracker = await lessonProvider.getDecayTracker(widget.lessonId);
       
-      // حساب المكافآت باستخدام RewardService مع نظام الاضمحلال
+      // حساب المكافآت باستخدام RewardService مع نظام الاضمحلال الصحيح
       final rewards = RewardService.calculateTotalRewards(
         lesson, 
         result.percentage, 
         decayTracker: decayTracker
       );
       
-      // حفظ نتيجة الكويز
+      // حفظ نتيجة الكويز أولاً
       await FirebaseService.saveEnhancedQuizResult(
         authProvider.user!.uid,
         widget.lessonId,
         result,
       );
       
-      // إضافة المكافآت المحسوبة بشكل صحيح
-      if (result.isPassed && (rewards['xp']! > 0 || rewards['gems']! > 0)) {
+      // إضافة XP (مع الاضمحلال)
+      if (result.isPassed && rewards['xp']! > 0) {
         await FirebaseService.addXPAndGems(
           authProvider.user!.uid,
           rewards['xp']!,
-          rewards['gems']!,
-          'إكمال كويز ${lesson.title}',
+          0,
+          'نقاط خبرة - ${lesson.title}',
         );
-        
-        // عرض معلومات المكافآت والاضمحلال للمستخدم
-        final decayInfo = RewardService.getDecayInfo(decayTracker);
-        _showRewardInfo(rewards, decayInfo);
       }
       
-      // حفظ النتيجة في LessonProvider لتحديث نظام الاضمحلال
+      if (result.isPassed && rewards['gems']! > 0) {
+        await FirebaseService.addXPAndGems(
+          authProvider.user!.uid,
+          0,
+          rewards['gems']!,
+          'جواهر - ${lesson.title} (المرة الأولى)',
+        );
+      }
+      
+      // عرض معلومات المكافآت والاضمحلال للمستخدم
+      final decayInfo = RewardService.getDecayInfo(decayTracker);
+      _showRewardInfo(rewards, decayInfo);
+      
       await lessonProvider.saveEnhancedQuizResult(
         authProvider.user!.uid,
         widget.lessonId,
@@ -367,22 +375,23 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
 
     final question = lesson.quiz[_currentQuestionIndex];
     
-    // عرض الفيدباك أولاً
     _showQuestionFeedback(question);
     
-    // الانتقال للسؤال التالي بعد 2 ثانية
-    Future.delayed(const Duration(milliseconds: 2000), () {
+    // الانتقال فوري بعد عرض الفيدباك
+    Future.delayed(const Duration(milliseconds: 100), () {
       if (_currentQuestionIndex < lesson.quiz.length - 1) {
         _saveCurrentQuestionResult();
         _pageController.nextPage(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 200), // تسريع الانتقال
           curve: Curves.easeInOut,
         );
         setState(() {
           _canContinue = false;
         });
       } else {
-        _completeQuiz();
+        if (!_isCompleted) {
+          _completeQuiz();
+        }
       }
     });
   }
@@ -572,44 +581,76 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               
               if (lesson.quiz[_currentQuestionIndex].showHint == true)
                 Positioned(
-                  top: 120,
-                  left: 16,
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                  top: 100, // تعديل الموضع ليكون أقل تداخلاً
+                  right: 16, // نقل لليمين بدلاً من اليسار
+                  child: Consumer<UserProvider>(
+                    builder: (context, userProvider, child) {
+                      return Container(
+                        width: 40, // تصغير الحجم
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: userProvider.hasHints 
+                              ? Colors.amber.withOpacity(0.9)
+                              : Colors.grey.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(24),
-                        onTap: (_hintManagers[_currentQuestionIndex]?.hasMoreHints ?? false) 
-                            ? () {
-                                final hintManager = _hintManagers[_currentQuestionIndex];
-                                if (hintManager != null) {
-                                  final hint = hintManager.getNextHint();
-                                  if (hint != null) {
-                                    _showHint(hint);
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: (_hintManagers[_currentQuestionIndex]?.hasMoreHints ?? false) 
+                                ? () {
+                                    final hintManager = _hintManagers[_currentQuestionIndex];
+                                    if (hintManager != null) {
+                                      final hint = hintManager.getNextHint();
+                                      if (hint != null) {
+                                        _showHint(hint);
+                                      }
+                                    }
                                   }
-                                }
-                              }
-                            : null,
-                        child: const Icon(
-                          Icons.lightbulb,
-                          color: Colors.white,
-                          size: 24,
+                                : null,
+                            child: Stack(
+                              children: [
+                                const Center(
+                                  child: Icon(
+                                    Icons.lightbulb,
+                                    color: Colors.white,
+                                    size: 20, // تصغير الأيقونة
+                                  ),
+                                ),
+                                if (userProvider.hasHints)
+                                  Positioned(
+                                    top: 2,
+                                    right: 2,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Text(
+                                        '${userProvider.availableHints}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
             ],
@@ -674,7 +715,26 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _showHint(String hint) {
+  void _showHint(String hint) async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    
+    // التحقق من توفر تلميحات مجانية
+    if (userProvider.hasHints) {
+      // استخدام تلميح مجاني
+      final success = await userProvider.useHint();
+      if (success) {
+        _displayHint(hint);
+      }
+    } else if (userProvider.canBuyHints) {
+      // عرض خيار الشراء
+      _showHintPurchaseDialog(hint);
+    } else {
+      // لا توجد جواهر كافية
+      _showInsufficientGemsDialog();
+    }
+  }
+  
+  void _displayHint(String hint) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -695,6 +755,49 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       ),
     );
   }
+  
+  void _showHintPurchaseDialog(String hint) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('شراء تلميح'),
+        content: const Text('لا توجد تلميحات مجانية متاحة. هل تريد شراء 5 تلميحات مقابل 50 جوهرة؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final userProvider = Provider.of<UserProvider>(context, listen: false);
+              final success = await userProvider.purchaseHints();
+              if (success) {
+                _displayHint(hint);
+              }
+            },
+            child: const Text('شراء'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showInsufficientGemsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('جواهر غير كافية'),
+        content: const Text('تحتاج إلى 50 جوهرة لشراء تلميحات إضافية.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('حسناً'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildResultScreen() {
     final result = _result!;
@@ -703,7 +806,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     return Scaffold(
       appBar: AppBar(
         title: const Text('نتيجة الكويز'),
-        backgroundColor: result.isPassed ? Colors.green : Colors.red,
+        backgroundColor: Colors.green,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
       ),
@@ -719,15 +822,15 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                 child: Column(
                   children: [
                     Icon(
-                      result.isPassed ? Icons.celebration : Icons.sentiment_dissatisfied,
+                      Icons.celebration,
                       size: 64,
-                      color: result.isPassed ? Colors.green : Colors.red,
+                      color: Colors.green,
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      result.isPassed ? 'مبروك! لقد نجحت' : 'للأسف، لم تنجح',
+                      'مبروك! لقد نجحت',
                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: result.isPassed ? Colors.green : Colors.red,
+                        color: Colors.green,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -735,7 +838,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                     Text(
                       '${result.percentage.round()}%',
                       style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        color: result.isPassed ? Colors.green : Colors.red,
+                        color: Colors.green,
                         fontWeight: FontWeight.bold,
                       ),
                     ),

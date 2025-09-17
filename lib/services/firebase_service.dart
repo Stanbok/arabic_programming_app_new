@@ -455,23 +455,57 @@ class FirebaseService {
       var currentBatch = _firestore.batch();
       var operationCount = 0;
       
-      // إعادة تعيين بيانات المستخدم الأساسية
       final userRef = _firestore.collection('users').doc(userId);
       currentBatch.update(userRef, {
         'xp': 0,
         'gems': 0,
         'currentLevel': 1,
         'completedLessons': [],
+        'availableHints': 3, // إعادة تعيين التلميحات للقيمة الافتراضية
         'lastActivityAt': FieldValue.serverTimestamp(),
       });
       operationCount++;
+      
+      final decaySnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('decayTrackers')
+          .limit(400)
+          .get();
+      
+      for (var doc in decaySnapshot.docs) {
+        if (operationCount >= 400) {
+          batches.add(currentBatch);
+          currentBatch = _firestore.batch();
+          operationCount = 0;
+        }
+        currentBatch.delete(doc.reference);
+        operationCount++;
+      }
+      
+      final enhancedQuizSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('enhancedQuizResults')
+          .limit(400 - operationCount)
+          .get();
+      
+      for (var doc in enhancedQuizSnapshot.docs) {
+        if (operationCount >= 400) {
+          batches.add(currentBatch);
+          currentBatch = _firestore.batch();
+          operationCount = 0;
+        }
+        currentBatch.delete(doc.reference);
+        operationCount++;
+      }
       
       // حذف نتائج الاختبارات
       final quizSnapshot = await _firestore
           .collection('users')
           .doc(userId)
           .collection('quizResults')
-          .limit(400) // حد Firestore للعمليات في batch واحد
+          .limit(400 - operationCount)
           .get();
       
       for (var doc in quizSnapshot.docs) {

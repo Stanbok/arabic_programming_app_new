@@ -50,6 +50,8 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   Map<int, DateTime> _questionStartTimes = {};
   bool _showFeedback = false;
   bool _canContinue = false;
+  bool _isNavigatingToResult = false;
+  Map<String, int>? _actualRewards;
 
   @override
   void initState() {
@@ -239,7 +241,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       });
       
       // حفظ النتيجة
-      await _saveQuizResult(result);
+      await _saveQuizResult();
       
     } catch (e) {
       print('خطأ في تقييم الكويز: $e');
@@ -252,22 +254,26 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _saveQuizResult(EnhancedQuizResult result) async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
-    
-    if (authProvider.isGuestUser) return;
-    
+  Future<void> _saveQuizResult() async {
+    if (_isNavigatingToResult || _result == null) return;
+    _isNavigatingToResult = true;
+
     try {
-      final lesson = _getCurrentLesson();
-      if (lesson == null) return;
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final lessonProvider = Provider.of<LessonProvider>(context, listen: false);
       
-      // جلب بيانات الاضمحلال الحالية من LessonProvider
-      DecayTrackerModel? decayTracker = await lessonProvider.getDecayTracker(widget.lessonId);
-      
-      // حساب المكافآت باستخدام RewardService مع نظام الاضمحلال الصحيح
-      final rewards = RewardService.calculateTotalRewards(
+      if (authProvider.user == null) return;
+
+      final lesson = _getCurrentLesson()!;
+      final result = _result!;
+
+      // جلب أو إنشاء بيانات الاضمحلال
+      var decayTracker = await lessonProvider.getDecayTracker(
+        authProvider.user!.uid, 
+        widget.lessonId
+      );
+
+      _actualRewards = RewardService.calculateTotalRewards(
         lesson, 
         result.percentage, 
         decayTracker: decayTracker
@@ -281,37 +287,44 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       );
       
       // إضافة XP (مع الاضمحلال)
-      if (result.isPassed && rewards['xp']! > 0) {
+      if (result.isPassed && _actualRewards!['xp']! > 0) {
         await FirebaseService.addXPAndGems(
           authProvider.user!.uid,
-          rewards['xp']!,
+          _actualRewards!['xp']!,
           0,
           'نقاط خبرة - ${lesson.title}',
         );
       }
       
-      if (result.isPassed && rewards['gems']! > 0) {
+      if (result.isPassed && _actualRewards!['gems']! > 0 && (decayTracker?.retakeCount ?? 0) == 0) {
         await FirebaseService.addXPAndGems(
           authProvider.user!.uid,
           0,
-          rewards['gems']!,
+          _actualRewards!['gems']!,
           'جواهر - ${lesson.title} (المرة الأولى)',
+        );
+      }
+      
+      if (result.isPassed) {
+        await lessonProvider.updateDecayTracker(
+          authProvider.user!.uid,
+          widget.lessonId,
+          decayTracker,
         );
       }
       
       // عرض معلومات المكافآت والاضمحلال للمستخدم
       final decayInfo = RewardService.getDecayInfo(decayTracker);
-      _showRewardInfo(rewards, decayInfo);
-      
-      await lessonProvider.saveEnhancedQuizResult(
-        authProvider.user!.uid,
-        widget.lessonId,
-        result,
-      );
+      _showRewardInfo(_actualRewards!, decayInfo);
       
     } catch (e) {
       print('خطأ في حفظ نتيجة الكويز: $e');
-      rethrow;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في حفظ النتيجة: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -344,6 +357,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       _timeRemaining = 300;
       _isCompleted = false;
       _result = null;
+      _actualRewards = null;
       
       // إعادة تهيئة مدراء التلميحات
       final lesson = _getCurrentLesson()!;
@@ -913,13 +927,13 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                           _buildRewardItem(
                             icon: Icons.star,
                             label: 'نقاط الخبرة',
-                            value: '+${result.score * 10}',
+                            value: '+${_actualRewards?['xp'] ?? 0}',
                             color: Colors.amber,
                           ),
                           _buildRewardItem(
                             icon: Icons.diamond,
                             label: 'الجواهر',
-                            value: '+${result.score ~/ 10}',
+                            value: '+${_actualRewards?['gems'] ?? 0}',
                             color: Colors.blue,
                           ),
                         ],
@@ -947,6 +961,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                         _timeRemaining = 300;
                         _isCompleted = false;
                         _result = null;
+                        _actualRewards = null;
                         
                         // إعادة تشغيل المؤقت
                         _quizTimer = QuizTimer(totalTime: const Duration(minutes: 5));

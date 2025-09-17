@@ -51,9 +51,16 @@ class _HintPurchaseDialogState extends State<HintPurchaseDialog>
     });
 
     try {
-      // خصم 50 جوهرة وإضافة 5 تلميحات
+      final currentGems = user.gems;
+      final newGemsAmount = currentGems - 50;
+      
+      if (newGemsAmount < 0) {
+        _showInsufficientGemsDialog();
+        return;
+      }
+      
       await userProvider.updateUserData({
-        'gems': FieldValue.increment(-50),
+        'gems': newGemsAmount, // خصم مباشر
         'availableHints': FieldValue.increment(5),
       });
 

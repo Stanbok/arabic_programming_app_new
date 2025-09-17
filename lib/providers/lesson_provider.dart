@@ -331,7 +331,7 @@ class LessonProvider with ChangeNotifier {
       if (result.isPassed) {
         await markQuizCompletedLocally(lessonId);
         _syncQuizCompletionWithFirebase(userId, lessonId);
-        await _updateDecayTracker(lessonId);
+        await _updateDecayTracker(userId, lessonId);
       }
     } catch (e) {
       print('❌ خطأ في حفظ نتيجة الاختبار: $e');
@@ -345,7 +345,7 @@ class LessonProvider with ChangeNotifier {
       if (QuizEngine.isPassing(result.percentage)) {
         await markQuizCompletedLocally(lessonId);
         _syncQuizCompletionWithFirebase(userId, lessonId);
-        await _updateDecayTracker(lessonId);
+        await _updateDecayTracker(userId, lessonId);
       }
       
       // حفظ الإحصائيات المحلية
@@ -437,26 +437,93 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  Future<void> _updateDecayTracker(String lessonId) async {
+  Future<void> _updateDecayTracker(String userId, String lessonId) async {
     try {
-      final now = DateTime.now();
-      
-      _decayTrackers[lessonId] = _decayTrackers.containsKey(lessonId)
-          ? _decayTrackers[lessonId]!.withDailyReset().withNewRetake()
-          : DecayTrackerModel(
-              lessonId: lessonId,
-              firstCompletionDate: now,
-              lastRetakeDate: now,
-              retakeCount: 0,
-            );
-      
-      await _saveDecayTrackers();
+      final existingTracker = _decayTrackers[lessonId];
+      await updateDecayTracker(userId, lessonId, existingTracker);
     } catch (e) {
-      print('❌ خطأ في تحديث تتبع الاضمحلال: $e');
+      print('❌ خطأ في تحديث decay tracker: $e');
     }
   }
 
-  DecayTrackerModel? getDecayTracker(String lessonId) => _decayTrackers[lessonId];
+  Future<void> updateDecayTracker(String userId, String lessonId, DecayTrackerModel? existingTracker) async {
+    try {
+      final now = DateTime.now();
+      
+      DecayTrackerModel newTracker;
+      
+      if (existingTracker == null) {
+        newTracker = DecayTrackerModel(
+          lessonId: lessonId,
+          firstCompletionDate: now,
+          lastRetakeDate: now,
+          retakeCount: 0, // المرة الأولى - لا اضمحلال
+        );
+      } else {
+        newTracker = existingTracker.withDailyReset().withNewRetake();
+      }
+      
+      // حفظ في الكاش المحلي
+      _decayTrackers[lessonId] = newTracker;
+      await _saveDecayTrackers();
+      
+      // محاولة حفظ في Firebase
+      if (_hasNetworkConnection) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('decayTrackers')
+              .doc(lessonId)
+              .set(newTracker.toMap())
+              .timeout(const Duration(seconds: 5));
+        } catch (e) {
+          print('⚠️ فشل في حفظ decay tracker في Firebase: $e');
+        }
+      }
+      
+    } catch (e) {
+      print('❌ خطأ في تحديث decay tracker: $e');
+    }
+  }
+
+  DecayTrackerModel? getDecayTracker(String userId, String lessonId) async {
+    try {
+      // البحث في الكاش المحلي أولاً
+      if (_decayTrackers.containsKey(lessonId)) {
+        return _decayTrackers[lessonId];
+      }
+      
+      // محاولة جلب من Firebase إذا كان متاحاً
+      if (_hasNetworkConnection) {
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('decayTrackers')
+              .doc(lessonId)
+              .get()
+              .timeout(const Duration(seconds: 3));
+          
+          if (doc.exists) {
+            final tracker = DecayTrackerModel.fromMap(doc.data()!);
+            _decayTrackers[lessonId] = tracker;
+            return tracker;
+          }
+        } catch (e) {
+          print('⚠️ فشل في جلب decay tracker من Firebase: $e');
+        }
+      }
+      
+      // إرجاع null إذا لم يوجد tracker (المرة الأولى)
+      return null;
+    } catch (e) {
+      print('❌ خطأ في جلب decay tracker: $e');
+      return null;
+    }
+  }
+
+  DecayTrackerModel? getDecayTrackerLocal(String lessonId) => _decayTrackers[lessonId];
 
   Future<void> _saveDecayTrackers() async {
     try {

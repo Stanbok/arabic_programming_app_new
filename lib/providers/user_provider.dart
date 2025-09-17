@@ -215,8 +215,15 @@ class UserProvider with ChangeNotifier {
     if (_user == null || _user!.gems < 50) return false;
     
     try {
+      // التحقق من الرصيد مرة أخرى قبل الخصم
+      final currentGems = _user!.gems;
+      if (currentGems < 50) {
+        _setError('رصيد الجواهر غير كافي');
+        return false;
+      }
+      
       await updateUserData({
-        'gems': FieldValue.increment(-50),
+        'gems': currentGems - 50, // خصم مباشر بدلاً من increment سالب
         'availableHints': FieldValue.increment(5),
       });
       

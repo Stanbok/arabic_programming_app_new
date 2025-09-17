@@ -24,6 +24,7 @@ class _FloatingHintButtonState extends State<FloatingHintButton>
   late AnimationController _animationController;
   late Animation<double> _pulseAnimation;
   late Animation<double> _glowAnimation;
+  bool _isProcessing = false; // إضافة متغير لمنع التفعيل المتعدد
 
   @override
   void initState() {
@@ -59,26 +60,39 @@ class _FloatingHintButtonState extends State<FloatingHintButton>
   }
 
   void _handleHintRequest() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    if (_isProcessing) return;
+    
+    setState(() {
+      _isProcessing = true;
+    });
 
-    if (authProvider.isGuestUser) {
-      _showGuestDialog();
-      return;
-    }
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    final user = userProvider.user;
-    if (user == null) return;
-
-    if (user.hasHints) {
-      // استخدام تلميح متاح
-      await _useHint();
-      if (widget.onHintRequested != null) {
-        widget.onHintRequested!();
+      if (authProvider.isGuestUser) {
+        _showGuestDialog();
+        return;
       }
-    } else {
-      // عرض نافذة الشراء
-      _showPurchaseDialog();
+
+      final user = userProvider.user;
+      if (user == null) return;
+
+      if (user.availableHints > 0) {
+        // استخدام تلميح متاح
+        await _useHint();
+        if (widget.onHintRequested != null) {
+          widget.onHintRequested!();
+        }
+      } else {
+        await _showPurchaseDialog();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
@@ -86,9 +100,15 @@ class _FloatingHintButtonState extends State<FloatingHintButton>
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     
     try {
-      await userProvider.updateUserData({
-        'availableHints': FieldValue.increment(-1),
-      });
+      final success = await userProvider.useHint();
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('لا توجد تلميحات متاحة'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -125,11 +145,12 @@ class _FloatingHintButtonState extends State<FloatingHintButton>
     );
   }
 
-  void _showPurchaseDialog() {
-    showDialog(
+  Future<void> _showPurchaseDialog() async {
+    await showDialog(
       context: context,
       builder: (context) => const HintPurchaseDialog(),
     );
+    // المستخدم يحتاج للضغط على الزر مرة أخرى لاستخدام التلميح
   }
 
   @override
@@ -183,7 +204,7 @@ class _FloatingHintButtonState extends State<FloatingHintButton>
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      onTap: _handleHintRequest,
+                      onTap: _isProcessing ? null : _handleHintRequest, // تعطيل الزر أثناء المعالجة
                       borderRadius: BorderRadius.circular(28),
                       child: Container(
                         decoration: BoxDecoration(
@@ -193,12 +214,22 @@ class _FloatingHintButtonState extends State<FloatingHintButton>
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            Icon(
-                              Icons.lightbulb,
-                              color: hasHints ? Colors.white : Colors.grey[600],
-                              size: 28,
-                            ),
-                            if (hintsCount > 0)
+                            if (_isProcessing)
+                              const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            else
+                              Icon(
+                                Icons.lightbulb,
+                                color: hasHints ? Colors.white : Colors.grey[600],
+                                size: 28,
+                              ),
+                            if (hintsCount > 0 && !_isProcessing)
                               Positioned(
                                 top: 4,
                                 right: 4,

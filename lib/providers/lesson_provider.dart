@@ -487,7 +487,7 @@ class LessonProvider with ChangeNotifier {
     }
   }
 
-  DecayTrackerModel? getDecayTracker(String userId, String lessonId) async {
+  Future<DecayTrackerModel?> getDecayTracker(String userId, String lessonId) async {
     try {
       // البحث في الكاش المحلي أولاً
       if (_decayTrackers.containsKey(lessonId)) {

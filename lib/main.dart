@@ -12,7 +12,7 @@ import 'core/services/cache_service.dart';
 import 'features/onboarding/screens/splash_screen.dart';
 import 'features/dev/dev_seeder_screen.dart';
 
-const bool kShowDevSeeder = true;
+const bool kShowDevSeeder = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

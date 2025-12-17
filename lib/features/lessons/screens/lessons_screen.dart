@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+// Core
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../core/services/cache_service.dart';
+
+// Models (alias for LessonCard model)
 import '../../../core/models/path_model.dart';
-import '../../../core/models/lesson_model.dart';
+import '../../../core/models/lesson_model.dart' as model;
 import '../../../core/models/progress_model.dart';
 import '../../../core/models/user_model.dart';
+
+// Widgets
 import '../../../core/widgets/loading_widget.dart';
-import '../widgets/lesson_card.dart';
+import '../widgets/lesson_card.dart'; // Widget version
 import '../widgets/download_sheet.dart';
+
+// Screens
 import '../../no_internet/screens/no_internet_screen.dart';
 import '../../premium/screens/premium_screen.dart';
 import 'lesson_viewer_screen.dart';
@@ -25,7 +33,7 @@ class LessonsScreen extends StatefulWidget {
 
 class _LessonsScreenState extends State<LessonsScreen> {
   List<PathModel> _paths = [];
-  List<LessonModel> _lessons = [];
+  List<model.LessonModel> _lessons = [];
   Map<String, ProgressModel> _progress = {};
   UserModel? _user;
   PathModel? _currentPath;
@@ -102,7 +110,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
     return _lessons.length - 1;
   }
 
-  LessonState _getLessonState(int index, LessonModel lesson) {
+  LessonState _getLessonState(int index, model.LessonModel lesson) {
     final isCompleted = _progress[lesson.id]?.completed ?? false;
     final isCached = CacheService.isLessonCached(lesson.id);
     
@@ -115,7 +123,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
     return LessonState.locked;
   }
 
-  void _onLessonTap(LessonModel lesson, LessonState state) async {
+  void _onLessonTap(model.LessonModel lesson, LessonState state) async {
     if (state == LessonState.locked) return;
 
     final connectivity = context.read<ConnectivityService>();
@@ -137,16 +145,14 @@ class _LessonsScreenState extends State<LessonsScreen> {
     ).then((_) => _loadData());
   }
 
-  void _onDownloadTap(LessonModel lesson) {
+  void _onDownloadTap(model.LessonModel lesson) {
     if (_user == null) return;
 
-    // If premium, download directly
     if (_user!.isPremium) {
       _downloadLesson(lesson);
       return;
     }
 
-    // Show options sheet for non-premium users
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -166,8 +172,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
     ).then((_) => _loadData());
   }
 
-  Future<void> _watchAdAndDownload(LessonModel lesson) async {
-    // Show loading indicator while "watching ad"
+  Future<void> _watchAdAndDownload(model.LessonModel lesson) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -188,7 +193,6 @@ class _LessonsScreenState extends State<LessonsScreen> {
       ),
     );
 
-    // Simulate ad watching (replace with actual ad SDK)
     await Future.delayed(const Duration(seconds: 2));
     
     if (mounted) {
@@ -197,7 +201,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
     }
   }
 
-  Future<void> _downloadLesson(LessonModel lesson) async {
+  Future<void> _downloadLesson(model.LessonModel lesson) async {
     try {
       final authService = context.read<AuthService>();
       final firestoreService = context.read<FirestoreService>();
@@ -258,7 +262,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
                           left: isLeft ? 80 : 0,
                           bottom: 16,
                         ),
-                        child: LessonCard(
+                        child: LessonCard( // Widget
                           lesson: lesson,
                           state: state,
                           index: index + 1,

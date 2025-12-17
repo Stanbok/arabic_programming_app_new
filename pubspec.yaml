@@ -46,12 +46,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  assets:
-    - assets/animations/
-    - assets/avatars/
-    - assets/icons/
-    - assets/data/
-
   fonts:
     - family: Cairo
       fonts:

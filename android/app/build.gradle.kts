@@ -1,10 +1,10 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // Flutter Gradle Plugin (لازم ييجي بعد Android و Kotlin)
     id("dev.flutter.flutter-gradle-plugin")
+    // Firebase Services (Auth / Firestore / Analytics …)
     id("com.google.gms.google-services")
-    id("com.google.firebase.firebase-perf")
 }
 
 android {
@@ -22,16 +22,16 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.python_in_arabic"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // نحدد المعمارية المدعومة (OPPO A7 بيشتغل arm64-v8a)
+        // تعطيل Firebase Performance نهائيًا (أمان إضافي)
+        resValue("bool", "firebase_performance_collection_enabled", "false")
+
+        // دعم arm64 فقط (زي OPPO A7)
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -39,9 +39,10 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // مؤقتًا Debug signing
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
         }
     }
 }
@@ -49,21 +50,14 @@ android {
 flutter {
     source = "../.."
 }
+
 dependencies {
-    // Firebase BoM (Bill of Materials) - بيظبط النسخ أوتوماتيك ✅
+    // Firebase BoM – إدارة النسخ تلقائيًا
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
 
-    // اختار بقى اللي انت عايز تستخدمه 👇 (ضيفهم كلهم أو اللي تحتاجه بس)
-
-    // Authentication
+    // Firebase Services المستخدمة فعليًا
     implementation("com.google.firebase:firebase-auth")
-
-    // Firestore
     implementation("com.google.firebase:firebase-firestore")
-
-    // Storage
     implementation("com.google.firebase:firebase-storage")
-
-    // Analytics (لو هتستخدمها)
     implementation("com.google.firebase:firebase-analytics")
 }

@@ -16,13 +16,14 @@ import '../../../core/models/user_model.dart';
 
 // Widgets
 import '../../../core/widgets/loading_widget.dart';
+import '../../../core/widgets/no_internet_popup.dart';
 import '../widgets/lesson_card.dart'; // Widget version
 import '../widgets/download_sheet.dart';
 
 // Screens
-import '../../no_internet/screens/no_internet_screen.dart';
 import '../../premium/screens/premium_screen.dart';
 import 'lesson_viewer_screen.dart';
+import 'path_completion_screen.dart';
 
 class LessonsScreen extends StatefulWidget {
   const LessonsScreen({super.key});
@@ -37,6 +38,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
   Map<String, ProgressModel> _progress = {};
   UserModel? _user;
   PathModel? _currentPath;
+  int _currentPathIndex = 0;
   bool _isLoading = true;
   final ScrollController _scrollController = ScrollController();
 
@@ -58,16 +60,26 @@ class _LessonsScreenState extends State<LessonsScreen> {
     try {
       final authService = context.read<AuthService>();
       final firestoreService = context.read<FirestoreService>();
+      final connectivity = context.read<ConnectivityService>();
       final userId = authService.currentUser?.uid;
       
       if (userId == null) return;
+
+      // التحقق من الاتصال قبل جلب البيانات
+      if (!connectivity.isOnline) {
+        _showNoInternetPopup();
+        setState(() => _isLoading = false);
+        return;
+      }
 
       final paths = await firestoreService.getPaths();
       final user = await firestoreService.getUser(userId);
       final progress = await firestoreService.getUserProgress(userId);
 
       if (paths.isNotEmpty) {
-        final currentPath = paths.first;
+        final currentPath = _currentPathIndex < paths.length 
+            ? paths[_currentPathIndex] 
+            : paths.first;
         final lessons = await firestoreService.getLessonsForPath(currentPath.id);
         
         setState(() {
@@ -84,8 +96,23 @@ class _LessonsScreenState extends State<LessonsScreen> {
         setState(() => _isLoading = false);
       }
     } catch (e) {
+      // عرض popup فقط إذا كان خطأ شبكة
+      final connectivity = context.read<ConnectivityService>();
+      if (!connectivity.isOnline) {
+        _showNoInternetPopup();
+      }
       setState(() => _isLoading = false);
     }
+  }
+
+  void _showNoInternetPopup() {
+    NoInternetPopup.show(
+      context: context,
+      onRetry: _loadData,
+      onDismiss: () {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      },
+    );
   }
 
   void _scrollToCurrentLesson() {
@@ -129,20 +156,66 @@ class _LessonsScreenState extends State<LessonsScreen> {
     final connectivity = context.read<ConnectivityService>();
     final isCached = CacheService.isLessonCached(lesson.id);
 
+    // عرض popup فقط إذا لم يكن محفوظاً محلياً
     if (!connectivity.isOnline && !isCached) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const NoInternetScreen()),
-      );
+      _showNoInternetPopup();
       return;
     }
 
-    Navigator.of(context).push(
+    // الانتقال للدرس بدون تخزين تلقائي
+    final result = await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LessonViewerScreen(
           lesson: isCached ? CacheService.getCachedLesson(lesson.id)! : lesson,
         ),
       ),
-    ).then((_) => _loadData());
+    );
+
+    if (result == 'completed') {
+      await _loadData();
+      _checkPathCompletion();
+    }
+  }
+
+  void _checkPathCompletion() {
+    final allCompleted = _lessons.every(
+      (lesson) => _progress[lesson.id]?.completed ?? false,
+    );
+
+    if (allCompleted && _currentPath != null) {
+      final totalQuestions = _lessons.fold<int>(
+        0,
+        (sum, lesson) => sum + lesson.quiz.length,
+      );
+
+      final nextPath = _currentPathIndex + 1 < _paths.length
+          ? _paths[_currentPathIndex + 1]
+          : null;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PathCompletionScreen(
+            completedPath: _currentPath!,
+            nextPath: nextPath,
+            totalLessons: _lessons.length,
+            totalQuestions: totalQuestions,
+            onContinue: () {
+              Navigator.pop(context);
+              if (nextPath != null) {
+                setState(() => _currentPathIndex++);
+                _loadData();
+              }
+            },
+            onShare: () {
+              // TODO: تنفيذ المشاركة
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('سيتم إضافة المشاركة قريباً')),
+              );
+            },
+          ),
+        ),
+      );
+    }
   }
 
   void _onDownloadTap(model.LessonModel lesson) {
@@ -196,7 +269,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
     await Future.delayed(const Duration(seconds: 2));
     
     if (mounted) {
-      Navigator.pop(context); // Close loading
+      Navigator.pop(context);
       _downloadLesson(lesson);
     }
   }
@@ -232,6 +305,25 @@ class _LessonsScreenState extends State<LessonsScreen> {
     }
   }
 
+  void _navigateToPreviousPath() {
+    if (_currentPathIndex > 0) {
+      setState(() => _currentPathIndex--);
+      _loadData();
+    }
+  }
+
+  void _navigateToNextPath() {
+    // السماح بالانتقال فقط للمسارات المكتملة
+    final allCompleted = _lessons.every(
+      (lesson) => _progress[lesson.id]?.completed ?? false,
+    );
+    
+    if (allCompleted && _currentPathIndex + 1 < _paths.length) {
+      setState(() => _currentPathIndex++);
+      _loadData();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -262,7 +354,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
                           left: isLeft ? 80 : 0,
                           bottom: 16,
                         ),
-                        child: LessonCard( // Widget
+                        child: LessonCard(
                           lesson: lesson,
                           state: state,
                           index: index + 1,
@@ -289,6 +381,9 @@ class _LessonsScreenState extends State<LessonsScreen> {
   Widget _buildHeader() {
     final completedCount = _progress.values.where((p) => p.completed).length;
     final progress = _lessons.isEmpty ? 0.0 : completedCount / _lessons.length;
+    final canGoBack = _currentPathIndex > 0;
+    final canGoForward = _currentPathIndex + 1 < _paths.length &&
+        _lessons.every((lesson) => _progress[lesson.id]?.completed ?? false);
 
     return Container(
       margin: const EdgeInsets.all(24),
@@ -314,59 +409,110 @@ class _LessonsScreenState extends State<LessonsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Stack(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _currentPath?.name ?? 'مسار التعلم',
-                      style: const TextStyle(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // زر السابق
+                  if (canGoBack)
+                    IconButton(
+                      onPressed: _navigateToPreviousPath,
+                      icon: const Icon(
+                        Icons.chevron_right,
                         color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
+                        size: 32,
+                      ),
+                      tooltip: 'المسار السابق',
+                    )
+                  else
+                    const SizedBox(width: 48),
+                  
+                  const Spacer(),
+                  
+                  // زر التالي
+                  if (canGoForward)
+                    IconButton(
+                      onPressed: _navigateToNextPath,
+                      icon: const Icon(
+                        Icons.chevron_left,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                      tooltip: 'المسار التالي',
+                    )
+                  else
+                    const SizedBox(width: 48),
+                ],
+              ),
+              
+              // المحتوى الأصلي
+              Padding(
+                padding: const EdgeInsets.only(top: 40),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _currentPath?.name ?? 'مسار التعلم',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _currentPath?.description ?? '',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _currentPath?.description ?? '',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 14,
+                    if (_user?.isPremium == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.workspace_premium,
+                              color: Colors.amber,
+                              size: 18,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'VIP',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ],
                 ),
               ),
-              if (_user?.isPremium == true)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.workspace_premium, color: Colors.amber, size: 18),
-                      SizedBox(width: 4),
-                      Text(
-                        'VIP',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
             ],
           ),
+          
           const SizedBox(height: 20),
           Row(
             children: [

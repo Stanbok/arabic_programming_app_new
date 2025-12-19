@@ -200,10 +200,8 @@ class _ResultsScreenState extends State<ResultsScreen>
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (_) => const MainScreen()),
-                      (route) => false,
-                    );
+                    Navigator.of(context).pop(_passed ? 'completed' : null);
+                    Navigator.of(context).pop(_passed ? 'completed' : null);
                   },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),

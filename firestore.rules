@@ -12,31 +12,7 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    // منع الوصول بشكل افتراضي
-    match /{document=**} {
-      allow read, write: if false;
-    }
-    
-    // مجموعة المستخدمين - users collection
-    match /users/{userId} {
-      // كل مستخدم يقرأ بيانات نفسه فقط
-      allow read: if isOwner(userId);
       
-      // كل مستخدم يعدل بيانات نفسه فقط
-      allow write: if isOwner(userId) && validateUserData();
-      
-      // التحقق من صحة بيانات المستخدم
-      function validateUserData() {
-        let data = request.resource.data;
-        return data.keys().hasAll(['name', 'avatarId', 'createdAt']) &&
-               data.name is string &&
-               data.avatarId is number &&
-               data.createdAt is timestamp &&
-               data.name.size() > 0 &&
-               data.name.size() <= 100 &&
-               data.avatarId >= 1 && data.avatarId <= 10;
-      }
-    }
     
     // مجموعة المسارات - paths collection (قراءة عامة)
     match /paths/{pathId} {
@@ -69,15 +45,7 @@ service cloud.firestore {
         return resource.data.userId;
       }
       
-      // التحقق من صحة بيانات التقدم
-      function validateProgressData() {
-        let data = request.resource.data;
-        return data.keys().hasAll(['userId', 'lessonId', 'completed', 'completedAt']) &&
-               data.userId is string &&
-               data.lessonId is string &&
-               data.completed is bool &&
-               data.completedAt is timestamp;
-      }
+      
     }
   }
 }

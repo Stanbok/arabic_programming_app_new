@@ -17,7 +17,13 @@ class ProgressModel {
     return ProgressModel(
       lessonId: lessonId,
       completed: map['completed'] ?? false,
-      completedAt: map['completedAt']?.toDate(),
+      completedAt: map['completedAt'] is DateTime 
+          ? map['completedAt'] 
+          : (map['completedAt'] != null 
+              ? (map['completedAt'].toDate != null 
+                  ? map['completedAt'].toDate() 
+                  : DateTime.tryParse(map['completedAt'].toString()))
+              : null),
       quizScore: map['quizScore'] ?? 0,
       totalQuestions: map['totalQuestions'] ?? 0,
     );
@@ -26,7 +32,7 @@ class ProgressModel {
   Map<String, dynamic> toMap() {
     return {
       'completed': completed,
-      'completedAt': completedAt,
+      'completedAt': completedAt?.toIso8601String(),
       'quizScore': quizScore,
       'totalQuestions': totalQuestions,
     };

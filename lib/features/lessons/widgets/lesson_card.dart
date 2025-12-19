@@ -25,7 +25,7 @@ class LessonCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLocked = state == LessonState.locked;
     final isCompleted = state == LessonState.completed;
-    final isActuallyCached = CacheService.isLessonCached(lesson.id);
+    final isContentCached = CacheService.isLessonContentCached(lesson.id);
 
     return GestureDetector(
       onTap: isLocked ? null : onTap,
@@ -94,7 +94,7 @@ class LessonCard extends StatelessWidget {
                 ),
               ),
               
-              if (state == LessonState.available && onDownload != null && !isActuallyCached)
+              if (!isLocked && !isCompleted && !isContentCached && onDownload != null)
                 IconButton(
                   onPressed: onDownload,
                   icon: const Icon(
@@ -103,7 +103,7 @@ class LessonCard extends StatelessWidget {
                   ),
                   tooltip: 'تحميل للعمل دون إنترنت',
                 )
-              else if (isActuallyCached)
+              else if (isContentCached && !isCompleted)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,

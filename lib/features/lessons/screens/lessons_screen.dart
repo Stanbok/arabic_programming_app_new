@@ -16,7 +16,6 @@ import '../../../core/models/user_model.dart';
 
 // Widgets
 import '../../../core/widgets/loading_widget.dart';
-import '../../../core/widgets/no_internet_popup.dart';
 import '../widgets/lesson_card.dart';
 import '../widgets/download_sheet.dart';
 
@@ -46,7 +45,8 @@ class _LessonsScreenState extends State<LessonsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _currentPathIndex = CacheService.getLastPathIndex();
+    _loadInitialData();
   }
 
   @override
@@ -55,7 +55,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     
     try {
@@ -66,70 +66,49 @@ class _LessonsScreenState extends State<LessonsScreen> {
       
       if (userId == null) return;
 
-      List<PathModel> paths;
-      Map<String, ProgressModel> progress;
-      UserModel? user;
+      _progress = CacheService.getAllLocalProgress();
+
+      _paths = CacheService.getCachedPaths() ?? [];
 
       if (connectivity.isOnline) {
-        // جلب من الإنترنت وتخزينها محلياً
-        paths = await firestoreService.getPaths();
-        user = await firestoreService.getUser(userId);
-        progress = await firestoreService.getUserProgress(userId);
+        // جلب من الإنترنت
+        final serverPaths = await firestoreService.getPaths();
+        _user = await firestoreService.getUser(userId);
+        final serverProgress = await firestoreService.getUserProgress(userId);
         
         // تخزين المسارات محلياً
-        await CacheService.cachePaths(paths);
-      } else {
-        // جلب من التخزين المؤقت
-        paths = CacheService.getCachedPaths() ?? [];
-        user = _user; // استخدام البيانات المحفوظة
-        progress = _progress;
+        await CacheService.cachePaths(serverPaths);
+        _paths = serverPaths;
         
-        // عرض popup فقط في التحميل الأولي إذا لم تتوفر بيانات
-        if (_isInitialLoad && paths.isEmpty) {
-          _showNoInternetPopup();
-          setState(() => _isLoading = false);
-          return;
+        // دمج التقدم
+        await CacheService.mergeProgress(serverProgress);
+        _progress = CacheService.getAllLocalProgress();
+
+        for (final path in _paths) {
+          if (!CacheService.hasLessonsMetadata(path.id)) {
+            final lessons = await firestoreService.getLessonsForPath(path.id);
+            await CacheService.cacheLessonsMetadata(path.id, lessons);
+            
+            // تحميل صور الدروس
+            for (final lesson in lessons) {
+              if (lesson.thumbnailUrl.isNotEmpty) {
+                _cacheImageInBackground(lesson.thumbnailUrl);
+              }
+            }
+          }
         }
       }
 
-      if (paths.isNotEmpty) {
-        final currentPath = _currentPathIndex < paths.length 
-            ? paths[_currentPathIndex] 
-            : paths.first;
-        
-        List<model.LessonModel> lessons;
-        
-        if (connectivity.isOnline) {
-          lessons = await firestoreService.getLessonsForPath(currentPath.id);
-          // تخزين الدروس محلياً
-          await CacheService.cacheLessonsForPath(currentPath.id, lessons);
-        } else {
-          // جلب الدروس من التخزين المؤقت
-          lessons = CacheService.getCachedLessonsForPath(currentPath.id) ?? [];
-        }
-        
-        setState(() {
-          _paths = paths;
-          _currentPath = currentPath;
-          _lessons = lessons;
-          _progress = progress;
-          _user = user;
-          _isLoading = false;
-          _isInitialLoad = false;
-        });
+      // تحميل دروس المسار الحالي
+      await _loadCurrentPathLessons();
 
-        _scrollToCurrentLesson();
-      } else {
-        setState(() {
-          _isLoading = false;
-          _isInitialLoad = false;
-        });
-      }
+      setState(() {
+        _isLoading = false;
+        _isInitialLoad = false;
+      });
+
+      _scrollToCurrentLesson();
     } catch (e) {
-      final connectivity = context.read<ConnectivityService>();
-      if (!connectivity.isOnline && _isInitialLoad) {
-        _showNoInternetPopup();
-      }
       setState(() {
         _isLoading = false;
         _isInitialLoad = false;
@@ -137,14 +116,34 @@ class _LessonsScreenState extends State<LessonsScreen> {
     }
   }
 
-  void _showNoInternetPopup() {
-    NoInternetPopup.show(
-      context: context,
-      onRetry: _loadData,
-      onDismiss: () {
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      },
-    );
+  Future<void> _loadCurrentPathLessons() async {
+    if (_paths.isEmpty) return;
+    
+    _currentPath = _currentPathIndex < _paths.length 
+        ? _paths[_currentPathIndex] 
+        : _paths.first;
+
+    // جلب الدروس من الكاش (البيانات الوصفية فقط)
+    _lessons = CacheService.getCachedLessonsMetadata(_currentPath!.id) ?? [];
+
+    // إذا لم تتوفر في الكاش ومتصل بالإنترنت
+    if (_lessons.isEmpty) {
+      final connectivity = context.read<ConnectivityService>();
+      if (connectivity.isOnline) {
+        final firestoreService = context.read<FirestoreService>();
+        final lessons = await firestoreService.getLessonsForPath(_currentPath!.id);
+        await CacheService.cacheLessonsMetadata(_currentPath!.id, lessons);
+        _lessons = CacheService.getCachedLessonsMetadata(_currentPath!.id) ?? [];
+      }
+    }
+
+    // حفظ المسار الحالي
+    await CacheService.saveLastPathIndex(_currentPathIndex);
+  }
+
+  void _cacheImageInBackground(String url) async {
+    if (CacheService.isImageCached(url)) return;
+    // يمكن إضافة منطق تحميل الصورة هنا
   }
 
   void _scrollToCurrentLesson() {
@@ -181,13 +180,21 @@ class _LessonsScreenState extends State<LessonsScreen> {
 
   LessonState _getLessonState(int index, model.LessonModel lesson) {
     final isCompleted = _progress[lesson.id]?.completed ?? false;
-    final isCached = CacheService.isLessonCached(lesson.id);
+    final isContentCached = CacheService.isLessonContentCached(lesson.id);
     
+    // إذا مكتمل
     if (isCompleted) return LessonState.completed;
-    if (index == 0) return isCached ? LessonState.downloaded : LessonState.available;
     
+    // الدرس الأول دائماً متاح
+    if (index == 0) {
+      return isContentCached ? LessonState.downloaded : LessonState.available;
+    }
+    
+    // الدرس متاح إذا كان الدرس السابق مكتمل
     final prevCompleted = _progress[_lessons[index - 1].id]?.completed ?? false;
-    if (prevCompleted) return isCached ? LessonState.downloaded : LessonState.available;
+    if (prevCompleted) {
+      return isContentCached ? LessonState.downloaded : LessonState.available;
+    }
     
     return LessonState.locked;
   }
@@ -196,25 +203,43 @@ class _LessonsScreenState extends State<LessonsScreen> {
     if (state == LessonState.locked) return;
 
     final connectivity = context.read<ConnectivityService>();
-    final isCached = CacheService.isLessonCached(lesson.id);
+    final isContentCached = CacheService.isLessonContentCached(lesson.id);
 
-    if (!connectivity.isOnline && !isCached) {
-      _showNoInternetPopup();
+    if (!isContentCached) {
+      if (!connectivity.isOnline) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يجب تحميل الدرس أولاً للعمل دون إنترنت'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+      
+      // إذا كان متصل لكن المحتوى غير محمّل، نطلب التحميل
+      _onDownloadTap(lesson);
       return;
     }
 
+    // الدخول للدرس المحمّل
+    final cachedLesson = CacheService.getCachedFullLesson(lesson.id);
+    if (cachedLesson == null) return;
+
     final result = await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => LessonViewerScreen(
-          lesson: isCached ? CacheService.getCachedLesson(lesson.id)! : lesson,
-        ),
+        builder: (_) => LessonViewerScreen(lesson: cachedLesson),
       ),
     );
 
     if (result == 'completed') {
-      await _loadData();
+      await _refreshProgress();
       _checkPathCompletion();
     }
+  }
+
+  Future<void> _refreshProgress() async {
+    _progress = CacheService.getAllLocalProgress();
+    setState(() {});
   }
 
   void _checkPathCompletion() {
@@ -242,8 +267,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
             onContinue: () {
               Navigator.pop(context);
               if (nextPath != null) {
-                setState(() => _currentPathIndex++);
-                _loadData();
+                _navigateToNextPath();
               }
             },
             onShare: () {
@@ -258,20 +282,28 @@ class _LessonsScreenState extends State<LessonsScreen> {
   }
 
   void _onDownloadTap(model.LessonModel lesson) {
-    if (_user == null) return;
+    if (_user == null) {
+      // للمستخدمين غير المسجلين
+      _showDownloadSheet(lesson);
+      return;
+    }
 
     if (_user!.isPremium) {
       _downloadLesson(lesson);
       return;
     }
 
+    _showDownloadSheet(lesson);
+  }
+
+  void _showDownloadSheet(model.LessonModel lesson) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => DownloadSheet(
         lesson: lesson,
-        isPremium: _user!.isPremium,
+        isPremium: _user?.isPremium ?? false,
         onSubscribe: _showPremiumScreen,
         onWatchAd: () => _watchAdAndDownload(lesson),
       ),
@@ -281,7 +313,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
   void _showPremiumScreen() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const PremiumScreen()),
-    ).then((_) => _loadData());
+    ).then((_) => _loadInitialData());
   }
 
   Future<void> _watchAdAndDownload(model.LessonModel lesson) async {
@@ -314,17 +346,61 @@ class _LessonsScreenState extends State<LessonsScreen> {
   }
 
   Future<void> _downloadLesson(model.LessonModel lesson) async {
+    final connectivity = context.read<ConnectivityService>();
+    
+    if (!connectivity.isOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يتطلب الاتصال بالإنترنت للتحميل'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     try {
-      final authService = context.read<AuthService>();
+      // عرض مؤشر التحميل
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('جاري تحميل الدرس...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
       final firestoreService = context.read<FirestoreService>();
-      final userId = authService.currentUser!.uid;
-
-      await CacheService.cacheLesson(lesson);
-      await firestoreService.recordDownload(userId, lesson.id, lesson.title);
-
-      setState(() {});
+      
+      // جلب المحتوى الكامل من الخادم
+      final fullLesson = await firestoreService.getLesson(lesson.id);
+      
+      if (fullLesson != null) {
+        // حفظ المحتوى الكامل محلياً
+        await CacheService.cacheFullLesson(fullLesson);
+        
+        // تسجيل التحميل في الخادم
+        final authService = context.read<AuthService>();
+        final userId = authService.currentUser?.uid;
+        if (userId != null) {
+          await firestoreService.recordDownload(userId, lesson.id, lesson.title);
+        }
+      }
 
       if (mounted) {
+        Navigator.pop(context); // إغلاق مؤشر التحميل
+        setState(() {}); // تحديث الواجهة
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم تحميل الدرس بنجاح'),
@@ -334,6 +410,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
       }
     } catch (e) {
       if (mounted) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('فشل تحميل الدرس'),
@@ -347,14 +424,29 @@ class _LessonsScreenState extends State<LessonsScreen> {
   void _navigateToPreviousPath() {
     if (_currentPathIndex > 0) {
       setState(() => _currentPathIndex--);
-      _loadData();
+      _loadCurrentPathLessons().then((_) {
+        setState(() {});
+        _scrollToCurrentLesson();
+      });
     }
   }
 
   void _navigateToNextPath() {
     if (_currentPathIndex + 1 < _paths.length) {
       setState(() => _currentPathIndex++);
-      _loadData();
+      _loadCurrentPathLessons().then((_) {
+        setState(() {});
+        _scrollToCurrentLesson();
+      });
+    }
+  }
+
+  Future<void> _onRefresh() async {
+    final connectivity = context.read<ConnectivityService>();
+    if (connectivity.isOnline) {
+      await _loadInitialData();
+    } else {
+      await _refreshProgress();
     }
   }
 
@@ -367,7 +459,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _loadData,
+          onRefresh: _onRefresh,
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
@@ -393,7 +485,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
                           state: state,
                           index: index + 1,
                           onTap: () => _onLessonTap(lesson, state),
-                          onDownload: state == LessonState.available
+                          onDownload: (state == LessonState.available)
                               ? () => _onDownloadTap(lesson)
                               : null,
                         ),
@@ -414,7 +506,8 @@ class _LessonsScreenState extends State<LessonsScreen> {
 
   Widget _buildHeader() {
     final completedCount = _getCompletedCountForCurrentPath();
-    final progress = _lessons.isEmpty ? 0.0 : completedCount / _lessons.length;
+    final totalLessons = _lessons.length;
+    final progress = totalLessons == 0 ? 0.0 : completedCount / totalLessons;
     final canGoBack = _currentPathIndex > 0;
     final canGoForward = _currentPathIndex + 1 < _paths.length;
 
@@ -445,21 +538,6 @@ class _LessonsScreenState extends State<LessonsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // زر التالي (يسار في RTL)
-              if (canGoForward)
-                IconButton(
-                  onPressed: _navigateToNextPath,
-                  icon: const Icon(
-                    Icons.chevron_left,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                  tooltip: 'المسار التالي',
-                )
-              else
-                const SizedBox(width: 48),
-              
-              // زر السابق (يمين في RTL)
               if (canGoBack)
                 IconButton(
                   onPressed: _navigateToPreviousPath,
@@ -469,6 +547,19 @@ class _LessonsScreenState extends State<LessonsScreen> {
                     size: 32,
                   ),
                   tooltip: 'المسار السابق',
+                )
+              else
+                const SizedBox(width: 48),
+              
+              if (canGoForward)
+                IconButton(
+                  onPressed: _navigateToNextPath,
+                  icon: const Icon(
+                    Icons.chevron_left,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  tooltip: 'المسار التالي',
                 )
               else
                 const SizedBox(width: 48),
@@ -565,7 +656,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '$completedCount من ${_lessons.length} درس مكتمل',
+            '$completedCount من $totalLessons درس مكتمل',
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
               fontSize: 12,

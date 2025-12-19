@@ -5,6 +5,8 @@ import '../../../core/models/lesson_model.dart';
 import '../../../core/models/progress_model.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/connectivity_service.dart';
+import '../../../core/services/cache_service.dart';
 import 'dart:math' as math;
 
 class ResultsScreen extends StatefulWidget {
@@ -56,12 +58,6 @@ class _ResultsScreenState extends State<ResultsScreen>
   }
 
   Future<void> _saveProgress() async {
-    final authService = context.read<AuthService>();
-    final firestoreService = context.read<FirestoreService>();
-    final userId = authService.currentUser?.uid;
-    
-    if (userId == null) return;
-
     final progress = ProgressModel(
       lessonId: widget.lesson.id,
       completed: true,
@@ -70,8 +66,28 @@ class _ResultsScreenState extends State<ResultsScreen>
       totalQuestions: widget.totalQuestions,
     );
 
-    await firestoreService.saveProgress(userId, widget.lesson.id, progress);
-    await firestoreService.incrementCompletedLessons(userId);
+    await CacheService.saveLocalProgress(widget.lesson.id, progress);
+
+    // مزامنة مع الخادم في الخلفية
+    _syncProgressToServer(progress);
+  }
+
+  Future<void> _syncProgressToServer(ProgressModel progress) async {
+    try {
+      final connectivity = context.read<ConnectivityService>();
+      if (!connectivity.isOnline) return;
+
+      final authService = context.read<AuthService>();
+      final firestoreService = context.read<FirestoreService>();
+      final userId = authService.currentUser?.uid;
+      
+      if (userId == null) return;
+
+      await firestoreService.saveProgress(userId, widget.lesson.id, progress);
+      await firestoreService.incrementCompletedLessons(userId);
+    } catch (e) {
+      // سيتم المزامنة لاحقاً
+    }
   }
 
   @override
@@ -89,7 +105,6 @@ class _ResultsScreenState extends State<ResultsScreen>
   }
 
   void _goToNextLesson() {
-    // إغلاق شاشة النتائج وإرسال نتيجة للشاشة السابقة
     Navigator.of(context).pop('completed');
   }
 

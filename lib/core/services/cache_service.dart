@@ -12,6 +12,7 @@ class CacheService {
   static late Box<String> _pathsBox;
   static late Box<String> _metadataBox;
   static late Box<String> _userBox;
+  static late Box<String> _syncBox;
 
   static Future<void> init() async {
     _lessonsBox = await Hive.openBox<String>('cached_lessons');
@@ -20,9 +21,31 @@ class CacheService {
     _pathsBox = await Hive.openBox<String>('cached_paths');
     _metadataBox = await Hive.openBox<String>('lessons_metadata');
     _userBox = await Hive.openBox<String>('user_data');
+    _syncBox = await Hive.openBox<String>('sync_queue');
   }
 
-  // ==================== تخزين البيانات الوصفية للدروس (بدون المحتوى) ====================
+  // ==================== المسارات ====================
+  
+  static Future<void> cachePaths(List<PathModel> paths) async {
+    final pathsData = paths.map((p) => p.toMap()).toList();
+    await _pathsBox.put('all_paths', jsonEncode(pathsData));
+  }
+
+  static List<PathModel>? getCachedPaths() {
+    final data = _pathsBox.get('all_paths');
+    if (data == null) return null;
+    final List<dynamic> decoded = jsonDecode(data);
+    return decoded.asMap().entries.map((e) {
+      final map = e.value as Map<String, dynamic>;
+      return PathModel.fromMap(map, map['id'] ?? 'path_${e.key}');
+    }).toList();
+  }
+
+  static bool hasCachedPaths() {
+    return _pathsBox.containsKey('all_paths');
+  }
+
+  // ==================== البيانات الوصفية للدروس (بدون المحتوى) ====================
   
   static Future<void> cacheLessonsMetadata(String pathId, List<LessonModel> lessons) async {
     final metadataList = lessons.map((l) => {
@@ -50,8 +73,8 @@ class CacheService {
         title: map['title'] ?? '',
         orderIndex: map['orderIndex'] ?? 0,
         thumbnailUrl: map['thumbnailUrl'] ?? '',
-        cards: [],  // فارغ - المحتوى لا يُحمّل هنا
-        quiz: [],   // فارغ
+        cards: [],
+        quiz: [],
         xpReward: map['xpReward'] ?? 300,
         gemsReward: map['gemsReward'] ?? 5,
       );
@@ -62,7 +85,7 @@ class CacheService {
     return _metadataBox.containsKey('metadata_$pathId');
   }
 
-  // ==================== تخزين المحتوى الكامل للدرس (عند التحميل) ====================
+  // ==================== المحتوى الكامل للدرس ====================
   
   static Future<void> cacheFullLesson(LessonModel lesson) async {
     await _lessonsBox.put('full_${lesson.id}', jsonEncode(lesson.toMap()));
@@ -79,51 +102,16 @@ class CacheService {
   }
 
   // للتوافق مع الكود القديم
-  static Future<void> cacheLesson(LessonModel lesson) async {
-    await cacheFullLesson(lesson);
-  }
+  static Future<void> cacheLesson(LessonModel lesson) => cacheFullLesson(lesson);
+  static LessonModel? getCachedLesson(String lessonId) => getCachedFullLesson(lessonId);
+  static bool isLessonCached(String lessonId) => isLessonContentCached(lessonId);
 
-  static LessonModel? getCachedLesson(String lessonId) {
-    return getCachedFullLesson(lessonId);
-  }
-
-  static bool isLessonCached(String lessonId) {
-    return isLessonContentCached(lessonId);
-  }
-
-  static List<String> getCachedLessonIds() {
-    return _lessonsBox.keys
-        .cast<String>()
-        .where((k) => k.startsWith('full_'))
-        .map((k) => k.replaceFirst('full_', ''))
-        .toList();
-  }
-
-  // ==================== تخزين المسارات ====================
-  
-  static Future<void> cachePaths(List<PathModel> paths) async {
-    final pathsData = paths.map((p) => p.toMap()).toList();
-    await _pathsBox.put('all_paths', jsonEncode(pathsData));
-  }
-
-  static List<PathModel>? getCachedPaths() {
-    final data = _pathsBox.get('all_paths');
-    if (data == null) return null;
-    final List<dynamic> decoded = jsonDecode(data);
-    return decoded.asMap().entries.map((e) {
-      final map = e.value as Map<String, dynamic>;
-      return PathModel.fromMap(map, map['id'] ?? 'path_${e.key}');
-    }).toList();
-  }
-
-  static bool hasCachedPaths() {
-    return _pathsBox.containsKey('all_paths');
-  }
-
-  // ==================== تخزين التقدم محلياً ====================
+  // ==================== التقدم (Offline-First) ====================
   
   static Future<void> saveLocalProgress(String lessonId, ProgressModel progress) async {
     await _progressBox.put('progress_$lessonId', jsonEncode(progress.toMap()));
+    // إضافة للطابور للمزامنة لاحقاً
+    await _addToSyncQueue(lessonId);
   }
 
   static ProgressModel? getLocalProgress(String lessonId) {
@@ -146,23 +134,54 @@ class CacheService {
     return progress;
   }
 
+  static bool isLessonCompleted(String lessonId) {
+    final progress = getLocalProgress(lessonId);
+    return progress?.completed ?? false;
+  }
+
   static Future<void> mergeProgress(Map<String, ProgressModel> serverProgress) async {
     final localProgress = getAllLocalProgress();
     
     for (final entry in serverProgress.entries) {
       final local = localProgress[entry.key];
-      // إذا لم يكن موجود محلياً أو التقدم من الخادم أحدث
+      // إذا الخادم يحتوي على تقدم غير موجود محلياً أو أحدث
       if (local == null || 
           (entry.value.completed && !local.completed) ||
           (entry.value.completedAt != null && 
            local.completedAt != null && 
            entry.value.completedAt!.isAfter(local.completedAt!))) {
-        await saveLocalProgress(entry.key, entry.value);
+        await _progressBox.put('progress_${entry.key}', jsonEncode(entry.value.toMap()));
       }
     }
   }
 
-  // ==================== تخزين آخر مسار تم فتحه ====================
+  // ==================== طابور المزامنة ====================
+  
+  static Future<void> _addToSyncQueue(String lessonId) async {
+    final queue = getSyncQueue();
+    if (!queue.contains(lessonId)) {
+      queue.add(lessonId);
+      await _syncBox.put('pending_sync', jsonEncode(queue));
+    }
+  }
+
+  static List<String> getSyncQueue() {
+    final data = _syncBox.get('pending_sync');
+    if (data == null) return [];
+    return List<String>.from(jsonDecode(data));
+  }
+
+  static Future<void> removeFromSyncQueue(String lessonId) async {
+    final queue = getSyncQueue();
+    queue.remove(lessonId);
+    await _syncBox.put('pending_sync', jsonEncode(queue));
+  }
+
+  static Future<void> clearSyncQueue() async {
+    await _syncBox.delete('pending_sync');
+  }
+
+  // ==================== آخر مسار ====================
   
   static Future<void> saveLastPathIndex(int index) async {
     await _userBox.put('last_path_index', index.toString());
@@ -173,7 +192,17 @@ class CacheService {
     return data != null ? int.tryParse(data) ?? 0 : 0;
   }
 
-  // ==================== تخزين الصور ====================
+  // ==================== علامة التهيئة الأولى ====================
+  
+  static Future<void> markInitialSyncDone() async {
+    await _userBox.put('initial_sync_done', 'true');
+  }
+
+  static bool isInitialSyncDone() {
+    return _userBox.get('initial_sync_done') == 'true';
+  }
+
+  // ==================== الصور ====================
   
   static Future<void> cacheImage(String url, Uint8List bytes) async {
     await _imagesBox.put(url, bytes);
@@ -211,19 +240,15 @@ class CacheService {
     await _pathsBox.clear();
     await _metadataBox.clear();
     await _userBox.clear();
+    await _syncBox.clear();
   }
 
-  // ==================== للتوافق مع الكود القديم ====================
+  // ==================== للتوافق ====================
   
-  static Future<void> cacheLessonsForPath(String pathId, List<LessonModel> lessons) async {
-    await cacheLessonsMetadata(pathId, lessons);
-  }
-
-  static List<LessonModel>? getCachedLessonsForPath(String pathId) {
-    return getCachedLessonsMetadata(pathId);
-  }
-
-  static bool hasLessonsForPath(String pathId) {
-    return hasLessonsMetadata(pathId);
-  }
+  static Future<void> cacheLessonsForPath(String pathId, List<LessonModel> lessons) => 
+      cacheLessonsMetadata(pathId, lessons);
+  static List<LessonModel>? getCachedLessonsForPath(String pathId) => 
+      getCachedLessonsMetadata(pathId);
+  static bool hasLessonsForPath(String pathId) => 
+      hasLessonsMetadata(pathId);
 }

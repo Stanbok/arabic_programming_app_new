@@ -34,9 +34,9 @@ class _ResultsScreenState extends State<ResultsScreen>
   @override
   void initState() {
     super.initState();
-    
+
     _passed = (widget.correctAnswers / widget.totalQuestions) >= 0.5;
-    
+
     _progressController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -80,13 +80,16 @@ class _ResultsScreenState extends State<ResultsScreen>
       final authService = context.read<AuthService>();
       final firestoreService = context.read<FirestoreService>();
       final userId = authService.currentUser?.uid;
-      
+
       if (userId == null) return;
 
       await firestoreService.saveProgress(userId, widget.lesson.id, progress);
       await firestoreService.incrementCompletedLessons(userId);
+      
+      // إزالة من طابور المزامنة
+      await CacheService.removeFromSyncQueue(widget.lesson.id);
     } catch (e) {
-      // سيتم المزامنة لاحقاً
+      // سيتم المزامنة لاحقاً عبر SyncService
     }
   }
 
@@ -125,8 +128,8 @@ class _ResultsScreenState extends State<ResultsScreen>
           child: Column(
             children: [
               const Spacer(),
-              
-              // Result Icon
+
+              // أيقونة النتيجة
               Container(
                 width: 100,
                 height: 100,
@@ -141,10 +144,10 @@ class _ResultsScreenState extends State<ResultsScreen>
                   color: _passed ? AppColors.success : AppColors.error,
                 ),
               ),
-              
+
               const SizedBox(height: 32),
-              
-              // Score Circle
+
+              // دائرة النتيجة
               AnimatedBuilder(
                 animation: _progressAnimation,
                 builder: (context, child) {
@@ -187,10 +190,10 @@ class _ResultsScreenState extends State<ResultsScreen>
                   );
                 },
               ),
-              
+
               const SizedBox(height: 32),
-              
-              // Message
+
+              // الرسالة
               Text(
                 _getResultMessage(),
                 style: const TextStyle(
@@ -200,9 +203,9 @@ class _ResultsScreenState extends State<ResultsScreen>
                 ),
                 textAlign: TextAlign.center,
               ),
-              
+
               const SizedBox(height: 12),
-              
+
               if (_passed)
                 const Text(
                   'تم فتح الدرس التالي',
@@ -219,9 +222,9 @@ class _ResultsScreenState extends State<ResultsScreen>
                     color: AppColors.textSecondary,
                   ),
                 ),
-              
+
               const Spacer(),
-              
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -232,7 +235,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                   child: Text(_passed ? 'متابعة' : 'العودة للدروس'),
                 ),
               ),
-              
+
               if (!_passed) ...[
                 const SizedBox(height: 12),
                 SizedBox(

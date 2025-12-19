@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/lesson_model.dart';
-import '../../../core/services/cache_service.dart';
 
 enum LessonState { locked, available, downloaded, completed }
 
@@ -25,7 +24,7 @@ class LessonCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLocked = state == LessonState.locked;
     final isCompleted = state == LessonState.completed;
-    final isContentCached = CacheService.isLessonContentCached(lesson.id);
+    final isDownloaded = state == LessonState.downloaded;
 
     return GestureDetector(
       onTap: isLocked ? null : onTap,
@@ -53,7 +52,7 @@ class LessonCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // Lesson Number/Status
+              // رقم/حالة الدرس
               Container(
                 width: 48,
                 height: 48,
@@ -66,8 +65,8 @@ class LessonCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              
-              // Lesson Info
+
+              // معلومات الدرس
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,8 +92,8 @@ class LessonCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
-              if (!isLocked && !isCompleted && !isContentCached && onDownload != null)
+
+              if (onDownload != null)
                 IconButton(
                   onPressed: onDownload,
                   icon: const Icon(
@@ -103,7 +102,7 @@ class LessonCard extends StatelessWidget {
                   ),
                   tooltip: 'تحميل للعمل دون إنترنت',
                 )
-              else if (isContentCached && !isCompleted)
+              else if (isDownloaded)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,

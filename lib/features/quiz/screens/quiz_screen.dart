@@ -51,8 +51,8 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
-  void _nextQuestion() {
-    Navigator.pop(context);
+  void _nextQuestion() async {
+    Navigator.pop(context); // إغلاق FeedbackSheet
 
     if (_currentQuestion < widget.lesson.quiz.length - 1) {
       setState(() {
@@ -61,7 +61,8 @@ class _QuizScreenState extends State<QuizScreen> {
         _hasAnswered = false;
       });
     } else {
-      Navigator.of(context).pushReplacement(
+      // الانتقال لشاشة النتائج واستقبال النتيجة
+      final result = await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ResultsScreen(
             lesson: widget.lesson,
@@ -70,6 +71,24 @@ class _QuizScreenState extends State<QuizScreen> {
           ),
         ),
       );
+
+      // إعادة النتيجة لـ LessonViewerScreen
+      if (mounted) {
+        if (result == 'completed') {
+          Navigator.of(context).pop('completed');
+        } else if (result == 'retry') {
+          // إعادة الاختبار
+          setState(() {
+            _currentQuestion = 0;
+            _selectedAnswer = null;
+            _correctAnswers = 0;
+            _hasAnswered = false;
+          });
+        } else {
+          // العودة للدروس بدون إكمال
+          Navigator.of(context).pop();
+        }
+      }
     }
   }
 
@@ -93,8 +112,8 @@ class _QuizScreenState extends State<QuizScreen> {
                   ),
                   TextButton(
                     onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.pop(context);
+                      Navigator.pop(context); // إغلاق الحوار
+                      Navigator.pop(context); // العودة لـ LessonViewerScreen
                     },
                     child: const Text('إنهاء'),
                   ),

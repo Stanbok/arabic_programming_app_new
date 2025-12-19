@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/lesson_model.dart';
+import '../../../core/services/cache_service.dart';
 
 enum LessonState { locked, available, downloaded, completed }
 
@@ -24,7 +25,7 @@ class LessonCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLocked = state == LessonState.locked;
     final isCompleted = state == LessonState.completed;
-    final isDownloaded = state == LessonState.downloaded;
+    final isActuallyCached = CacheService.isLessonCached(lesson.id);
 
     return GestureDetector(
       onTap: isLocked ? null : onTap,
@@ -93,8 +94,7 @@ class LessonCard extends StatelessWidget {
                 ),
               ),
               
-              // Download/Offline Badge
-              if (state == LessonState.available && onDownload != null)
+              if (state == LessonState.available && onDownload != null && !isActuallyCached)
                 IconButton(
                   onPressed: onDownload,
                   icon: const Icon(
@@ -103,7 +103,7 @@ class LessonCard extends StatelessWidget {
                   ),
                   tooltip: 'تحميل للعمل دون إنترنت',
                 )
-              else if (isDownloaded || isCompleted)
+              else if (isActuallyCached)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,

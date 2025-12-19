@@ -5,7 +5,6 @@ import '../../../core/models/lesson_model.dart';
 import '../../../core/models/progress_model.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/firestore_service.dart';
-import '../../home/screens/main_screen.dart';
 import 'dart:math' as math;
 
 class ResultsScreen extends StatefulWidget {
@@ -87,6 +86,19 @@ class _ResultsScreenState extends State<ResultsScreen>
     if (percentage >= 0.8) return 'أحسنت! أداء رائع';
     if (percentage >= 0.5) return 'جيد! استمر في التعلم';
     return 'حاول مرة أخرى';
+  }
+
+  void _goToNextLesson() {
+    // إغلاق شاشة النتائج وإرسال نتيجة للشاشة السابقة
+    Navigator.of(context).pop('completed');
+  }
+
+  void _goBackToLessons() {
+    Navigator.of(context).pop();
+  }
+
+  void _retryQuiz() {
+    Navigator.of(context).pop('retry');
   }
 
   @override
@@ -195,18 +207,14 @@ class _ResultsScreenState extends State<ResultsScreen>
               
               const Spacer(),
               
-              // Buttons
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(_passed ? 'completed' : null);
-                    Navigator.of(context).pop(_passed ? 'completed' : null);
-                  },
+                  onPressed: _passed ? _goToNextLesson : _goBackToLessons,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: Text(_passed ? 'الدرس التالي' : 'العودة للدروس'),
+                  child: Text(_passed ? 'متابعة' : 'العودة للدروس'),
                 ),
               ),
               
@@ -215,7 +223,7 @@ class _ResultsScreenState extends State<ResultsScreen>
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _retryQuiz,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),

@@ -8,7 +8,7 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../core/services/cache_service.dart';
 
-// Models (alias for LessonCard model)
+// Models
 import '../../../core/models/path_model.dart';
 import '../../../core/models/lesson_model.dart' as model;
 import '../../../core/models/progress_model.dart';
@@ -17,7 +17,7 @@ import '../../../core/models/user_model.dart';
 // Widgets
 import '../../../core/widgets/loading_widget.dart';
 import '../../../core/widgets/no_internet_popup.dart';
-import '../widgets/lesson_card.dart'; // Widget version
+import '../widgets/lesson_card.dart';
 import '../widgets/download_sheet.dart';
 
 // Screens
@@ -40,6 +40,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
   PathModel? _currentPath;
   int _currentPathIndex = 0;
   bool _isLoading = true;
+  bool _isInitialLoad = true;
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -65,22 +66,47 @@ class _LessonsScreenState extends State<LessonsScreen> {
       
       if (userId == null) return;
 
-      // التحقق من الاتصال قبل جلب البيانات
-      if (!connectivity.isOnline) {
-        _showNoInternetPopup();
-        setState(() => _isLoading = false);
-        return;
-      }
+      List<PathModel> paths;
+      Map<String, ProgressModel> progress;
+      UserModel? user;
 
-      final paths = await firestoreService.getPaths();
-      final user = await firestoreService.getUser(userId);
-      final progress = await firestoreService.getUserProgress(userId);
+      if (connectivity.isOnline) {
+        // جلب من الإنترنت وتخزينها محلياً
+        paths = await firestoreService.getPaths();
+        user = await firestoreService.getUser(userId);
+        progress = await firestoreService.getUserProgress(userId);
+        
+        // تخزين المسارات محلياً
+        await CacheService.cachePaths(paths);
+      } else {
+        // جلب من التخزين المؤقت
+        paths = CacheService.getCachedPaths() ?? [];
+        user = _user; // استخدام البيانات المحفوظة
+        progress = _progress;
+        
+        // عرض popup فقط في التحميل الأولي إذا لم تتوفر بيانات
+        if (_isInitialLoad && paths.isEmpty) {
+          _showNoInternetPopup();
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
 
       if (paths.isNotEmpty) {
         final currentPath = _currentPathIndex < paths.length 
             ? paths[_currentPathIndex] 
             : paths.first;
-        final lessons = await firestoreService.getLessonsForPath(currentPath.id);
+        
+        List<model.LessonModel> lessons;
+        
+        if (connectivity.isOnline) {
+          lessons = await firestoreService.getLessonsForPath(currentPath.id);
+          // تخزين الدروس محلياً
+          await CacheService.cacheLessonsForPath(currentPath.id, lessons);
+        } else {
+          // جلب الدروس من التخزين المؤقت
+          lessons = CacheService.getCachedLessonsForPath(currentPath.id) ?? [];
+        }
         
         setState(() {
           _paths = paths;
@@ -89,19 +115,25 @@ class _LessonsScreenState extends State<LessonsScreen> {
           _progress = progress;
           _user = user;
           _isLoading = false;
+          _isInitialLoad = false;
         });
 
         _scrollToCurrentLesson();
       } else {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _isInitialLoad = false;
+        });
       }
     } catch (e) {
-      // عرض popup فقط إذا كان خطأ شبكة
       final connectivity = context.read<ConnectivityService>();
-      if (!connectivity.isOnline) {
+      if (!connectivity.isOnline && _isInitialLoad) {
         _showNoInternetPopup();
       }
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _isInitialLoad = false;
+      });
     }
   }
 
@@ -137,6 +169,16 @@ class _LessonsScreenState extends State<LessonsScreen> {
     return _lessons.length - 1;
   }
 
+  int _getCompletedCountForCurrentPath() {
+    int count = 0;
+    for (final lesson in _lessons) {
+      if (_progress[lesson.id]?.completed ?? false) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   LessonState _getLessonState(int index, model.LessonModel lesson) {
     final isCompleted = _progress[lesson.id]?.completed ?? false;
     final isCached = CacheService.isLessonCached(lesson.id);
@@ -156,13 +198,11 @@ class _LessonsScreenState extends State<LessonsScreen> {
     final connectivity = context.read<ConnectivityService>();
     final isCached = CacheService.isLessonCached(lesson.id);
 
-    // عرض popup فقط إذا لم يكن محفوظاً محلياً
     if (!connectivity.isOnline && !isCached) {
       _showNoInternetPopup();
       return;
     }
 
-    // الانتقال للدرس بدون تخزين تلقائي
     final result = await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LessonViewerScreen(
@@ -207,7 +247,6 @@ class _LessonsScreenState extends State<LessonsScreen> {
               }
             },
             onShare: () {
-              // TODO: تنفيذ المشاركة
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('سيتم إضافة المشاركة قريباً')),
               );
@@ -313,12 +352,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
   }
 
   void _navigateToNextPath() {
-    // السماح بالانتقال فقط للمسارات المكتملة
-    final allCompleted = _lessons.every(
-      (lesson) => _progress[lesson.id]?.completed ?? false,
-    );
-    
-    if (allCompleted && _currentPathIndex + 1 < _paths.length) {
+    if (_currentPathIndex + 1 < _paths.length) {
       setState(() => _currentPathIndex++);
       _loadData();
     }
@@ -379,11 +413,10 @@ class _LessonsScreenState extends State<LessonsScreen> {
   }
 
   Widget _buildHeader() {
-    final completedCount = _progress.values.where((p) => p.completed).length;
+    final completedCount = _getCompletedCountForCurrentPath();
     final progress = _lessons.isEmpty ? 0.0 : completedCount / _lessons.length;
     final canGoBack = _currentPathIndex > 0;
-    final canGoForward = _currentPathIndex + 1 < _paths.length &&
-        _lessons.every((lesson) => _progress[lesson.id]?.completed ?? false);
+    final canGoForward = _currentPathIndex + 1 < _paths.length;
 
     return Container(
       margin: const EdgeInsets.all(24),
@@ -409,107 +442,100 @@ class _LessonsScreenState extends State<LessonsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // زر السابق
-                  if (canGoBack)
-                    IconButton(
-                      onPressed: _navigateToPreviousPath,
-                      icon: const Icon(
-                        Icons.chevron_right,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                      tooltip: 'المسار السابق',
-                    )
-                  else
-                    const SizedBox(width: 48),
-                  
-                  const Spacer(),
-                  
-                  // زر التالي
-                  if (canGoForward)
-                    IconButton(
-                      onPressed: _navigateToNextPath,
-                      icon: const Icon(
-                        Icons.chevron_left,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                      tooltip: 'المسار التالي',
-                    )
-                  else
-                    const SizedBox(width: 48),
-                ],
-              ),
+              // زر التالي (يسار في RTL)
+              if (canGoForward)
+                IconButton(
+                  onPressed: _navigateToNextPath,
+                  icon: const Icon(
+                    Icons.chevron_left,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  tooltip: 'المسار التالي',
+                )
+              else
+                const SizedBox(width: 48),
               
-              // المحتوى الأصلي
-              Padding(
-                padding: const EdgeInsets.only(top: 40),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // زر السابق (يمين في RTL)
+              if (canGoBack)
+                IconButton(
+                  onPressed: _navigateToPreviousPath,
+                  icon: const Icon(
+                    Icons.chevron_right,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  tooltip: 'المسار السابق',
+                )
+              else
+                const SizedBox(width: 48),
+            ],
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // المحتوى
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _currentPath?.name ?? 'مسار التعلم',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _currentPath?.description ?? '',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
-                              fontSize: 14,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                    Text(
+                      _currentPath?.name ?? 'مسار التعلم',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (_user?.isPremium == true)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.workspace_premium,
-                              color: Colors.amber,
-                              size: 18,
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              'VIP',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _currentPath?.description ?? '',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 14,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
+              if (_user?.isPremium == true)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.workspace_premium,
+                        color: Colors.amber,
+                        size: 18,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        'VIP',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
           
@@ -520,7 +546,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: LinearProgressIndicator(
-                    value: progress,
+                    value: progress.clamp(0.0, 1.0),
                     backgroundColor: Colors.white24,
                     valueColor: const AlwaysStoppedAnimation(Colors.white),
                     minHeight: 8,
@@ -529,7 +555,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
               ),
               const SizedBox(width: 12),
               Text(
-                '${(progress * 100).toInt()}%',
+                '${(progress * 100).toInt().clamp(0, 100)}%',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,

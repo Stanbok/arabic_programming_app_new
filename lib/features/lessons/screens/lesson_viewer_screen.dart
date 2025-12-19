@@ -59,14 +59,19 @@ class _LessonViewerScreenState extends State<LessonViewerScreen> {
     }
   }
 
-  void _startQuiz() {
+  void _startQuiz() async {
     CacheService.clearLessonPosition(widget.lesson.id);
     
-    Navigator.of(context).pushReplacement(
+    final result = await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => QuizScreen(lesson: widget.lesson),
       ),
     );
+
+    // إذا اكتمل الدرس، نعود لشاشة الدروس مع النتيجة
+    if (result == 'completed' && mounted) {
+      Navigator.of(context).pop('completed');
+    }
   }
 
   @override

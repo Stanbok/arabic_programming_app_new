@@ -29,6 +29,18 @@ class PathModel {
     );
   }
 
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'level': level,
+      'orderIndex': orderIndex,
+      'lessonIds': lessonIds,
+      'thumbnailUrl': thumbnailUrl,
+    };
+  }
+
   double get xpMultiplier {
     switch (level) {
       case 1: return 1.0;

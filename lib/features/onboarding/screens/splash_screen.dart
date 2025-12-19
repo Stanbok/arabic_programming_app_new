@@ -1,69 +1,58 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_strings.dart';
-import '../../../core/constants/route_names.dart';
-import '../../../providers/auth_provider.dart';
-import '../../../providers/onboarding_provider.dart';
+import 'dart:async';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/services/auth_service.dart';
+import 'package:provider/provider.dart';
+import 'carousel_screen.dart';
+import '../../home/screens/main_screen.dart';
 
-class SplashScreen extends ConsumerStatefulWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  ConsumerState<SplashScreen> createState() => _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen>
+class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
+  late Animation<double> _opacityAnimation;
 
   @override
   void initState() {
     super.initState();
+    
     _controller = AnimationController(
-      vsync: this,
       duration: const Duration(milliseconds: 1500),
+      vsync: this,
     );
 
     _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
-      ),
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.3, 0.8, curve: Curves.easeIn),
-      ),
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
     );
 
     _controller.forward();
-    _navigateAfterDelay();
+
+    Timer(const Duration(seconds: 2), _navigate);
   }
 
-  Future<void> _navigateAfterDelay() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-
-    final hasCompletedOnboarding = ref.read(hasCompletedOnboardingProvider);
-    final authState = ref.read(authStateProvider);
-
-    authState.when(
-      data: (user) {
-        if (hasCompletedOnboarding && user != null) {
-          context.goNamed(RouteNames.main);
-        } else {
-          context.goNamed(RouteNames.onboardingFeatures);
-        }
-      },
-      loading: () {},
-      error: (_, __) => context.goNamed(RouteNames.onboardingFeatures),
-    );
+  void _navigate() {
+    final authService = context.read<AuthService>();
+    
+    if (authService.currentUser != null) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const CarouselScreen()),
+      );
+    }
   }
 
   @override
@@ -75,60 +64,51 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.primary,
       body: Center(
         child: AnimatedBuilder(
           animation: _controller,
           builder: (context, child) {
-            return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        '🐍',
-                        style: TextStyle(fontSize: 60),
+            return Opacity(
+              opacity: _opacityAnimation.value,
+              child: Transform.scale(
+                scale: _scaleAnimation.value,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: const Icon(
+                        Icons.code,
+                        size: 60,
+                        color: AppColors.primary,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'تعلم بايثون',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'رحلتك في البرمجة تبدأ هنا',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                Opacity(
-                  opacity: _fadeAnimation.value,
-                  child: Text(
-                    AppStrings.appName,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Opacity(
-                  opacity: _fadeAnimation.value,
-                  child: Text(
-                    AppStrings.appTagline,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                  ),
-                ),
-              ],
+              ),
             );
           },
         ),

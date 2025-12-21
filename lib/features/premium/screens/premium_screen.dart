@@ -1,384 +1,408 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/services/auth_service.dart';
-import '../../../core/services/firestore_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class PremiumScreen extends StatelessWidget {
+import '../../../core/constants/app_colors.dart';
+import '../../../core/providers/profile_provider.dart';
+import '../../../data/repositories/auth_repository.dart';
+
+class PremiumScreen extends ConsumerStatefulWidget {
   const PremiumScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                // Back Button
-                Align(
-                  alignment: Alignment.topRight,
-                  child: IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ),
-                
-                // Premium Icon
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.premium, Color(0xFFE8C547)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.premium.withOpacity(0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.workspace_premium,
-                    size: 50,
-                    color: Colors.white,
-                  ),
-                ),
-                
-                const SizedBox(height: 24),
-                
-                const Text(
-                  'Python Premium',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                
-                const SizedBox(height: 8),
-                
-                const Text(
-                  'احصل على تجربة تعلم متكاملة',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                
-                const SizedBox(height: 40),
-                
-                // Features List
-                _FeatureItem(
-                  icon: Icons.download,
-                  title: 'تحميل غير محدود',
-                  description: 'حمّل جميع الدروس للتعلم بدون إنترنت',
-                ),
-                _FeatureItem(
-                  icon: Icons.block,
-                  title: 'بدون إعلانات',
-                  description: 'تجربة تعلم سلسة بدون انقطاع',
-                ),
-                _FeatureItem(
-                  icon: Icons.speed,
-                  title: 'وصول مبكر',
-                  description: 'احصل على الدروس الجديدة قبل الجميع',
-                ),
-                _FeatureItem(
-                  icon: Icons.support_agent,
-                  title: 'دعم مخصص',
-                  description: 'أولوية في الدعم الفني',
-                ),
-                
-                const SizedBox(height: 40),
-                
-                // Pricing Cards
-                _PricingCard(
-                  title: 'شهري',
-                  price: '9.99',
-                  period: '/شهر',
-                  isPopular: false,
-                  onTap: () => _subscribe(context, 'monthly'),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                _PricingCard(
-                  title: 'سنوي',
-                  price: '79.99',
-                  period: '/سنة',
-                  isPopular: true,
-                  savings: 'وفّر 40%',
-                  onTap: () => _subscribe(context, 'yearly'),
-                ),
-                
-                const SizedBox(height: 24),
-                
-                // Terms
-                const Text(
-                  'بالاشتراك، أنت توافق على شروط الخدمة وسياسة الخصوصية',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                const SizedBox(height: 16),
-                
-                TextButton(
-                  onPressed: () => _restorePurchases(context),
-                  child: const Text('استعادة المشتريات'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _subscribe(BuildContext context, String plan) async {
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('جاري المعالجة...'),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    // Simulate payment processing
-    // Replace with actual in-app purchase implementation
-    await Future.delayed(const Duration(seconds: 2));
-
-    // Update user to premium
-    final authService = context.read<AuthService>();
-    final firestoreService = context.read<FirestoreService>();
-    final userId = authService.currentUser?.uid;
-
-    if (userId != null) {
-      await firestoreService.upgradeToPremium(userId);
-    }
-
-    Navigator.pop(context); // Close loading
-    Navigator.pop(context); // Close premium screen
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم الاشتراك بنجاح! مرحباً بك في Premium'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-  }
-
-  Future<void> _restorePurchases(BuildContext context) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('جاري استعادة المشتريات...')),
-    );
-    
-    await Future.delayed(const Duration(seconds: 1));
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('لم يتم العثور على مشتريات سابقة')),
-    );
-  }
+  ConsumerState<PremiumScreen> createState() => _PremiumScreenState();
 }
 
-class _FeatureItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-
-  const _FeatureItem({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
+class _PremiumScreenState extends ConsumerState<PremiumScreen> {
+  bool _isLinking = false;
+  int _selectedPlan = 0; // 0 = monthly, 1 = annual
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.premium.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+    final profile = ref.watch(profileProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // If not linked, show link gate first
+    if (!profile.isLinked) {
+      return _buildLinkGate(context);
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Premium'),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.vipGold, AppColors.vipGoldLight],
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.workspace_premium_rounded,
+                    color: Colors.white,
+                    size: 64,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Python Premium',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'اشترك الآن واستمتع بتجربة تعلم بلا حدود',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Icon(icon, color: AppColors.premium),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
+            
+            const SizedBox(height: 24),
+            
+            // Features comparison
+            _buildFeatureComparison(context),
+            
+            const SizedBox(height: 24),
+            
+            // Plan selection
+            _buildPlanSelection(context),
+            
+            const SizedBox(height: 24),
+            
+            // Subscribe button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => _subscribe(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.vipGold,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: Text(
+                  _selectedPlan == 0 ? 'اشترك شهرياً' : 'اشترك سنوياً',
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Restore purchases
+            TextButton(
+              onPressed: () => _restorePurchases(context),
+              child: const Text('استعادة المشتريات'),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Skip
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'لاحقاً',
+                style: TextStyle(color: AppColors.textSecondaryLight),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLinkGate(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('ربط الحساب'),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.link_rounded,
+                color: AppColors.primary,
+                size: 64,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'ربط الحساب مطلوب',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'للاشتراك في Premium، يجب ربط حسابك بـ Google أولاً. هذا يضمن حفظ اشتراكك ومزامنة تقدمك عبر جميع أجهزتك.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondaryLight,
+                height: 1.6,
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isLinking ? null : () => _linkAccount(context),
+                icon: _isLinking
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.g_mobiledata_rounded),
+                label: Text(_isLinking ? 'جارٍ الربط...' : 'ربط بحساب Google'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-              ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('لاحقاً'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureComparison(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'مقارنة المميزات',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildFeatureRow('الدروس الأساسية', true, true),
+        _buildFeatureRow('تحميل غير محدود', false, true),
+        _buildFeatureRow('بدون إعلانات', false, true),
+        _buildFeatureRow('مسارات VIP', false, true),
+        _buildFeatureRow('شهادات إتمام', false, true),
+        _buildFeatureRow('دعم أولوي', false, true),
+      ],
+    );
+  }
+
+  Widget _buildFeatureRow(String feature, bool inFree, bool inPremium) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(feature),
+          ),
+          Expanded(
+            child: Center(
+              child: Icon(
+                inFree ? Icons.check_circle_rounded : Icons.close_rounded,
+                color: inFree ? AppColors.success : AppColors.locked,
+                size: 20,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Icon(
+                inPremium ? Icons.check_circle_rounded : Icons.close_rounded,
+                color: inPremium ? AppColors.vipGold : AppColors.locked,
+                size: 20,
+              ),
             ),
           ),
         ],
       ),
     );
   }
-}
 
-class _PricingCard extends StatelessWidget {
-  final String title;
-  final String price;
-  final String period;
-  final bool isPopular;
-  final String? savings;
-  final VoidCallback onTap;
-
-  const _PricingCard({
-    required this.title,
-    required this.price,
-    required this.period,
-    required this.isPopular,
-    this.savings,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: isPopular
-              ? const LinearGradient(
-                  colors: [AppColors.premium, Color(0xFFE8C547)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: isPopular ? null : AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: isPopular ? null : Border.all(color: AppColors.border),
-          boxShadow: isPopular
-              ? [
-                  BoxShadow(
-                    color: AppColors.premium.withOpacity(0.3),
-                    blurRadius: 15,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
+  Widget _buildPlanSelection(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildPlanCard(
+            context,
+            index: 0,
+            title: 'شهري',
+            price: '4.99\$',
+            period: '/شهر',
+          ),
         ),
-        child: Row(
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildPlanCard(
+            context,
+            index: 1,
+            title: 'سنوي',
+            price: '39.99\$',
+            period: '/سنة',
+            badge: 'وفر 33%',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlanCard(
+    BuildContext context, {
+    required int index,
+    required String title,
+    required String price,
+    required String period,
+    String? badge,
+  }) {
+    final isSelected = _selectedPlan == index;
+
+    return GestureDetector(
+      onTap: () => setState(() => _selectedPlan = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.vipGold.withOpacity(0.1)
+              : AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.vipGold : AppColors.dividerLight,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: isPopular ? Colors.white : AppColors.textPrimary,
-                        ),
-                      ),
-                      if (isPopular) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'الأفضل',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+            if (badge != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  badge,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
                   ),
-                  if (savings != null)
-                    Text(
-                      savings!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isPopular
-                            ? Colors.white.withOpacity(0.8)
-                            : AppColors.success,
-                      ),
+                ),
+              ),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: price,
+                    style: TextStyle(
+                      color: isSelected ? AppColors.vipGold : AppColors.primary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  TextSpan(
+                    text: period,
+                    style: TextStyle(
+                      color: AppColors.textSecondaryLight,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '\$$price',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: isPopular ? Colors.white : AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  period,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isPopular
-                        ? Colors.white.withOpacity(0.8)
-                        : AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _linkAccount(BuildContext context) async {
+    setState(() => _isLinking = true);
+    
+    try {
+      final success = await AuthRepository.instance.linkWithGoogle();
+      if (success && mounted) {
+        ref.read(profileProvider.notifier).setLinked(true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم ربط الحساب بنجاح!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل الربط: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLinking = false);
+    }
+  }
+
+  void _subscribe(BuildContext context) {
+    // TODO: Implement in-app purchase
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('سيتم تنفيذ الاشتراك في مرحلة لاحقة'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _restorePurchases(BuildContext context) {
+    // TODO: Implement restore purchases
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('جارٍ البحث عن مشتريات سابقة...'),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

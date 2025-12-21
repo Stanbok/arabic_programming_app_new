@@ -1,0 +1,108 @@
+{
+  "id": "lesson_1_4",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "النصوص (Strings) هي تسلسل من الأحرف تُستخدم لتمثيل النص في Python."
+        },
+        {
+          "type": "text",
+          "content": "يمكن إنشاء النصوص باستخدام علامات الاقتباس المفردة أو المزدوجة."
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "طرق إنشاء النصوص:"
+        },
+        {
+          "type": "code",
+          "content": "# علامات اقتباس مفردة\nname = 'أحمد'\n\n# علامات اقتباس مزدوجة\nmessage = \"مرحباً بالعالم\"\n\n# نص متعدد الأسطر\npoem = '''هذا نص\nمتعدد\nالأسطر'''"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "دمج النصوص (Concatenation):"
+        },
+        {
+          "type": "code",
+          "content": "first_name = \"محمد\"\nlast_name = \"علي\"\n\n# الدمج باستخدام +\nfull_name = first_name + \" \" + last_name\nprint(full_name)  # محمد علي\n\n# التكرار باستخدام *\nstars = \"*\" * 5\nprint(stars)  # *****"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "الوصول للأحرف (Indexing):"
+        },
+        {
+          "type": "code",
+          "content": "text = \"Python\"\n\n# الوصول للحرف الأول (الفهرس يبدأ من 0)\nprint(text[0])   # P\n\n# الوصول للحرف الأخير\nprint(text[-1])  # n\n\n# طول النص\nprint(len(text)) # 6"
+        },
+        {
+          "type": "warning",
+          "content": "تذكر: الفهرس في Python يبدأ من 0 وليس 1!"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "بعض دوال النصوص المفيدة:"
+        },
+        {
+          "type": "code",
+          "content": "text = \"Hello World\"\n\nprint(text.upper())      # HELLO WORLD\nprint(text.lower())      # hello world\nprint(text.replace(\"World\", \"Python\"))  # Hello Python\nprint(text.split())      # ['Hello', 'World']"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ملخص النصوص:"
+        },
+        {
+          "type": "bullets",
+          "content": "• النصوص تُكتب بين علامات اقتباس\n• + لدمج النصوص، * للتكرار\n• الفهرس يبدأ من 0\n• len() لمعرفة طول النص\n• دوال مثل upper(), lower(), replace()"
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "codeOutput",
+        "question": "ما هو ناتج الكود التالي؟",
+        "codeSnippet": "text = \"Python\"\nprint(text[0])",
+        "options": ["P", "y", "Python", "1"],
+        "correctIndex": 0,
+        "expectedOutput": "P",
+        "explanation": "text[0] يُرجع الحرف الأول في النص، والفهرس يبدأ من 0."
+      }
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "fillBlank",
+        "question": "لمعرفة طول نص، نستخدم الدالة ___",
+        "correctText": "len",
+        "explanation": "الدالة len() تُرجع عدد الأحرف في النص."
+      }
+    }
+  ]
+}

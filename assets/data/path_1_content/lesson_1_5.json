@@ -1,0 +1,112 @@
+{
+  "id": "lesson_1_5",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "الإدخال والإخراج هما الطريقة التي يتفاعل بها البرنامج مع المستخدم."
+        },
+        {
+          "type": "bullets",
+          "content": "• الإخراج (Output): عرض المعلومات للمستخدم\n• الإدخال (Input): استقبال المعلومات من المستخدم"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "دالة الطباعة print():"
+        },
+        {
+          "type": "code",
+          "content": "# طباعة نص\nprint(\"مرحباً بالعالم\")\n\n# طباعة متغير\nname = \"أحمد\"\nprint(name)\n\n# طباعة عدة قيم\nage = 25\nprint(\"الاسم:\", name, \"العمر:\", age)"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "النصوص المنسقة (f-strings):"
+        },
+        {
+          "type": "code",
+          "content": "name = \"سارة\"\nage = 22\n\n# الطريقة الحديثة: f-string\nprint(f\"اسمي {name} وعمري {age} سنة\")\n\n# يمكن إجراء عمليات داخل الأقواس\nprint(f\"بعد 5 سنوات سيكون عمري {age + 5}\")"
+        },
+        {
+          "type": "hint",
+          "content": "f-strings هي الطريقة الأسهل والأحدث لتنسيق النصوص في Python 3.6+"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "دالة الإدخال input():"
+        },
+        {
+          "type": "code",
+          "content": "# استقبال اسم من المستخدم\nname = input(\"ما اسمك؟ \")\nprint(f\"أهلاً {name}!\")\n\n# استقبال رقم (يجب تحويله)\nage_text = input(\"كم عمرك؟ \")\nage = int(age_text)  # تحويل النص لرقم\nprint(f\"عمرك {age} سنة\")"
+        },
+        {
+          "type": "warning",
+          "content": "input() يُرجع دائماً نصاً. لاستخدامه كرقم، يجب تحويله بـ int() أو float()."
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ملخص الإدخال والإخراج:"
+        },
+        {
+          "type": "bullets",
+          "content": "• print() لعرض المخرجات\n• input() لاستقبال المدخلات\n• f-strings لتنسيق النصوص\n• int() لتحويل النص لرقم صحيح\n• float() لتحويل النص لرقم عشري"
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "singleChoice",
+        "question": "ما هو نوع القيمة التي تُرجعها دالة input()؟",
+        "options": ["int", "float", "str", "bool"],
+        "correctIndex": 2,
+        "explanation": "input() تُرجع دائماً نصاً (str)، حتى لو أدخل المستخدم رقماً."
+      }
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "codeChoice",
+        "question": "أي من الأكواد التالية صحيح لطباعة \"مرحباً أحمد\"؟",
+        "options": [
+          "name = \"أحمد\"\nprint(f\"مرحباً {name}\")",
+          "name = \"أحمد\"\nprint(\"مرحباً {name}\")",
+          "name = \"أحمد\"\nprint(مرحباً + name)",
+          "name = \"أحمد\"\nprint(f\"مرحباً\" name)"
+        ],
+        "correctIndex": 0,
+        "explanation": "f-string تتطلب وضع f قبل علامات الاقتباس، والمتغيرات داخل أقواس معقوصة {}."
+      }
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "trueFalse",
+        "question": "يمكن جمع رقمين مباشرة من input() بدون تحويل.",
+        "correctAnswer": false,
+        "explanation": "input() تُرجع نصاً، لذا يجب تحويله لرقم باستخدام int() أو float() قبل إجراء العمليات الحسابية."
+      }
+    }
+  ]
+}

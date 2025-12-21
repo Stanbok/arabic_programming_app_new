@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_theme.dart';
-import 'auth_screen.dart';
+
+import '../../../core/constants/app_colors.dart';
+import '../../../core/navigation/app_router.dart';
+import '../../../core/widgets/custom_button.dart';
+import '../widgets/carousel_page.dart';
 
 class CarouselScreen extends StatefulWidget {
   const CarouselScreen({super.key});
@@ -13,171 +16,145 @@ class _CarouselScreenState extends State<CarouselScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<_SlideData> _slides = [
-    _SlideData(
-      icon: Icons.school,
-      title: 'تعلم بايثون بسهولة',
-      description: 'دروس تفاعلية مصممة للمبتدئين باللغة العربية',
+  static const List<CarouselItemData> _items = [
+    CarouselItemData(
+      icon: Icons.code_rounded,
+      iconColor: AppColors.primary,
+      backgroundColor: AppColors.primary,
+      title: 'تعلم Python بالعربي',
+      description: 'ابدأ رحلتك في تعلم البرمجة بلغتك الأم مع دروس تفاعلية وممتعة',
     ),
-    _SlideData(
-      icon: Icons.emoji_events,
-      title: 'اكسب نقاط ومكافآت',
-      description: 'أكمل الدروس واجمع الجواهر لفتح محتوى جديد',
-    ),
-    _SlideData(
-      icon: Icons.offline_bolt,
+    CarouselItemData(
+      icon: Icons.offline_bolt_rounded,
+      iconColor: AppColors.secondary,
+      backgroundColor: AppColors.secondary,
       title: 'تعلم بدون إنترنت',
-      description: 'حمّل الدروس وتعلم في أي وقت وأي مكان',
+      description: 'حمّل الدروس مرة واحدة وتعلم في أي وقت وأي مكان بدون اتصال',
+    ),
+    CarouselItemData(
+      icon: Icons.emoji_events_rounded,
+      iconColor: AppColors.accent,
+      backgroundColor: AppColors.accent,
+      title: 'اختبر معلوماتك',
+      description: 'أسئلة تفاعلية متنوعة تثبت المعلومات وتقيس مستوى فهمك',
     ),
   ];
 
+  void _nextPage() {
+    if (_currentPage < _items.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _navigateToPersonalization();
+    }
+  }
+
+  void _navigateToPersonalization() {
+    Navigator.of(context).pushReplacementNamed(AppRoutes.personalization);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             // Skip button
             Align(
-              alignment: Alignment.topLeft,
-              child: TextButton(
-                onPressed: _navigateToAuth,
-                child: const Text('تخطي'),
+              alignment: AlignmentDirectional.topEnd,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextButton(
+                  onPressed: _navigateToPersonalization,
+                  child: Text(
+                    'تخطي',
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.textSecondaryDark
+                          : AppColors.textSecondaryLight,
+                    ),
+                  ),
+                ),
               ),
             ),
-            
-            // PageView
+            // Page view
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: _slides.length,
                 onPageChanged: (index) {
                   setState(() => _currentPage = index);
                 },
+                itemCount: _items.length,
                 itemBuilder: (context, index) {
-                  return _SlideWidget(data: _slides[index]);
+                  return CarouselPage(item: _items[index]);
                 },
               ),
             ),
-            
-            // Progress dots
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                _slides.length,
-                (index) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: _currentPage == index ? 24 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _currentPage == index
-                        ? AppColors.primary
-                        : AppColors.border,
-                    borderRadius: BorderRadius.circular(4),
+            // Dots indicator
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _items.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == index ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index
+                          ? _items[_currentPage].backgroundColor
+                          : (isDark
+                              ? AppColors.dividerDark
+                              : AppColors.dividerLight),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
               ),
             ),
-            
-            const SizedBox(height: 32),
-            
             // Next/Start button
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (_currentPage < _slides.length - 1) {
-                      _pageController.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    } else {
-                      _navigateToAuth();
-                    }
-                  },
-                  child: Text(
-                    _currentPage < _slides.length - 1 ? 'التالي' : 'ابدأ الآن',
-                  ),
-                ),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              child: CustomButton(
+                label: _currentPage == _items.length - 1 ? 'ابدأ الآن' : 'التالي',
+                onPressed: _nextPage,
+                isFullWidth: true,
+                icon: _currentPage == _items.length - 1
+                    ? Icons.rocket_launch_rounded
+                    : Icons.arrow_back_rounded,
               ),
             ),
-            
-            const SizedBox(height: 32),
           ],
         ),
       ),
     );
   }
-
-  void _navigateToAuth() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const AuthScreen()),
-    );
-  }
 }
 
-class _SlideData {
+class CarouselItemData {
   final IconData icon;
+  final Color iconColor;
+  final Color backgroundColor;
   final String title;
   final String description;
 
-  _SlideData({
+  const CarouselItemData({
     required this.icon,
+    required this.iconColor,
+    required this.backgroundColor,
     required this.title,
     required this.description,
   });
-}
-
-class _SlideWidget extends StatelessWidget {
-  final _SlideData data;
-
-  const _SlideWidget({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 160,
-            height: 160,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              data.icon,
-              size: 80,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 48),
-          Text(
-            data.title,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            data.description,
-            style: const TextStyle(
-              fontSize: 16,
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
 }

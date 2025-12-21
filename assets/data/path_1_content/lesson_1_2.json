@@ -1,0 +1,87 @@
+{
+  "id": "lesson_1_2",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "في هذا الدرس، سنتعلم كيفية تخزين البيانات باستخدام المتغيرات في Python."
+        },
+        {
+          "type": "text",
+          "content": "المتغير هو مكان في الذاكرة يُستخدم لتخزين قيمة يمكنك استخدامها لاحقاً في برنامجك."
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "لإنشاء متغير في Python، نستخدم علامة المساواة (=) لإسناد قيمة إلى اسم المتغير:"
+        },
+        {
+          "type": "code",
+          "content": "name = \"أحمد\"\nage = 25\nheight = 1.75"
+        },
+        {
+          "type": "note",
+          "content": "لاحظ أننا لم نحتاج لتحديد نوع المتغير - Python يحدده تلقائياً!"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "قواعد تسمية المتغيرات في Python:"
+        },
+        {
+          "type": "bullets",
+          "content": "• يجب أن يبدأ بحرف أو شرطة سفلية (_)\n• يمكن أن يحتوي على أحرف وأرقام وشرطات سفلية\n• لا يمكن أن يبدأ برقم\n• حساس لحالة الأحرف (name ≠ Name)\n• لا يمكن استخدام الكلمات المحجوزة"
+        },
+        {
+          "type": "warning",
+          "content": "تجنب الأسماء التي تبدأ برقم مثل 1name أو التي تحتوي مسافات مثل my name"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ملخص الدرس:"
+        },
+        {
+          "type": "bullets",
+          "content": "• المتغيرات تُستخدم لتخزين البيانات\n• نستخدم = لإسناد القيم\n• Python يحدد نوع المتغير تلقائياً\n• اتبع قواعد التسمية الصحيحة"
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "singleChoice",
+        "question": "أي من أسماء المتغيرات التالية صحيح في Python؟",
+        "options": ["1user", "user name", "user_name", "user-name"],
+        "correctIndex": 2,
+        "explanation": "user_name هو الاسم الصحيح لأنه يبدأ بحرف ويستخدم الشرطة السفلية بدلاً من المسافة أو الشرطة العادية."
+      }
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "codeOutput",
+        "question": "ما هو ناتج الكود التالي؟",
+        "codeSnippet": "x = 10\nx = 20\nprint(x)",
+        "options": ["10", "20", "30", "خطأ"],
+        "correctIndex": 1,
+        "expectedOutput": "20",
+        "explanation": "عند إعادة إسناد قيمة للمتغير، تُستبدل القيمة القديمة بالجديدة. لذا x يساوي 20."
+      }
+    }
+  ]
+}

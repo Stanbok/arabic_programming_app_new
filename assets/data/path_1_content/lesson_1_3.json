@@ -1,0 +1,114 @@
+{
+  "id": "lesson_1_3",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "في هذا الدرس، سنتعلم العمليات الحسابية الأساسية في Python وكيفية استخدامها."
+        },
+        {
+          "type": "text",
+          "content": "Python تدعم جميع العمليات الحسابية الأساسية التي تعرفها من الرياضيات."
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "العمليات الحسابية الأساسية:"
+        },
+        {
+          "type": "code",
+          "content": "# الجمع\nresult = 5 + 3    # 8\n\n# الطرح\nresult = 10 - 4   # 6\n\n# الضرب\nresult = 6 * 7    # 42\n\n# القسمة\nresult = 15 / 3   # 5.0"
+        },
+        {
+          "type": "note",
+          "content": "لاحظ أن القسمة (/) تُرجع دائماً عدداً عشرياً حتى لو كانت النتيجة عدداً صحيحاً."
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "عمليات حسابية إضافية:"
+        },
+        {
+          "type": "code",
+          "content": "# القسمة الصحيحة (بدون باقي)\nresult = 17 // 5   # 3\n\n# باقي القسمة\nresult = 17 % 5    # 2\n\n# الأس (القوة)\nresult = 2 ** 3    # 8"
+        },
+        {
+          "type": "hint",
+          "content": "// للقسمة الصحيحة، % لباقي القسمة، ** للأس."
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ترتيب العمليات (أولوية التنفيذ):"
+        },
+        {
+          "type": "bullets",
+          "content": "• الأقواس () - الأعلى أولوية\n• الأس **\n• الضرب والقسمة * / // %\n• الجمع والطرح + -"
+        },
+        {
+          "type": "code",
+          "content": "# مثال على ترتيب العمليات\nresult = 2 + 3 * 4    # 14 (الضرب أولاً)\nresult = (2 + 3) * 4  # 20 (الأقواس أولاً)"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ملخص العمليات الحسابية:"
+        },
+        {
+          "type": "bullets",
+          "content": "• + للجمع، - للطرح\n• * للضرب، / للقسمة\n• // للقسمة الصحيحة، % لباقي القسمة\n• ** للأس\n• الأقواس تغير ترتيب التنفيذ"
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "codeOutput",
+        "question": "ما هو ناتج الكود التالي؟",
+        "codeSnippet": "x = 10 + 5 * 2\nprint(x)",
+        "options": ["30", "20", "25", "15"],
+        "correctIndex": 1,
+        "expectedOutput": "20",
+        "explanation": "الضرب يُنفذ أولاً: 5 * 2 = 10، ثم الجمع: 10 + 10 = 20."
+      }
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "singleChoice",
+        "question": "ما هو ناتج العملية 17 % 5؟",
+        "options": ["3", "2", "3.4", "12"],
+        "correctIndex": 1,
+        "explanation": "% هي عملية باقي القسمة. 17 ÷ 5 = 3 والباقي 2."
+      }
+    },
+    {
+      "type": "quiz",
+      "quizData": {
+        "questionType": "ordering",
+        "question": "رتب العمليات التالية حسب أولوية التنفيذ (من الأعلى للأقل):",
+        "options": ["الأقواس ()", "الأس **", "الضرب *", "الجمع +"],
+        "correctOrder": [0, 1, 2, 3],
+        "explanation": "ترتيب الأولوية: الأقواس أولاً، ثم الأس، ثم الضرب/القسمة، وأخيراً الجمع/الطرح."
+      }
+    }
+  ]
+}

@@ -1,171 +1,129 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../home/screens/main_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class WelcomeScreen extends StatefulWidget {
-  final String userName;
+import '../../../core/constants/app_colors.dart';
+import '../../../core/navigation/app_router.dart';
+import '../../../core/providers/profile_provider.dart';
+import '../../../core/widgets/custom_button.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/loading_overlay.dart';
+import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/sync_repository.dart';
 
-  const WelcomeScreen({
-    super.key,
-    required this.userName,
-  });
+class WelcomeScreen extends ConsumerStatefulWidget {
+  const WelcomeScreen({super.key});
 
   @override
-  State<WelcomeScreen> createState() => _WelcomeScreenState();
+  ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
+class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
+  bool _isLinking = false;
 
-  @override
-  void initState() {
-    super.initState();
-    
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
+  Future<void> _linkAccount() async {
+    setState(() => _isLinking = true);
 
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
+    final result = await AuthRepository.instance.linkWithGoogle();
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    if (!mounted) return;
+    setState(() => _isLinking = false);
 
-    _controller.forward();
+    if (result.success) {
+      // Update profile
+      ref.read(profileProvider.notifier).linkAccount(
+            email: result.user?.email ?? '',
+            firebaseUid: result.user?.uid ?? '',
+          );
+
+      // Trigger initial sync
+      SyncRepository.instance.fullSync();
+
+      AppSnackBar.show(
+        context,
+        message: 'تم ربط حسابك بنجاح!',
+        type: SnackBarType.success,
+      );
+
+      _navigateToHome();
+    } else {
+      AppSnackBar.show(
+        context,
+        message: result.error ?? 'حدث خطأ أثناء ربط الحساب',
+        type: SnackBarType.error,
+      );
+    }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  void _skipToHome() {
+    ref.read(profileProvider.notifier).completeOnboarding();
+    _navigateToHome();
+  }
+
+  void _navigateToHome() {
+    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(),
-              
-              AnimatedBuilder(
-                animation: _controller,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _fadeAnimation.value,
-                    child: Transform.scale(
-                      scale: _scaleAnimation.value,
-                      child: child,
-                    ),
-                  );
-                },
-                child: Column(
-                  children: [
-                    // Welcome Icon
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.primary.withOpacity(0.1),
-                            AppColors.primaryLight.withOpacity(0.1),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.rocket_launch,
-                        size: 60,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 32),
-                    
-                    Text(
-                      'مرحباً ${widget.userName}!',
-                      style: const TextStyle(
-                        fontSize: 32,
+    final profile = ref.watch(profileProvider);
+    final userName = profile.name ?? 'متعلم';
+
+    return LoadingOverlay(
+      isLoading: _isLinking,
+      message: 'جارٍ ربط حسابك...',
+      child: Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Spacer(),
+
+                // Welcome illustration
+                _WelcomeIllustration(avatarId: profile.avatarId),
+                const SizedBox(height: 40),
+
+                // Welcome message
+                Text(
+                  'مرحباً $userName!',
+                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'أنت على بعد خطوة من رحلة تعلم البرمجة',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.textSecondary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    
-                    const SizedBox(height: 48),
-                    
-                    // Features Card
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Column(
-                        children: [
-                          _FeatureItem(
-                            icon: Icons.school,
-                            title: 'دروس تفاعلية',
-                            subtitle: 'تعلم Python بطريقة سهلة وممتعة',
-                          ),
-                          const SizedBox(height: 16),
-                          _FeatureItem(
-                            icon: Icons.quiz,
-                            title: 'اختبارات فورية',
-                            subtitle: 'اختبر معلوماتك بعد كل درس',
-                          ),
-                          const SizedBox(height: 16),
-                          _FeatureItem(
-                            icon: Icons.offline_bolt,
-                            title: 'تعلم بدون إنترنت',
-                            subtitle: 'حمّل الدروس وتعلم في أي وقت',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  textAlign: TextAlign.center,
                 ),
-              ),
-              
-              const Spacer(),
-              
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const MainScreen()),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                const SizedBox(height: 12),
+                Text(
+                  'أنت على بعد خطوة واحدة من بدء رحلتك في تعلم البرمجة',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                        height: 1.5,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 48),
+
+                // Link account card
+                _LinkAccountCard(
+                  onLink: _linkAccount,
+                  isLoading: _isLinking,
+                ),
+
+                const Spacer(),
+
+                // Skip button
+                TextButton(
+                  onPressed: _isLinking ? null : _skipToHome,
+                  child: Text(
+                    'تخطي والبدء لاحقاً',
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
                   ),
-                  child: const Text('ابدأ التعلم الآن'),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
@@ -173,54 +131,174 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 }
 
-class _FeatureItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
+class _WelcomeIllustration extends StatelessWidget {
+  final int avatarId;
 
-  const _FeatureItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
+  const _WelcomeIllustration({required this.avatarId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Outer glow
+        Container(
+          width: 200,
+          height: 200,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                AppColors.secondary.withOpacity(0.2),
+                AppColors.secondary.withOpacity(0.0),
+              ],
+            ),
+          ),
+        ),
+        // Inner circle
+        Container(
+          width: 140,
+          height: 140,
+          decoration: BoxDecoration(
+            color: AppColors.secondary.withOpacity(0.15),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.celebration_rounded,
+            size: 70,
+            color: AppColors.secondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LinkAccountCard extends StatelessWidget {
+  final VoidCallback onLink;
+  final bool isLoading;
+
+  const _LinkAccountCard({
+    required this.onLink,
+    required this.isLoading,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: AppColors.primary),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Icon and text row
+          Row(
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.cloud_sync_rounded,
+                  color: AppColors.primary,
+                  size: 28,
                 ),
               ),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ربط حسابك',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'احفظ تقدمك وانتقل بين الأجهزة بسهولة',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 20),
+
+          // Google sign-in button
+          CustomButton(
+            label: 'ربط عبر Google',
+            onPressed: isLoading ? null : onLink,
+            isFullWidth: true,
+            isLoading: isLoading,
+            icon: Icons.g_mobiledata_rounded,
+          ),
+
+          const SizedBox(height: 12),
+
+          // Benefits list
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _BenefitChip(icon: Icons.sync_rounded, label: 'مزامنة'),
+              const SizedBox(width: 8),
+              _BenefitChip(icon: Icons.devices_rounded, label: 'عدة أجهزة'),
+              const SizedBox(width: 8),
+              _BenefitChip(icon: Icons.backup_rounded, label: 'نسخ احتياطي'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BenefitChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _BenefitChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.secondary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppColors.secondary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.secondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

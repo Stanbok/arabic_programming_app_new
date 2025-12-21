@@ -1,0 +1,138 @@
+{
+  "path_1": [
+    {
+      "id": "lesson_1_1",
+      "pathId": "path_1",
+      "title": "مقدمة في Python",
+      "order": 1,
+      "thumbnail": "assets/images/lessons/lesson_1_1.png",
+      "bundled": true
+    },
+    {
+      "id": "lesson_1_2",
+      "pathId": "path_1",
+      "title": "المتغيرات وأنواع البيانات",
+      "order": 2,
+      "thumbnail": "assets/images/lessons/lesson_1_2.png",
+      "bundled": true
+    },
+    {
+      "id": "lesson_1_3",
+      "pathId": "path_1",
+      "title": "العمليات الحسابية",
+      "order": 3,
+      "thumbnail": "assets/images/lessons/lesson_1_3.png",
+      "bundled": true
+    },
+    {
+      "id": "lesson_1_4",
+      "pathId": "path_1",
+      "title": "النصوص والسلاسل",
+      "order": 4,
+      "thumbnail": "assets/images/lessons/lesson_1_4.png",
+      "bundled": true
+    },
+    {
+      "id": "lesson_1_5",
+      "pathId": "path_1",
+      "title": "الإدخال والإخراج",
+      "order": 5,
+      "thumbnail": "assets/images/lessons/lesson_1_5.png",
+      "bundled": true
+    }
+  ],
+  "path_2": [
+    {
+      "id": "lesson_2_1",
+      "pathId": "path_2",
+      "title": "الشروط if-else",
+      "order": 1,
+      "thumbnail": "assets/images/lessons/lesson_2_1.png",
+      "bundled": false
+    },
+    {
+      "id": "lesson_2_2",
+      "pathId": "path_2",
+      "title": "حلقات while",
+      "order": 2,
+      "thumbnail": "assets/images/lessons/lesson_2_2.png",
+      "bundled": false
+    },
+    {
+      "id": "lesson_2_3",
+      "pathId": "path_2",
+      "title": "حلقات for",
+      "order": 3,
+      "thumbnail": "assets/images/lessons/lesson_2_3.png",
+      "bundled": false
+    },
+    {
+      "id": "lesson_2_4",
+      "pathId": "path_2",
+      "title": "break و continue",
+      "order": 4,
+      "thumbnail": "assets/images/lessons/lesson_2_4.png",
+      "bundled": false
+    }
+  ],
+  "path_3": [
+    {
+      "id": "lesson_3_1",
+      "pathId": "path_3",
+      "title": "تعريف الدوال",
+      "order": 1,
+      "thumbnail": "assets/images/lessons/lesson_3_1.png",
+      "bundled": false
+    },
+    {
+      "id": "lesson_3_2",
+      "pathId": "path_3",
+      "title": "المعاملات والقيم المرجعة",
+      "order": 2,
+      "thumbnail": "assets/images/lessons/lesson_3_2.png",
+      "bundled": false
+    },
+    {
+      "id": "lesson_3_3",
+      "pathId": "path_3",
+      "title": "نطاق المتغيرات",
+      "order": 3,
+      "thumbnail": "assets/images/lessons/lesson_3_3.png",
+      "bundled": false
+    }
+  ],
+  "path_4": [
+    {
+      "id": "lesson_4_1",
+      "pathId": "path_4",
+      "title": "القوائم Lists",
+      "order": 1,
+      "thumbnail": "assets/images/lessons/lesson_4_1.png",
+      "bundled": false
+    },
+    {
+      "id": "lesson_4_2",
+      "pathId": "path_4",
+      "title": "الصفوف Tuples",
+      "order": 2,
+      "thumbnail": "assets/images/lessons/lesson_4_2.png",
+      "bundled": false
+    },
+    {
+      "id": "lesson_4_3",
+      "pathId": "path_4",
+      "title": "القواميس Dictionaries",
+      "order": 3,
+      "thumbnail": "assets/images/lessons/lesson_4_3.png",
+      "bundled": false
+    },
+    {
+      "id": "lesson_4_4",
+      "pathId": "path_4",
+      "title": "المجموعات Sets",
+      "order": 4,
+      "thumbnail": "assets/images/lessons/lesson_4_4.png",
+      "bundled": false
+    }
+  ]
+}

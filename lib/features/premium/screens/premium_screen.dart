@@ -363,13 +363,20 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
     setState(() => _isLinking = true);
     
     try {
-      final success = await AuthRepository.instance.linkWithGoogle();
-      if (success && mounted) {
+      final result = await AuthRepository.instance.linkWithGoogle();
+      if (result.success && mounted) {
         ref.read(profileProvider.notifier).setLinked(true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم ربط الحساب بنجاح!'),
             backgroundColor: AppColors.success,
+          ),
+        );
+      } else if (!result.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'فشل الربط'),
+            backgroundColor: AppColors.error,
           ),
         );
       }

@@ -278,8 +278,7 @@ class _LessonViewerScreenState extends ConsumerState<LessonViewerScreen> {
     // Mark lesson as completed
     await progressNotifier.completeLesson(widget.lesson.id);
 
-    // Check if all lessons in path are completed
-    final lessonsAsync = ref.read(lessonsForPathProvider(widget.pathId));
+    final lessonsAsync = ref.read(lessonsProvider(widget.pathId));
     final progress = ref.read(progressProvider);
     
     bool allCompleted = false;

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/lesson_model.dart';
-import '../../../data/repositories/progress_repository.dart';
+import '../../../data/repositories/progress_repository.dart' show ContentLockState;
 
 class LessonNode extends StatelessWidget {
   final LessonModel lesson;
-  final LockState lockState;
+  final ContentLockState lockState;
   final bool isOfflineAvailable;
   final AlignmentGeometry alignment;
   final VoidCallback onTap;
@@ -22,8 +22,8 @@ class LessonNode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLocked = lockState == LockState.locked;
-    final isCompleted = lockState == LockState.completed;
+    final isLocked = lockState == ContentLockState.locked;
+    final isCompleted = lockState == ContentLockState.completed;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final nodeColor = isCompleted

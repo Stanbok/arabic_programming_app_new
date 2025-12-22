@@ -12,26 +12,28 @@ class CarouselScreen extends StatefulWidget {
   State<CarouselScreen> createState() => _CarouselScreenState();
 }
 
+
 class _CarouselScreenState extends State<CarouselScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  static const List<CarouselItemData> _items = [
-    CarouselItemData(
+  // Store carousel data as records instead of a separate class
+  static const List<({IconData icon, Color iconColor, Color backgroundColor, String title, String description})> _items = [
+    (
       icon: Icons.code_rounded,
       iconColor: AppColors.primary,
       backgroundColor: AppColors.primary,
       title: 'تعلم Python بالعربي',
       description: 'ابدأ رحلتك في تعلم البرمجة بلغتك الأم مع دروس تفاعلية وممتعة',
     ),
-    CarouselItemData(
+    (
       icon: Icons.offline_bolt_rounded,
       iconColor: AppColors.secondary,
       backgroundColor: AppColors.secondary,
       title: 'تعلم بدون إنترنت',
       description: 'حمّل الدروس مرة واحدة وتعلم في أي وقت وأي مكان بدون اتصال',
     ),
-    CarouselItemData(
+    (
       icon: Icons.emoji_events_rounded,
       iconColor: AppColors.accent,
       backgroundColor: AppColors.accent,
@@ -96,7 +98,14 @@ class _CarouselScreenState extends State<CarouselScreen> {
                 },
                 itemCount: _items.length,
                 itemBuilder: (context, index) {
-                  return CarouselPage(item: _items[index]);
+                  final item = _items[index];
+                  return CarouselPage(
+                    icon: item.icon,
+                    iconColor: item.iconColor,
+                    backgroundColor: item.backgroundColor,
+                    title: item.title,
+                    description: item.description,
+                  );
                 },
               ),
             ),
@@ -141,20 +150,4 @@ class _CarouselScreenState extends State<CarouselScreen> {
       ),
     );
   }
-}
-
-class CarouselItemData {
-  final IconData icon;
-  final Color iconColor;
-  final Color backgroundColor;
-  final String title;
-  final String description;
-
-  const CarouselItemData({
-    required this.icon,
-    required this.iconColor,
-    required this.backgroundColor,
-    required this.title,
-    required this.description,
-  });
 }

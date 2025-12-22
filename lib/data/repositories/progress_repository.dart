@@ -7,7 +7,7 @@ import '../models/lesson_model.dart';
 import 'content_repository.dart';
 
 /// Lock state for lessons and paths
-enum LockState { locked, available, completed }
+enum ContentLockState { locked, available, completed }
 
 /// Repository for managing user progress
 class ProgressRepository {
@@ -27,17 +27,17 @@ class ProgressRepository {
   }
 
   /// Get lock state for a path
-  Future<LockState> getPathLockState(PathModel path) async {
+  Future<ContentLockState> getPathLockState(PathModel path) async {
     final progress = _progress;
 
     // Check if path is completed
     if (progress.completedPathIds.contains(path.id)) {
-      return LockState.completed;
+      return ContentLockState.completed;
     }
 
     // First path is always available
     if (path.order == 1) {
-      return LockState.available;
+      return ContentLockState.available;
     }
 
     // Check if previous path is completed
@@ -45,28 +45,28 @@ class ProgressRepository {
     final previousPath = paths.where((p) => p.order == path.order - 1).firstOrNull;
     
     if (previousPath == null) {
-      return LockState.available;
+      return ContentLockState.available;
     }
 
     if (progress.completedPathIds.contains(previousPath.id)) {
-      return LockState.available;
+      return ContentLockState.available;
     }
 
-    return LockState.locked;
+    return ContentLockState.locked;
   }
 
   /// Get lock state for a lesson
-  Future<LockState> getLessonLockState(LessonModel lesson) async {
+  Future<ContentLockState> getLessonLockState(LessonModel lesson) async {
     final progress = _progress;
 
     // Check if lesson is completed
     if (progress.completedLessonIds.contains(lesson.id)) {
-      return LockState.completed;
+      return ContentLockState.completed;
     }
 
     // First lesson in a path is available if path is unlocked
     if (lesson.order == 1) {
-      return LockState.available;
+      return ContentLockState.available;
     }
 
     // Check if previous lesson in same path is completed
@@ -74,14 +74,14 @@ class ProgressRepository {
     final previousLesson = lessons.where((l) => l.order == lesson.order - 1).firstOrNull;
 
     if (previousLesson == null) {
-      return LockState.available;
+      return ContentLockState.available;
     }
 
     if (progress.completedLessonIds.contains(previousLesson.id)) {
-      return LockState.available;
+      return ContentLockState.available;
     }
 
-    return LockState.locked;
+    return ContentLockState.locked;
   }
 
   /// Mark lesson as completed

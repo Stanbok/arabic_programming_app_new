@@ -7,7 +7,7 @@ import '../../../core/providers/content_provider.dart';
 import '../../../core/providers/profile_provider.dart';
 import '../../../data/models/path_model.dart';
 import '../../../data/models/lesson_model.dart';
-import '../../../data/repositories/progress_repository.dart';
+import '../../../data/repositories/progress_repository.dart' show ContentLockState;
 import '../../../data/repositories/content_repository.dart';
 import '../../../data/services/ad_service.dart';
 import '../../lesson_viewer/screens/lesson_viewer_screen.dart';
@@ -189,9 +189,9 @@ class _LessonsScreenState extends ConsumerState<LessonsScreen> {
   Future<void> _handleLessonTap(
     BuildContext context,
     LessonModel lesson,
-    LockState lockState,
+    ContentLockState lockState,
   ) async {
-    if (lockState == LockState.locked) {
+    if (lockState == ContentLockState.locked) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('أكمل الدرس السابق أولاً'),
@@ -445,7 +445,7 @@ class _LessonNodeWrapper extends ConsumerWidget {
   final LessonModel lesson;
   final bool isEven;
   final bool pathBundled;
-  final void Function(LockState) onTap;
+  final void Function(ContentLockState) onTap;
 
   const _LessonNodeWrapper({
     required this.lesson,

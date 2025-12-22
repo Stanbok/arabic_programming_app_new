@@ -307,8 +307,8 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () async {
                   Navigator.pop(context);
                   try {
-                    final success = await AuthRepository.instance.linkWithGoogle();
-                    if (success && context.mounted) {
+                    final result = await AuthRepository.instance.linkWithGoogle();
+                    if (result.success && context.mounted) {
                       ref.read(profileProvider.notifier).setLinked(true);
                     }
                   } catch (e) {

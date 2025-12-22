@@ -16,18 +16,20 @@ final lessonsProvider = FutureProvider.family<List<LessonModel>, String>((ref, p
   return ContentRepository.instance.getLessonsForPath(pathId);
 });
 
+final lessonsForPathProvider = lessonsProvider;
+
 /// Provider for lesson content
 final lessonContentProvider = FutureProvider.family<LessonContentModel?, ({String lessonId, String pathId})>((ref, params) async {
   return ContentRepository.instance.getLessonContent(params.lessonId, params.pathId);
 });
 
 /// Provider for path lock states
-final pathLockStateProvider = FutureProvider.family<LockState, PathModel>((ref, path) async {
+final pathLockStateProvider = FutureProvider.family<ContentLockState, PathModel>((ref, path) async {
   return ProgressRepository.instance.getPathLockState(path);
 });
 
 /// Provider for lesson lock states
-final lessonLockStateProvider = FutureProvider.family<LockState, LessonModel>((ref, lesson) async {
+final lessonLockStateProvider = FutureProvider.family<ContentLockState, LessonModel>((ref, lesson) async {
   return ProgressRepository.instance.getLessonLockState(lesson);
 });
 

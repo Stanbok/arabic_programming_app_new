@@ -6,7 +6,7 @@ import '../../../core/navigation/app_router.dart';
 import '../../../core/providers/content_provider.dart';
 import '../../../core/providers/profile_provider.dart';
 import '../../../data/models/path_model.dart';
-import '../../../data/repositories/progress_repository.dart';
+import '../../../data/repositories/progress_repository.dart' show ContentLockState;
 import '../../onboarding/widgets/avatar_widget.dart';
 import '../widgets/path_card.dart';
 
@@ -109,12 +109,12 @@ class HomeScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     PathModel path,
-    LockState lockState,
+    ContentLockState lockState, // Use ContentLockState
   ) {
     final profile = ref.read(profileProvider);
 
     switch (lockState) {
-      case LockState.locked:
+      case ContentLockState.locked:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('أكمل المسار السابق أولاً'),
@@ -122,8 +122,8 @@ class HomeScreen extends ConsumerWidget {
           ),
         );
         break;
-      case LockState.available:
-      case LockState.completed:
+      case ContentLockState.available:
+      case ContentLockState.completed:
         // VIP path requires linking first
         if (path.isVIP && !profile.isLinked) {
           Navigator.of(context).pushNamed(AppRoutes.premium);
@@ -141,7 +141,7 @@ class HomeScreen extends ConsumerWidget {
 /// Wrapper to handle async lock state
 class _PathCardWrapper extends ConsumerWidget {
   final PathModel path;
-  final void Function(LockState) onTap;
+  final void Function(ContentLockState) onTap; // Use ContentLockState
 
   const _PathCardWrapper({
     required this.path,

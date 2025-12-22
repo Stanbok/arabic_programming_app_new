@@ -342,13 +342,20 @@ class ProfileScreen extends ConsumerWidget {
 
   Future<void> _linkAccount(BuildContext context, WidgetRef ref) async {
     try {
-      final success = await AuthRepository.instance.linkWithGoogle();
-      if (success && context.mounted) {
+      final result = await AuthRepository.instance.linkWithGoogle();
+      if (result.success && context.mounted) {
         ref.read(profileProvider.notifier).setLinked(true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم ربط الحساب بنجاح!'),
             backgroundColor: AppColors.success,
+          ),
+        );
+      } else if (!result.success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'فشل الربط'),
+            backgroundColor: AppColors.error,
           ),
         );
       }

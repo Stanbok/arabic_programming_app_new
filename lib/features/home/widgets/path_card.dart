@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/path_model.dart';
-import '../../../data/repositories/progress_repository.dart';
+import '../../../data/repositories/progress_repository.dart' show ContentLockState;
 
 class PathCard extends StatelessWidget {
   final PathModel path;
-  final LockState lockState;
+  final ContentLockState lockState;
   final double progress;
   final VoidCallback onTap;
 
@@ -20,8 +20,8 @@ class PathCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLocked = lockState == LockState.locked;
-    final isCompleted = lockState == LockState.completed;
+    final isLocked = lockState == ContentLockState.locked;
+    final isCompleted = lockState == ContentLockState.completed;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(

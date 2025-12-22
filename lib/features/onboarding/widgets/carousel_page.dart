@@ -1,26 +1,22 @@
 import 'package:flutter/material.dart';
 
-/// Data class for carousel item
-class CarouselItemData {
+// The CarouselItemData class is defined in carousel_screen.dart as the single source of truth
+
+class CarouselPage extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final Color backgroundColor;
   final String title;
   final String description;
 
-  const CarouselItemData({
+  const CarouselPage({
+    super.key,
     required this.icon,
     required this.iconColor,
     required this.backgroundColor,
     required this.title,
     required this.description,
   });
-}
-
-class CarouselPage extends StatelessWidget {
-  final CarouselItemData item;
-
-  const CarouselPage({super.key, required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -36,8 +32,8 @@ class CarouselPage extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  item.backgroundColor.withOpacity(0.15),
-                  item.backgroundColor.withOpacity(0.05),
+                  backgroundColor.withOpacity(0.15),
+                  backgroundColor.withOpacity(0.05),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -47,20 +43,20 @@ class CarouselPage extends StatelessWidget {
             child: Container(
               margin: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: item.backgroundColor.withOpacity(0.1),
+                color: backgroundColor.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                item.icon,
+                icon,
                 size: 64,
-                color: item.iconColor,
+                color: iconColor,
               ),
             ),
           ),
           const SizedBox(height: 48),
           // Title
           Text(
-            item.title,
+            title,
             style: Theme.of(context).textTheme.displaySmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -69,7 +65,7 @@ class CarouselPage extends StatelessWidget {
           const SizedBox(height: 16),
           // Description
           Text(
-            item.description,
+            description,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Theme.of(context).textTheme.bodySmall?.color,
                   height: 1.6,

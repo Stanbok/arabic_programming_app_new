@@ -48,28 +48,40 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _initializeApp() async {
-    final authRepo = AuthRepository.instance;
+    try {
+      final authRepo = AuthRepository.instance;
 
-    // Sign in anonymously if not already signed in
-    if (!authRepo.isSignedIn) {
-      await authRepo.signInAnonymously();
+      // Sign in anonymously if not already signed in
+      if (!authRepo.isSignedIn) {
+        await authRepo.signInAnonymously();
+      }
+
+      // If user is linked, trigger background sync
+      final profile = ref.read(profileProvider);
+      if (profile.isLinked) {
+        SyncRepository.instance.fullSync(); // Fire and forget
+      }
+
+      // Wait for splash duration
+      await Future.delayed(AppConstants.splashDuration);
+      if (!mounted) return;
+
+      final route = profile.hasCompletedOnboarding
+          ? AppRoutes.home
+          : AppRoutes.carousel;
+
+      Navigator.of(context).pushReplacementNamed(route);
+    } catch (e) {
+      // If Firebase auth fails, still allow the app to proceed to onboarding
+      // The user can use the app in offline mode
+      debugPrint('Splash initialization error: $e');
+      
+      await Future.delayed(AppConstants.splashDuration);
+      if (!mounted) return;
+
+      // Default to carousel for new users or when auth fails
+      Navigator.of(context).pushReplacementNamed(AppRoutes.carousel);
     }
-
-    // If user is linked, trigger background sync
-    final profile = ref.read(profileProvider);
-    if (profile.isLinked) {
-      SyncRepository.instance.fullSync(); // Fire and forget
-    }
-
-    // Wait for splash duration
-    await Future.delayed(AppConstants.splashDuration);
-    if (!mounted) return;
-
-    final route = profile.hasCompletedOnboarding
-        ? AppRoutes.home
-        : AppRoutes.carousel;
-
-    Navigator.of(context).pushReplacementNamed(route);
   }
 
   @override

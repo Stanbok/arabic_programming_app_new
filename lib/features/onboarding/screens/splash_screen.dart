@@ -48,29 +48,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _initializeApp() async {
-    try {
-      final authRepo = AuthRepository.instance;
+    final authRepo = AuthRepository.instance;
 
-      // Sign in anonymously if not already signed in
-      if (!authRepo.isSignedIn) {
-        await authRepo.signInAnonymously();
-      }
+    // Sign in anonymously if not already signed in
+    if (!authRepo.isSignedIn) {
+      await authRepo.signInAnonymously();
+    }
 
-      // If user is linked, trigger background sync
-      final profile = ref.read(profileProvider);
-      if (profile.isLinked) {
-        SyncRepository.instance.fullSync(); // Fire and forget
-      }
-    } catch (e) {
-      debugPrint('Auth initialization error: $e');
-      // Continue to app even if auth fails - offline-first approach
+    // If user is linked, trigger background sync
+    final profile = ref.read(profileProvider);
+    if (profile.isLinked) {
+      SyncRepository.instance.fullSync(); // Fire and forget
     }
 
     // Wait for splash duration
     await Future.delayed(AppConstants.splashDuration);
     if (!mounted) return;
 
-    final profile = ref.read(profileProvider);
     final route = profile.hasCompletedOnboarding
         ? AppRoutes.home
         : AppRoutes.carousel;

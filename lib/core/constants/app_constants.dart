@@ -21,8 +21,8 @@ class AppConstants {
   static const String lessonsJsonPath = 'assets/data/lessons.json';
   static const String path1ContentPath = 'assets/data/path_1_content';
 
-  // Ads
-  static const String rewardedAdUnitId = 'ca-app-pub-xxxxx/yyyyy'; // Replace with real ID
+  // Ads (disabled)
+  // static const String rewardedAdUnitId = 'ca-app-pub-xxxxx/yyyyy';
 
   // Avatar count
   static const int avatarCount = 10;

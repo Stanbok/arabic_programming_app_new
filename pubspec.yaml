@@ -31,8 +31,7 @@ dependencies:
   flutter_svg: ^2.0.10+1
   lottie: ^3.1.2
 
-  # Ads & Payments
-  google_mobile_ads: ^4.0.0
+  # Ads & Payments (ads temporarily disabled)
   in_app_purchase: ^3.1.13
 
   # Utils

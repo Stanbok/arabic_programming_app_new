@@ -10,74 +10,28 @@ class AdService {
   RewardedAd? _rewardedAd;
   bool _isLoading = false;
 
-  /// Initialize ads SDK
+  /// Initialize ads SDK (no-op when disabled)
   Future<void> initialize() async {
-    await MobileAds.instance.initialize();
-    _loadRewardedAd();
+    // Ads disabled - no initialization needed
   }
 
-  /// Load a rewarded ad
+  /// Load a rewarded ad (no-op when disabled)
   void _loadRewardedAd() {
-    if (_isLoading || _rewardedAd != null) return;
-    _isLoading = true;
-
-    RewardedAd.load(
-      adUnitId: AppConstants.rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (ad) {
-          _rewardedAd = ad;
-          _isLoading = false;
-        },
-        onAdFailedToLoad: (error) {
-          _isLoading = false;
-          // Retry after delay
-          Future.delayed(const Duration(seconds: 30), _loadRewardedAd);
-        },
-      ),
-    );
+    // Nothing to load when ads are disabled
   }
 
-  /// Check if ad is ready
-  bool get isAdReady => _rewardedAd != null;
+  /// Check if ad is ready (always true when disabled)
+  bool get isAdReady => true;
 
   /// Show rewarded ad
-  /// Returns true if user earned reward, false otherwise
+  /// Returns true immediately since ads are disabled
   Future<bool> showRewardedAd() async {
-    if (_rewardedAd == null) {
-      _loadRewardedAd();
-      return false;
-    }
-
-    bool rewarded = false;
-
-    _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        ad.dispose();
-        _rewardedAd = null;
-        _loadRewardedAd();
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        ad.dispose();
-        _rewardedAd = null;
-        _loadRewardedAd();
-      },
-    );
-
-    await _rewardedAd!.show(
-      onUserEarnedReward: (ad, reward) {
-        rewarded = true;
-      },
-    );
-
-    // Wait a bit for callback
-    await Future.delayed(const Duration(milliseconds: 500));
-    return rewarded;
+    // Ads disabled - grant reward immediately
+    return true;
   }
 
-  /// Dispose resources
+  /// Dispose resources (no-op when disabled)
   void dispose() {
-    _rewardedAd?.dispose();
-    _rewardedAd = null;
+    // Nothing to dispose
   }
 }

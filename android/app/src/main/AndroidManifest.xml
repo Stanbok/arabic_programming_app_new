@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.example.python_in_arabic">
 
     <!-- صلاحيات الإنترنت المطلوبة لـ Firebase -->
@@ -6,7 +7,9 @@
 
     <!-- صلاحيات المعرض (للصور) -->
     <!-- للإصدارات القديمة -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <!-- للإصدارات الحديثة -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
@@ -17,6 +20,11 @@
         android:label="python_in_arabic"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- تعطيل Google Mobile Ads native provider -->
+        <provider
+            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
+            tools:node="remove" />
 
         <activity
             android:name=".MainActivity"
@@ -33,12 +41,12 @@
                 android:resource="@style/NormalTheme" />
 
             <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Firebase يحتاج الـ meta دي لتسجيل الإضافات -->
+        <!-- Flutter embedding -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
@@ -47,8 +55,9 @@
     <!-- عشان الإضافات اللي بتستخدم text processing تشتغل -->
     <queries>
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
         </intent>
     </queries>
+
 </manifest>

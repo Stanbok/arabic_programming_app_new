@@ -329,7 +329,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   void _showResults() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => ResultsScreen(
+        builder: (context) => ResultsScreen(
           answers: _answers,
           totalQuestions: widget.questions.length,
           onContinue: () {
@@ -337,9 +337,10 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
             widget.onComplete();
           },
           onRetry: () {
-            Navigator.of(context).pushReplacement(
+            Navigator.of(context).pop();
+            Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => QuizScreen(
+                builder: (context) => QuizScreen(
                   questions: widget.questions,
                   lessonTitle: widget.lessonTitle,
                   onComplete: widget.onComplete,

@@ -29,7 +29,7 @@
     "order": 3,
     "isVIP": false,
     "bundled": false,
-    "thumbnail": "assets/images/paths/path_3.png",
+    "thumbnail": "assets/images/paths/path_3.svg",
     "lessonIds": ["lesson_3_1", "lesson_3_2", "lesson_3_3"]
   },
   {
@@ -40,7 +40,7 @@
     "order": 4,
     "isVIP": true,
     "bundled": false,
-    "thumbnail": "assets/images/paths/path_4.png",
+    "thumbnail": "assets/images/paths/path_4.svg",
     "lessonIds": ["lesson_4_1", "lesson_4_2", "lesson_4_3", "lesson_4_4"]
   }
 ]

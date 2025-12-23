@@ -80,30 +80,32 @@
         },
         {
           "type": "bullets",
-          "content": "• النصوص تُكتب بين علامات اقتباس\n• + لدمج النصوص، * للتكرار\n• الفهرس يبدأ من 0\n• len() لمعرفة طول النص\n• دوال مثل upper(), lower(), replace()"
+          "items": [
+            "النصوص تُكتب بين علامات اقتباس",
+            "+ لدمج النصوص، * للتكرار",
+            "الفهرس يبدأ من 0",
+            "len() لمعرفة طول النص",
+            "دوال مثل upper(), lower(), replace()"
+          ]
         }
       ]
     },
     {
       "type": "quiz",
-      "quizData": {
-        "questionType": "codeOutput",
-        "question": "ما هو ناتج الكود التالي؟",
-        "codeSnippet": "text = \"Python\"\nprint(text[0])",
-        "options": ["P", "y", "Python", "1"],
-        "correctIndex": 0,
-        "expectedOutput": "P",
-        "explanation": "text[0] يُرجع الحرف الأول في النص، والفهرس يبدأ من 0."
-      }
+      "questionType": "code_output",
+      "question": "ما هو ناتج الكود التالي؟",
+      "codeSnippet": "text = \"Python\"\nprint(text[0])",
+      "options": ["P", "y", "Python", "1"],
+      "correctIndex": 0,
+      "expectedOutput": "P",
+      "explanation": "text[0] يُرجع الحرف الأول في النص، والفهرس يبدأ من 0."
     },
     {
       "type": "quiz",
-      "quizData": {
-        "questionType": "fillBlank",
-        "question": "لمعرفة طول نص، نستخدم الدالة ___",
-        "correctText": "len",
-        "explanation": "الدالة len() تُرجع عدد الأحرف في النص."
-      }
+      "questionType": "fill_blank",
+      "question": "لمعرفة طول نص، نستخدم الدالة ___",
+      "correctText": "len",
+      "explanation": "الدالة len() تُرجع عدد الأحرف في النص."
     }
   ]
 }

@@ -23,25 +23,9 @@ subprojects {
     layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// التأكد أن app يُقيَّم أولًا
+// التأكد أن app يُقيَّم أولًا (مسموح وآمن)
 subprojects {
     evaluationDependsOn(":app")
-}
-
-// الحل الصحيح لتوحيد compileSdk
-subprojects {
-
-    plugins.withId("com.android.application") {
-        extensions.configure<com.android.build.gradle.BaseExtension> {
-            compileSdkVersion(34)
-        }
-    }
-
-    plugins.withId("com.android.library") {
-        extensions.configure<com.android.build.gradle.BaseExtension> {
-            compileSdkVersion(34)
-        }
-    }
 }
 
 // clean

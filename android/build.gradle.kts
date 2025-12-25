@@ -1,7 +1,6 @@
 // android/build.gradle.kts
 
 plugins {
-    // Firebase Google Services (يُطبّق فقط على app)
     id("com.google.gms.google-services") version "4.4.0" apply false
 }
 
@@ -15,34 +14,37 @@ allprojects {
     }
 }
 
-// توحيد مجلدات build لكل المشروع
+// توحيد مجلدات build
 val newBuildDir = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
     val newSubprojectBuildDir = newBuildDir.dir(project.name)
-    project.layout.buildDirectory.value(newSubprojectBuildDir)
+    layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// التأكد أن app يُقيَّم قبل باقي الموديولات
+// التأكد أن app يُقيَّم أولًا
 subprojects {
-    project.evaluationDependsOn(":app")
+    evaluationDependsOn(":app")
 }
 
-// حل مشكلة compileSdk لجميع الموديولات (app + plugins مثل app_links)
+// الحل الصحيح لتوحيد compileSdk
 subprojects {
-    afterEvaluate {
-        if (plugins.hasPlugin("com.android.application") ||
-            plugins.hasPlugin("com.android.library")) {
 
-            extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {
-                compileSdkVersion(34)
-            }
+    plugins.withId("com.android.application") {
+        extensions.configure<com.android.build.gradle.BaseExtension> {
+            compileSdkVersion(34)
+        }
+    }
+
+    plugins.withId("com.android.library") {
+        extensions.configure<com.android.build.gradle.BaseExtension> {
+            compileSdkVersion(34)
         }
     }
 }
 
-// مهمة التنظيف
+// clean
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

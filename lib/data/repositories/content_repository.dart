@@ -3,7 +3,7 @@ import '../models/lesson_model.dart';
 import '../models/lesson_content_model.dart';
 import '../services/asset_loader_service.dart';
 import '../services/hive_service.dart';
-import '../services/firebase_storage_service.dart';
+import '../services/supabase_storage_service.dart';
 import '../../core/constants/app_constants.dart';
 
 /// Repository for accessing learning content
@@ -13,7 +13,7 @@ class ContentRepository {
 
   final _assetLoader = AssetLoaderService.instance;
   final _hiveService = HiveService.instance;
-  final _storageService = FirebaseStorageService.instance;
+  final _storageService = SupabaseStorageService.instance;
 
   /// Get all paths
   Future<List<PathModel>> getPaths() async {
@@ -98,13 +98,13 @@ class ContentRepository {
     return downloaded == total;
   }
 
-  /// Download a single lesson from Firebase Storage and cache it
+  /// Download a single lesson from Supabase and cache it
   /// Returns the downloaded content or null if failed
   Future<LessonContentModel?> downloadAndCacheLesson({
     required String lessonId,
     required String pathId,
   }) async {
-    // Download from Firebase Storage
+    // Download from Supabase
     final content = await _storageService.downloadLessonContent(
       lessonId: lessonId,
       pathId: pathId,
@@ -122,7 +122,7 @@ class ContentRepository {
     return content;
   }
 
-  /// Download all lessons for a path from Firebase Storage
+  /// Download all lessons for a path from Supabase
   /// Returns count of successfully downloaded lessons
   Future<int> downloadAllLessonsForPath({
     required String pathId,
@@ -131,7 +131,7 @@ class ContentRepository {
     // Get lesson IDs for this path
     final lessons = await getLessonsForPath(pathId);
     final lessonIds = lessons.map((l) => l.id).toList();
-    
+
     // Filter out already cached lessons
     final uncachedIds = lessonIds.where(
       (id) => !_hiveService.isLessonCached(id)
@@ -164,5 +164,10 @@ class ContentRepository {
     }
 
     return downloadedCount;
+  }
+
+  /// Get current content version from Supabase
+  Future<int> getRemoteContentVersion() async {
+    return _storageService.getContentVersion();
   }
 }

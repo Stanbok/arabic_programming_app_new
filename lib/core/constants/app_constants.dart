@@ -14,6 +14,7 @@ class AppConstants {
 
   // Content
   static const String path1Id = 'path_1';
+  static const int currentContentVersion = 1; // Added content version for background updates
   static const int quizPassThreshold = 50; // 50% to pass
 
   // Paths

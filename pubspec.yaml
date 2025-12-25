@@ -12,11 +12,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # Firebase
-  firebase_core: ^4.0.0
-  firebase_auth: ^6.0.0
-  cloud_firestore: ^6.0.0
-  firebase_storage: ^13.0.0
+  supabase_flutter: ^2.8.0
   google_sign_in: ^6.2.1
 
   # Local Storage
@@ -31,7 +27,7 @@ dependencies:
   flutter_svg: ^2.0.10+1
   lottie: ^3.1.2
 
-  # Ads & Payments (ads temporarily disabled)
+  # Payments (ads temporarily disabled)
   in_app_purchase: ^3.1.13
 
   # Utils

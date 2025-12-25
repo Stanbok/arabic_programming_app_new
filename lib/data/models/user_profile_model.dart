@@ -20,7 +20,7 @@ class UserProfileModel extends HiveObject {
   final String? email;
 
   @HiveField(5)
-  final String? firebaseUid;
+  final String? supabaseUid;
 
   @HiveField(6)
   final DateTime? premiumExpiryDate;
@@ -34,7 +34,7 @@ class UserProfileModel extends HiveObject {
     this.isLinked = false,
     this.isPremium = false,
     this.email,
-    this.firebaseUid,
+    this.supabaseUid,
     this.premiumExpiryDate,
     this.hasCompletedOnboarding = false,
   });
@@ -45,7 +45,7 @@ class UserProfileModel extends HiveObject {
     bool? isLinked,
     bool? isPremium,
     String? email,
-    String? firebaseUid,
+    String? supabaseUid,
     DateTime? premiumExpiryDate,
     bool? hasCompletedOnboarding,
   }) {
@@ -55,7 +55,7 @@ class UserProfileModel extends HiveObject {
       isLinked: isLinked ?? this.isLinked,
       isPremium: isPremium ?? this.isPremium,
       email: email ?? this.email,
-      firebaseUid: firebaseUid ?? this.firebaseUid,
+      supabaseUid: supabaseUid ?? this.supabaseUid,
       premiumExpiryDate: premiumExpiryDate ?? this.premiumExpiryDate,
       hasCompletedOnboarding:
           hasCompletedOnboarding ?? this.hasCompletedOnboarding,
@@ -75,7 +75,7 @@ class UserProfileModel extends HiveObject {
       'isLinked': isLinked,
       'isPremium': isPremium,
       'email': email,
-      'firebaseUid': firebaseUid,
+      'supabaseUid': supabaseUid,
       'premiumExpiryDate': premiumExpiryDate?.toIso8601String(),
       'hasCompletedOnboarding': hasCompletedOnboarding,
     };
@@ -88,7 +88,7 @@ class UserProfileModel extends HiveObject {
       isLinked: json['isLinked'] ?? false,
       isPremium: json['isPremium'] ?? false,
       email: json['email'],
-      firebaseUid: json['firebaseUid'],
+      supabaseUid: json['supabaseUid'] ?? json['firebaseUid'],
       premiumExpiryDate: json['premiumExpiryDate'] != null
           ? DateTime.parse(json['premiumExpiryDate'])
           : null,

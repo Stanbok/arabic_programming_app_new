@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 
 import 'app.dart';
 import 'core/constants/hive_boxes.dart';
@@ -11,6 +9,7 @@ import 'data/models/user_progress_model.dart';
 import 'data/models/user_profile_model.dart';
 import 'data/models/app_settings_model.dart';
 import 'data/models/cached_lesson_model.dart';
+import 'data/services/supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,9 +20,7 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await SupabaseService.instance.initialize();
 
   // Initialize Hive
   await Hive.initFlutter();

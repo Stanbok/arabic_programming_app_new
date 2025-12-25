@@ -11,7 +11,8 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  app_links: ^7.0.0
+  dependencies:
+  app_links: ^6.4.1
 
   supabase_flutter: ^2.8.0
   google_sign_in: ^6.2.1

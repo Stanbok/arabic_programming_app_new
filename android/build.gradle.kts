@@ -1,5 +1,3 @@
-// android/build.gradle.kts
-
 plugins {
     id("com.google.gms.google-services") version "4.4.0" apply false
 }
@@ -14,21 +12,18 @@ allprojects {
     }
 }
 
-// توحيد مجلدات build
-val newBuildDir = rootProject.layout.buildDirectory.dir("../../build").get()
+val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
-    val newSubprojectBuildDir = newBuildDir.dir(project.name)
-    layout.buildDirectory.value(newSubprojectBuildDir)
+    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
+    project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// التأكد أن app يُقيَّم أولًا (مسموح وآمن)
 subprojects {
-    evaluationDependsOn(":app")
+    project.evaluationDependsOn(":app")
 }
 
-// clean
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

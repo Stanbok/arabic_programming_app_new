@@ -5,6 +5,7 @@ import '../../data/models/lesson_model.dart';
 import '../../data/models/lesson_content_model.dart';
 import '../../data/repositories/content_repository.dart';
 import '../../data/repositories/progress_repository.dart';
+import '../../data/services/content_update_service.dart';
 
 /// Provider for all paths
 final pathsProvider = FutureProvider<List<PathModel>>((ref) async {
@@ -46,4 +47,34 @@ final pathDownloadStatusProvider = FutureProvider.family<(int, int), String>((re
 /// Provider to check if lesson is available offline
 final lessonOfflineAvailableProvider = Provider.family<bool, ({String lessonId, String pathId})>((ref, params) {
   return ContentRepository.instance.isLessonAvailableOffline(params.lessonId, params.pathId);
+});
+
+// ===== UPDATE PROVIDERS =====
+
+/// Provider to check if there's a pending update notification
+final hasUpdateNotificationProvider = Provider<bool>((ref) {
+  return ContentUpdateService.instance.hasPendingUpdateNotification();
+});
+
+/// Provider for pending update message
+final updateMessageProvider = Provider<String?>((ref) {
+  return ContentUpdateService.instance.getPendingUpdateMessage();
+});
+
+/// State notifier for update notification visibility
+class UpdateNotificationNotifier extends StateNotifier<bool> {
+  UpdateNotificationNotifier() : super(ContentUpdateService.instance.hasPendingUpdateNotification());
+
+  void dismiss() {
+    ContentUpdateService.instance.dismissUpdateNotification();
+    state = false;
+  }
+
+  void refresh() {
+    state = ContentUpdateService.instance.hasPendingUpdateNotification();
+  }
+}
+
+final updateNotificationProvider = StateNotifierProvider<UpdateNotificationNotifier, bool>((ref) {
+  return UpdateNotificationNotifier();
 });

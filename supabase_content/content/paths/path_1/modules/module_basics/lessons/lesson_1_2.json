@@ -1,0 +1,63 @@
+{
+  "id": "lesson_1_2",
+  "title": "المتغيرات وأنواع البيانات",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "المتغيرات هي حاويات لتخزين البيانات في الذاكرة."
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "name = \"أحمد\"\nage = 25\nheight = 1.75\nis_student = True"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "أنواع البيانات الأساسية في Python:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "str - النصوص (Strings)",
+            "int - الأعداد الصحيحة (Integers)",
+            "float - الأعداد العشرية (Floats)",
+            "bool - القيم المنطقية (Booleans)"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ما تعلمناه في هذا الدرس:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "المتغيرات تُخزن البيانات",
+            "Python يحدد نوع المتغير تلقائياً",
+            "الأنواع الأساسية: str, int, float, bool"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "questionType": "single_choice",
+      "question": "ما هو نوع المتغير x = 3.14؟",
+      "options": ["str", "int", "float", "bool"],
+      "correctIndex": 2,
+      "explanation": "الأعداد العشرية نوعها float"
+    }
+  ]
+}

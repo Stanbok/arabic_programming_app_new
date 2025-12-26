@@ -5,68 +5,90 @@ import '../services/asset_loader_service.dart';
 import '../services/hive_service.dart';
 import '../services/supabase_storage_service.dart';
 import '../../core/constants/app_constants.dart';
+import 'manifest_repository.dart';
 
 /// Repository for accessing learning content
+/// 
+/// Refactored to use ManifestRepository for hierarchical content loading.
+/// Maintains backward compatibility with existing interface.
+/// 
+/// Content Loading Priority:
+/// 1. Bundled assets (Path 1 lesson content)
+/// 2. Hive cache (downloaded lesson content)
+/// 3. On-demand download from Supabase (if online)
 class ContentRepository {
   ContentRepository._();
   static final ContentRepository instance = ContentRepository._();
 
+  final _manifestRepo = ManifestRepository.instance;
   final _assetLoader = AssetLoaderService.instance;
   final _hiveService = HiveService.instance;
   final _storageService = SupabaseStorageService.instance;
 
-  /// Get all paths
+  /// Get all paths (from manifests or bundled assets)
   Future<List<PathModel>> getPaths() async {
-    return _assetLoader.loadPaths();
+    return _manifestRepo.getPaths();
   }
 
   /// Get a specific path by ID
   Future<PathModel?> getPath(String pathId) async {
-    final paths = await getPaths();
-    try {
-      return paths.firstWhere((p) => p.id == pathId);
-    } catch (e) {
-      return null;
-    }
+    return _manifestRepo.getPath(pathId);
   }
 
-  /// Get lessons for a path
+  /// Get lessons for a path (from manifests or bundled assets)
   Future<List<LessonModel>> getLessonsForPath(String pathId) async {
-    return _assetLoader.loadLessonsForPath(pathId);
+    return _manifestRepo.getLessonsForPath(pathId);
   }
 
   /// Get a specific lesson by ID
   Future<LessonModel?> getLesson(String pathId, String lessonId) async {
-    final lessons = await getLessonsForPath(pathId);
-    try {
-      return lessons.firstWhere((l) => l.id == lessonId);
-    } catch (e) {
-      return null;
-    }
+    return _manifestRepo.getLesson(pathId, lessonId);
   }
 
   /// Get lesson content
-  /// - For Path 1: Loads from bundled assets
-  /// - For Path 2+: Loads from Hive cache
+  /// Priority:
+  /// 1. Bundled assets (Path 1)
+  /// 2. Hive cache
+  /// 3. On-demand download (if contentUrl available)
   Future<LessonContentModel?> getLessonContent(String lessonId, String pathId) async {
-    // Check if it's a bundled lesson (Path 1)
+    // For bundled Path 1, always load from assets
     if (pathId == AppConstants.path1Id) {
-      return _assetLoader.loadBundledLessonContent(lessonId);
+      final bundledContent = await _assetLoader.loadBundledLessonContent(lessonId);
+      if (bundledContent != null) return bundledContent;
     }
 
-    // For Path 2+, check cache
-    return _hiveService.getCachedLessonContent(lessonId);
+    // Check Hive cache
+    final cachedContent = _hiveService.getCachedLessonContent(lessonId);
+    if (cachedContent != null) return cachedContent;
+
+    // Try on-demand download using content URL from manifest
+    final contentUrl = _manifestRepo.getLessonContentUrl(pathId, lessonId);
+    if (contentUrl != null) {
+      final downloadedContent = await _storageService.downloadLessonContentByUrl(contentUrl);
+      if (downloadedContent != null) {
+        // Cache the downloaded content
+        await _hiveService.cacheLessonContent(
+          lessonId: lessonId,
+          pathId: pathId,
+          content: downloadedContent,
+        );
+        return downloadedContent;
+      }
+    }
+
+    return null;
   }
 
   /// Check if lesson content is available offline
   bool isLessonAvailableOffline(String lessonId, String pathId) {
+    // Path 1 bundled content is always available
     if (pathId == AppConstants.path1Id) {
-      return true; // Path 1 is always available
+      return true;
     }
     return _hiveService.isLessonCached(lessonId);
   }
 
-  /// Cache lesson content (for Path 2+)
+  /// Cache lesson content (for downloaded lessons)
   Future<void> cacheLessonContent({
     required String lessonId,
     required String pathId,
@@ -82,9 +104,10 @@ class ContentRepository {
   /// Get download status for a path
   /// Returns: (downloaded count, total count)
   Future<(int, int)> getPathDownloadStatus(String pathId) async {
+    // Path 1 is fully bundled
     if (pathId == AppConstants.path1Id) {
       final lessons = await getLessonsForPath(pathId);
-      return (lessons.length, lessons.length); // All downloaded
+      return (lessons.length, lessons.length);
     }
 
     final lessons = await getLessonsForPath(pathId);
@@ -98,18 +121,18 @@ class ContentRepository {
     return downloaded == total;
   }
 
-  /// Download a single lesson from Supabase and cache it
+  /// Download a single lesson using content URL from manifest
   /// Returns the downloaded content or null if failed
   Future<LessonContentModel?> downloadAndCacheLesson({
     required String lessonId,
     required String pathId,
   }) async {
-    // Download from Supabase
-    final content = await _storageService.downloadLessonContent(
-      lessonId: lessonId,
-      pathId: pathId,
-    );
+    // Get content URL from manifest
+    final contentUrl = _manifestRepo.getLessonContentUrl(pathId, lessonId);
+    if (contentUrl == null) return null;
 
+    // Download from Supabase
+    final content = await _storageService.downloadLessonContentByUrl(contentUrl);
     if (content == null) return null;
 
     // Cache in Hive
@@ -122,52 +145,55 @@ class ContentRepository {
     return content;
   }
 
-  /// Download all lessons for a path from Supabase
+  /// Download all lessons for a path
   /// Returns count of successfully downloaded lessons
   Future<int> downloadAllLessonsForPath({
     required String pathId,
     void Function(int downloaded, int total)? onProgress,
   }) async {
-    // Get lesson IDs for this path
     final lessons = await getLessonsForPath(pathId);
-    final lessonIds = lessons.map((l) => l.id).toList();
-
+    
     // Filter out already cached lessons
-    final uncachedIds = lessonIds.where(
-      (id) => !_hiveService.isLessonCached(id)
+    final uncachedLessons = lessons.where(
+      (l) => !_hiveService.isLessonCached(l.id)
     ).toList();
 
-    if (uncachedIds.isEmpty) {
-      onProgress?.call(lessonIds.length, lessonIds.length);
-      return lessonIds.length;
+    if (uncachedLessons.isEmpty) {
+      onProgress?.call(lessons.length, lessons.length);
+      return lessons.length;
     }
 
-    int downloadedCount = lessonIds.length - uncachedIds.length;
+    int downloadedCount = lessons.length - uncachedLessons.length;
 
     // Download uncached lessons
-    final downloaded = await _storageService.downloadAllLessonsForPath(
-      pathId: pathId,
-      lessonIds: uncachedIds,
-      onProgress: (current, total) {
-        onProgress?.call(downloadedCount + current, lessonIds.length);
-      },
-    );
-
-    // Cache downloaded content
-    for (final entry in downloaded.entries) {
-      await _hiveService.cacheLessonContent(
-        lessonId: entry.key,
-        pathId: pathId,
-        content: entry.value,
-      );
-      downloadedCount++;
+    for (int i = 0; i < uncachedLessons.length; i++) {
+      final lesson = uncachedLessons[i];
+      
+      if (lesson.contentUrl != null) {
+        final content = await _storageService.downloadLessonContentByUrl(lesson.contentUrl!);
+        if (content != null) {
+          await _hiveService.cacheLessonContent(
+            lessonId: lesson.id,
+            pathId: pathId,
+            content: content,
+          );
+          downloadedCount++;
+        }
+      }
+      
+      onProgress?.call(downloadedCount, lessons.length);
     }
 
     return downloadedCount;
   }
 
-  /// Get current content version from Supabase
-  Future<int> getRemoteContentVersion() async {
-    return _storageService.getContentVersion();
+  /// Get modules for a path
+  List<dynamic> getModulesForPath(String pathId) {
+    return _manifestRepo.getModulesForPath(pathId);
+  }
+
+  /// Clear all cached content (for debugging/reset)
+  Future<void> clearAllCache() async {
+    await _hiveService.clearAllCache();
   }
 }

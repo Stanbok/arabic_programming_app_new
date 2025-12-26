@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "moduleId": "module_control_flow",
+  "pathId": "path_2",
+  "lessons": [
+    {
+      "id": "lesson_2_1",
+      "title": "الشروط if-else",
+      "order": 1,
+      "thumbnail": "assets/images/lessons/lesson_2_1.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_2/modules/module_control_flow/lessons/lesson_2_1.json"
+    },
+    {
+      "id": "lesson_2_2",
+      "title": "حلقات while",
+      "order": 2,
+      "thumbnail": "assets/images/lessons/lesson_2_2.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_2/modules/module_control_flow/lessons/lesson_2_2.json"
+    },
+    {
+      "id": "lesson_2_3",
+      "title": "حلقات for",
+      "order": 3,
+      "thumbnail": "assets/images/lessons/lesson_2_3.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_2/modules/module_control_flow/lessons/lesson_2_3.json"
+    },
+    {
+      "id": "lesson_2_4",
+      "title": "break و continue",
+      "order": 4,
+      "thumbnail": "assets/images/lessons/lesson_2_4.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_2/modules/module_control_flow/lessons/lesson_2_4.json"
+    }
+  ]
+}

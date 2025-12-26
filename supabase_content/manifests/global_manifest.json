@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "updated_at": "2025-01-01",
+  "paths": [
+    {
+      "id": "path_1",
+      "version": 1,
+      "manifest_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/manifests/paths/path_1/manifest.json"
+    },
+    {
+      "id": "path_2",
+      "version": 1,
+      "manifest_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/manifests/paths/path_2/manifest.json"
+    },
+    {
+      "id": "path_3",
+      "version": 1,
+      "manifest_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/manifests/paths/path_3/manifest.json"
+    },
+    {
+      "id": "path_4",
+      "version": 1,
+      "manifest_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/manifests/paths/path_4/manifest.json"
+    }
+  ]
+}

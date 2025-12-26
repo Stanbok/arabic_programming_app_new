@@ -1,0 +1,18 @@
+{
+  "pathId": "path_3",
+  "version": 1,
+  "title": "الدوال",
+  "description": "إنشاء واستخدام الدوال في Python",
+  "level": "متوسط",
+  "order": 3,
+  "isVIP": false,
+  "thumbnail": "assets/images/paths/path_3.svg",
+  "modules": [
+    {
+      "id": "module_functions",
+      "version": 1,
+      "title": "الدوال",
+      "lessons_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/manifests/paths/path_3/modules/module_functions/lessons.json"
+    }
+  ]
+}

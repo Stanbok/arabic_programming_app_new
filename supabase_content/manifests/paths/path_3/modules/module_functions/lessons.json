@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "moduleId": "module_functions",
+  "pathId": "path_3",
+  "lessons": [
+    {
+      "id": "lesson_3_1",
+      "title": "تعريف الدوال",
+      "order": 1,
+      "thumbnail": "assets/images/lessons/lesson_3_1.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_3/modules/module_functions/lessons/lesson_3_1.json"
+    },
+    {
+      "id": "lesson_3_2",
+      "title": "المعاملات والقيم المرجعة",
+      "order": 2,
+      "thumbnail": "assets/images/lessons/lesson_3_2.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_3/modules/module_functions/lessons/lesson_3_2.json"
+    },
+    {
+      "id": "lesson_3_3",
+      "title": "نطاق المتغيرات",
+      "order": 3,
+      "thumbnail": "assets/images/lessons/lesson_3_3.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_3/modules/module_functions/lessons/lesson_3_3.json"
+    }
+  ]
+}

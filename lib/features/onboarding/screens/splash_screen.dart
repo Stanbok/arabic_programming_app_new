@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/profile_provider.dart';
-import '../../../core/providers/sync_provider.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/sync_repository.dart';
@@ -52,6 +51,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     try {
       final authRepo = AuthRepository.instance;
 
+      // Sign in anonymously if not already signed in
       if (!authRepo.isSignedIn) {
         await authRepo.signInAnonymously();
       }
@@ -59,8 +59,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // If user is linked, trigger background sync
       final profile = ref.read(profileProvider);
       if (profile.isLinked) {
-        final syncNotifier = ref.read(syncProvider.notifier);
-        SyncRepository.instance.initialize(syncNotifier);
         SyncRepository.instance.fullSync(); // Fire and forget
       }
 
@@ -74,10 +72,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       Navigator.of(context).pushReplacementNamed(route);
     } catch (e) {
-      // If Supabase auth fails, still allow the app to proceed to onboarding
+      // If Firebase auth fails, still allow the app to proceed to onboarding
       // The user can use the app in offline mode
       debugPrint('Splash initialization error: $e');
-
+      
       await Future.delayed(AppConstants.splashDuration);
       if (!mounted) return;
 

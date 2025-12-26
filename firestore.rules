@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // تحقق من هوية المستخدم الحالي
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // تحقق من أن المستخدم يعدل بيانات نفسه فقط
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+      
+    
+    // مجموعة المسارات - paths collection (قراءة عامة)
+    match /paths/{pathId} {
+      // جميع المستخدمين يمكنهم قراءة المسارات المتاحة
+      allow read: if true;
+      
+      // منع الكتابة (البيانات من الـ seed فقط)
+      allow write: if false;
+    }
+    
+    // مجموعة الدروس - lessons collection (قراءة عامة)
+    match /lessons/{lessonId} {
+      // جميع المستخدمين يمكنهم قراءة الدروس
+      allow read: if true;
+      
+      // منع الكتابة (البيانات من الـ seed فقط)
+      allow write: if false;
+    }
+    
+    // مجموعة التقدم - progress collection
+    match /progress/{progressId} {
+      // المستخدم يقرأ تقدمه الخاص فقط
+      allow read: if isOwner(getOwnerFromProgressId());
+      
+      // المستخدم يعدل تقدمه الخاص فقط
+      allow write: if isOwner(getOwnerFromProgressId()) && validateProgressData();
+      
+      // استخرج معرف المستخدم من معرف التقدم (format: userId_lessonId)
+      function getOwnerFromProgressId() {
+        return resource.data.userId;
+      }
+      
+      
+    }
+  }
+}

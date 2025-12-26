@@ -14,16 +14,21 @@ class AppConstants {
 
   // Content
   static const String path1Id = 'path_1';
-  static const int currentContentVersion = 1; // Added content version for background updates
   static const int quizPassThreshold = 50; // 50% to pass
 
-  // Paths
+  // These are used as fallback when no manifest cache exists
   static const String pathsJsonPath = 'assets/data/paths.json';
   static const String lessonsJsonPath = 'assets/data/lessons.json';
   static const String path1ContentPath = 'assets/data/path_1_content';
 
-  // Ads (disabled)
-  // static const String rewardedAdUnitId = 'ca-app-pub-xxxxx/yyyyy';
+  /// Minimum interval between update checks (1 day)
+  static const Duration updateCheckInterval = Duration(days: 1);
+  
+  /// Timeout for manifest downloads
+  static const Duration manifestDownloadTimeout = Duration(seconds: 30);
+  
+  /// Timeout for lesson content downloads
+  static const Duration lessonDownloadTimeout = Duration(seconds: 60);
 
   // Avatar count
   static const int avatarCount = 10;

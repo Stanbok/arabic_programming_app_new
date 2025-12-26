@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.example.python_in_arabic"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -24,7 +24,7 @@ android {
     defaultConfig {
         applicationId = "com.example.python_in_arabic"
         minSdk = 23
-        targetSdk = 34
+        targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
@@ -57,4 +57,7 @@ dependencies {
 
     // Firebase Services المستخدمة فعليًا
     implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-analytics")
 }

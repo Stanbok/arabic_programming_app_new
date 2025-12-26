@@ -1,0 +1,63 @@
+{
+  "id": "lesson_1_5",
+  "title": "الإدخال والإخراج",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "input() لقراءة مدخلات من المستخدم:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "name = input(\"ما اسمك؟ \")\nprint(f\"مرحباً {name}!\")"
+        },
+        {
+          "type": "note",
+          "content": "input() تُرجع دائماً نص (string)"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "تحويل المدخلات إلى أرقام:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "age = int(input(\"كم عمرك؟ \"))\nprice = float(input(\"السعر: \"))"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ما تعلمناه:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "input() لقراءة المدخلات",
+            "print() لعرض المخرجات",
+            "int() و float() لتحويل الأنواع",
+            "f-strings لتنسيق النصوص"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "questionType": "true_false",
+      "question": "input() تُرجع دائماً قيمة من نوع string",
+      "correctAnswer": true,
+      "explanation": "نعم، input() تُرجع دائماً نص حتى لو أدخل المستخدم أرقام"
+    }
+  ]
+}

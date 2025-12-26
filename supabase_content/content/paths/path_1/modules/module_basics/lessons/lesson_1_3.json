@@ -1,0 +1,55 @@
+{
+  "id": "lesson_1_3",
+  "title": "العمليات الحسابية",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "Python تدعم جميع العمليات الحسابية الأساسية:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "a = 10\nb = 3\n\nprint(a + b)  # الجمع: 13\nprint(a - b)  # الطرح: 7\nprint(a * b)  # الضرب: 30\nprint(a / b)  # القسمة: 3.33..."
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "عمليات إضافية مفيدة:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "print(10 // 3)  # القسمة الصحيحة: 3\nprint(10 % 3)   # باقي القسمة: 1\nprint(2 ** 3)   # الأس: 8"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ما تعلمناه:"
+        },
+        {
+          "type": "bullets",
+          "items": ["+ للجمع، - للطرح", "* للضرب، / للقسمة", "// للقسمة الصحيحة، % لباقي القسمة", "** للأس"]
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "questionType": "single_choice",
+      "question": "ما هي نتيجة 7 % 3؟",
+      "options": ["2", "1", "2.33", "0"],
+      "correctIndex": 1,
+      "explanation": "% تعطي باقي القسمة، و 7 ÷ 3 = 2 والباقي 1"
+    }
+  ]
+}

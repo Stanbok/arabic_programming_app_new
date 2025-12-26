@@ -5,16 +5,21 @@ import '../models/user_progress_model.dart';
 import '../models/path_model.dart';
 import '../models/lesson_model.dart';
 import 'content_repository.dart';
+import 'sync_repository.dart';
 
 /// Lock state for lessons and paths
 enum ContentLockState { locked, available, completed }
 
 /// Repository for managing user progress
+/// 
+/// Local-first: All reads/writes go to Hive immediately.
+/// Background sync: Triggers Supabase sync after writes (non-blocking).
 class ProgressRepository {
   ProgressRepository._();
   static final ProgressRepository instance = ProgressRepository._();
 
   final _contentRepo = ContentRepository.instance;
+  final _syncRepo = SyncRepository.instance;
   Box<UserProgressModel>? _progressBox;
 
   Box<UserProgressModel> get _box {
@@ -94,6 +99,8 @@ class ProgressRepository {
         lastUpdated: DateTime.now(),
       );
       await _box.put(HiveKeys.progress, updated);
+      
+      _syncRepo.syncProgress(); // Fire and forget
     }
   }
 
@@ -107,6 +114,8 @@ class ProgressRepository {
         lastUpdated: DateTime.now(),
       );
       await _box.put(HiveKeys.progress, updated);
+      
+      _syncRepo.syncProgress(); // Fire and forget
     }
   }
 
@@ -154,6 +163,8 @@ class ProgressRepository {
       lastUpdated: DateTime.now(),
     );
     await _box.put(HiveKeys.progress, updated);
+    
+    _syncRepo.syncProgress(); // Fire and forget
   }
 
   /// Update current card index
@@ -164,6 +175,7 @@ class ProgressRepository {
       lastUpdated: DateTime.now(),
     );
     await _box.put(HiveKeys.progress, updated);
+    // Note: Don't sync on every card index change to reduce API calls
   }
 
   /// Get current position
@@ -189,5 +201,12 @@ class ProgressRepository {
   /// Reset all progress
   Future<void> resetProgress() async {
     await _box.delete(HiveKeys.progress);
+    
+    _syncRepo.syncProgress(); // Fire and forget
+  }
+
+  /// Fetch and merge progress from Supabase (called on app start)
+  Future<void> fetchAndMergeFromCloud() async {
+    await _syncRepo.fetchAndMergeProgress();
   }
 }

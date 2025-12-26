@@ -1,0 +1,18 @@
+{
+  "pathId": "path_2",
+  "version": 1,
+  "title": "التحكم في التدفق",
+  "description": "الشروط والحلقات وبنى التحكم",
+  "level": "مبتدئ",
+  "order": 2,
+  "isVIP": false,
+  "thumbnail": "assets/images/paths/path_2.png",
+  "modules": [
+    {
+      "id": "module_control_flow",
+      "version": 1,
+      "title": "التحكم في التدفق",
+      "lessons_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/manifests/paths/path_2/modules/module_control_flow/lessons.json"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "id": "lesson_1_1",
+  "title": "مقدمة في Python",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "مرحباً بك في رحلتك لتعلم لغة Python!"
+        },
+        {
+          "type": "text",
+          "content": "Python هي لغة برمجة سهلة التعلم وقوية في نفس الوقت. تُستخدم في مجالات عديدة مثل:"
+        },
+        {
+          "type": "bullets",
+          "items": ["تطوير المواقع والتطبيقات", "الذكاء الاصطناعي وتعلم الآلة", "تحليل البيانات", "أتمتة المهام"]
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "لنكتب أول برنامج لنا في Python!"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "print(\"مرحباً بالعالم!\")"
+        },
+        {
+          "type": "note",
+          "content": "الدالة print() تُستخدم لطباعة النص على الشاشة"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ما تعلمناه في هذا الدرس:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Python لغة برمجة متعددة الاستخدامات",
+            "نستخدم print() لطباعة النصوص",
+            "النصوص توضع بين علامات تنصيص"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "questionType": "single_choice",
+      "question": "ما هي الدالة المستخدمة لطباعة النص في Python؟",
+      "options": ["echo()", "print()", "write()", "output()"],
+      "correctIndex": 1,
+      "explanation": "الدالة print() هي الدالة الصحيحة لطباعة النصوص في Python"
+    },
+    {
+      "type": "quiz",
+      "questionType": "true_false",
+      "question": "Python تُستخدم فقط لتطوير المواقع",
+      "correctAnswer": false,
+      "explanation": "Python تُستخدم في مجالات متعددة منها الذكاء الاصطناعي وتحليل البيانات وغيرها"
+    }
+  ]
+}

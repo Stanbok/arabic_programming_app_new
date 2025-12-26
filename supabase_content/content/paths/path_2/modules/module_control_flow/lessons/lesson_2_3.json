@@ -1,0 +1,99 @@
+{
+  "id": "lesson_2_3",
+  "title": "حلقات for",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "حلقة for تُستخدم للمرور على عناصر مجموعة (قائمة، نص، الخ)."
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "fruits = [\"تفاح\", \"موز\", \"برتقال\"]\n\nfor fruit in fruits:\n    print(fruit)"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "دالة range() تُنشئ سلسلة من الأرقام:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "# من 0 إلى 4\nfor i in range(5):\n    print(i)\n\n# من 1 إلى 5\nfor i in range(1, 6):\n    print(i)\n\n# من 0 إلى 10 بخطوة 2\nfor i in range(0, 11, 2):\n    print(i)  # 0, 2, 4, 6, 8, 10"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "المرور على حروف النص:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "name = \"Python\"\n\nfor char in name:\n    print(char)"
+        },
+        {
+          "type": "note",
+          "content": "for تعمل مع أي شيء قابل للتكرار (iterable)"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "استخدام enumerate للحصول على الفهرس:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "colors = [\"أحمر\", \"أخضر\", \"أزرق\"]\n\nfor index, color in enumerate(colors):\n    print(f\"{index}: {color}\")"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ما تعلمناه في هذا الدرس:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "for للمرور على عناصر المجموعات",
+            "range() لإنشاء سلسلة أرقام",
+            "enumerate() للحصول على الفهرس مع القيمة",
+            "for تعمل مع القوائم والنصوص وغيرها"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "questionType": "single_choice",
+      "question": "ما هي نتيجة range(2, 5)؟",
+      "options": ["[2, 3, 4, 5]", "[2, 3, 4]", "[1, 2, 3, 4, 5]", "[0, 1, 2, 3, 4]"],
+      "correctIndex": 1,
+      "explanation": "range(2, 5) تُنتج الأرقام من 2 إلى 4 (لا تشمل 5)"
+    },
+    {
+      "type": "quiz",
+      "questionType": "true_false",
+      "question": "يمكن استخدام for للمرور على حروف النص",
+      "correctAnswer": true,
+      "explanation": "نعم، النص في Python قابل للتكرار ويمكن المرور على حروفه"
+    }
+  ]
+}

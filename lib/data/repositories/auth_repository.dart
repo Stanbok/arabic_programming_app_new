@@ -1,11 +1,9 @@
-import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:hive/hive.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/hive_boxes.dart';
 import '../models/user_profile_model.dart';
-import '../services/supabase_service.dart';
 
 /// Result of authentication operations
 class AuthResult {
@@ -20,14 +18,13 @@ class AuthResult {
   });
 }
 
-/// Repository for authentication operations using Supabase
+/// Repository for authentication operations
 class AuthRepository {
   AuthRepository._();
   static final AuthRepository instance = AuthRepository._();
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID'),
-  );
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   Box<UserProfileModel>? _profileBox;
 
@@ -36,31 +33,21 @@ class AuthRepository {
     return _profileBox!;
   }
 
-  SupabaseClient get _supabase => SupabaseService.clientInstance;
-
-  /// Get current Supabase user
-  User? get currentUser => _supabase.auth.currentUser;
+  /// Get current Firebase user
+  User? get currentUser => _auth.currentUser;
 
   /// Check if user is signed in
   bool get isSignedIn => currentUser != null;
 
   /// Check if user is anonymous
-  bool get isAnonymous {
-    final user = currentUser;
-    if (user == null) return true;
-    // Supabase anonymous users have no email and no identities
-    return user.email == null && (user.identities?.isEmpty ?? true);
-  }
+  bool get isAnonymous => currentUser?.isAnonymous ?? true;
 
   /// Sign in anonymously
   Future<AuthResult> signInAnonymously() async {
     try {
-      final response = await _supabase.auth.signInAnonymously();
-      if (response.user != null) {
-        return AuthResult(success: true, user: response.user);
-      }
-      return const AuthResult(success: false, error: 'فشل في إنشاء حساب مجهول');
-    } on AuthException catch (e) {
+      final credential = await _auth.signInAnonymously();
+      return AuthResult(success: true, user: credential.user);
+    } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: e.message);
     } catch (e) {
       return AuthResult(success: false, error: e.toString());
@@ -78,36 +65,31 @@ class AuthRepository {
 
       // Get auth details
       final googleAuth = await googleUser.authentication;
-      final idToken = googleAuth.idToken;
-      final accessToken = googleAuth.accessToken;
-
-      if (idToken == null) {
-        return const AuthResult(success: false, error: 'فشل في الحصول على رمز المصادقة');
-      }
-
-      // Link with Supabase using Google OAuth
-      final response = await _supabase.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
       );
 
-      if (response.user != null) {
+      // Link with current anonymous account
+      final userCredential = await currentUser?.linkWithCredential(credential);
+      
+      if (userCredential?.user != null) {
         // Update local profile
         final profile = _box.get(HiveKeys.profile) ?? UserProfileModel();
         final updated = profile.copyWith(
           isLinked: true,
-          email: response.user!.email,
-          supabaseUid: response.user!.id,
+          email: userCredential!.user!.email,
+          firebaseUid: userCredential.user!.uid,
         );
         await _box.put(HiveKeys.profile, updated);
 
-        return AuthResult(success: true, user: response.user);
+        return AuthResult(success: true, user: userCredential.user);
       }
 
       return const AuthResult(success: false, error: 'فشل في ربط الحساب');
-    } on AuthException catch (e) {
-      if (e.message.contains('already registered')) {
+    } on FirebaseAuthException catch (e) {
+      // Handle specific error cases
+      if (e.code == 'credential-already-in-use') {
         return const AuthResult(
           success: false,
           error: 'هذا الحساب مرتبط بمستخدم آخر',
@@ -128,34 +110,28 @@ class AuthRepository {
       }
 
       final googleAuth = await googleUser.authentication;
-      final idToken = googleAuth.idToken;
-      final accessToken = googleAuth.accessToken;
-
-      if (idToken == null) {
-        return const AuthResult(success: false, error: 'فشل في الحصول على رمز المصادقة');
-      }
-
-      final response = await _supabase.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
       );
 
-      if (response.user != null) {
+      final userCredential = await _auth.signInWithCredential(credential);
+      
+      if (userCredential.user != null) {
         // Update local profile
         final profile = _box.get(HiveKeys.profile) ?? UserProfileModel();
         final updated = profile.copyWith(
           isLinked: true,
-          email: response.user!.email,
-          supabaseUid: response.user!.id,
+          email: userCredential.user!.email,
+          firebaseUid: userCredential.user!.uid,
         );
         await _box.put(HiveKeys.profile, updated);
 
-        return AuthResult(success: true, user: response.user);
+        return AuthResult(success: true, user: userCredential.user);
       }
 
       return const AuthResult(success: false, error: 'فشل في تسجيل الدخول');
-    } on AuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
       return AuthResult(success: false, error: e.message);
     } catch (e) {
       return AuthResult(success: false, error: e.toString());
@@ -165,15 +141,15 @@ class AuthRepository {
   /// Sign out
   Future<void> signOut() async {
     await _googleSignIn.signOut();
-    await _supabase.auth.signOut();
-
+    await _auth.signOut();
+    
     // Update local profile
     final profile = _box.get(HiveKeys.profile);
     if (profile != null) {
       final updated = profile.copyWith(
         isLinked: false,
         email: null,
-        supabaseUid: null,
+        firebaseUid: null,
       );
       await _box.put(HiveKeys.profile, updated);
     }
@@ -182,23 +158,20 @@ class AuthRepository {
   /// Delete account
   Future<AuthResult> deleteAccount() async {
     try {
-      // Delete user data from Supabase first
-      final userId = currentUser?.id;
-      if (userId != null) {
-        // Delete profile and progress (cascade will handle related data)
-        await _supabase.from('profiles').delete().eq('id', userId);
-        await _supabase.from('user_progress').delete().eq('user_id', userId);
-      }
-
-      // Sign out
+      await currentUser?.delete();
       await _googleSignIn.signOut();
-      await _supabase.auth.signOut();
-
+      
       // Clear local profile
       await _box.delete(HiveKeys.profile);
-
+      
       return const AuthResult(success: true);
-    } on AuthException catch (e) {
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        return const AuthResult(
+          success: false,
+          error: 'يرجى تسجيل الخروج وإعادة تسجيل الدخول للمتابعة',
+        );
+      }
       return AuthResult(success: false, error: e.message);
     } catch (e) {
       return AuthResult(success: false, error: e.toString());
@@ -206,5 +179,5 @@ class AuthRepository {
   }
 
   /// Stream of auth state changes
-  Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
 }

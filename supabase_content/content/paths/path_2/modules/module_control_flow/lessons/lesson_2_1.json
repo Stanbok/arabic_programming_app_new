@@ -1,0 +1,109 @@
+{
+  "id": "lesson_2_1",
+  "title": "الشروط if-else",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "في البرمجة، نحتاج أحياناً لاتخاذ قرارات بناءً على شروط معينة."
+        },
+        {
+          "type": "text",
+          "content": "جملة if تسمح لنا بتنفيذ كود معين فقط إذا تحقق شرط ما."
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "age = 18\nif age >= 18:\n    print(\"أنت بالغ\")"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "يمكننا إضافة else لتنفيذ كود بديل إذا لم يتحقق الشرط."
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "age = 15\nif age >= 18:\n    print(\"أنت بالغ\")\nelse:\n    print(\"أنت قاصر\")"
+        },
+        {
+          "type": "note",
+          "content": "لاحظ أهمية المسافة البادئة (indentation) في Python"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "لفحص عدة شروط، نستخدم elif (اختصار else if):"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "grade = 85\n\nif grade >= 90:\n    print(\"ممتاز\")\nelif grade >= 80:\n    print(\"جيد جداً\")\nelif grade >= 70:\n    print(\"جيد\")\nelse:\n    print(\"يحتاج تحسين\")"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "عوامل المقارنة في Python:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "== للمساواة",
+            "!= لعدم المساواة",
+            "> أكبر من",
+            "< أصغر من",
+            ">= أكبر من أو يساوي",
+            "<= أصغر من أو يساوي"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ما تعلمناه في هذا الدرس:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "if لتنفيذ كود عند تحقق شرط",
+            "else للحالة البديلة",
+            "elif لفحص شروط متعددة",
+            "عوامل المقارنة للمقارنة بين القيم"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "questionType": "single_choice",
+      "question": "ما هي نتيجة الكود التالي؟\nx = 5\nif x > 10:\n    print(\"كبير\")\nelse:\n    print(\"صغير\")",
+      "options": ["كبير", "صغير", "خطأ", "لا شيء"],
+      "correctIndex": 1,
+      "explanation": "بما أن 5 ليس أكبر من 10، سيتم تنفيذ الكود داخل else"
+    },
+    {
+      "type": "quiz",
+      "questionType": "true_false",
+      "question": "يمكن استخدام elif بدون if قبلها",
+      "correctAnswer": false,
+      "explanation": "elif يجب أن تأتي دائماً بعد if أو elif أخرى"
+    }
+  ]
+}

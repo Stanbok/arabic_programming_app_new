@@ -1,0 +1,60 @@
+{
+  "id": "lesson_1_4",
+  "title": "النصوص والسلاسل",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "النصوص (Strings) هي سلاسل من الأحرف:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "name = \"أحمد\"\nmessage = 'مرحباً'\nmultiline = \"\"\"نص\nعلى عدة\nأسطر\"\"\""
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "عمليات على النصوص:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "s = \"Python\"\n\nprint(len(s))       # طول النص: 6\nprint(s.upper())    # PYTHON\nprint(s.lower())    # python\nprint(s[0])         # أول حرف: P"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ما تعلمناه:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "النصوص تُحاط بعلامات تنصيص",
+            "len() لمعرفة طول النص",
+            "upper() و lower() لتغيير الحالة",
+            "[index] للوصول لحرف معين"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "questionType": "single_choice",
+      "question": "ما هي نتيجة len(\"مرحبا\")؟",
+      "options": ["4", "5", "6", "7"],
+      "correctIndex": 1,
+      "explanation": "كلمة \"مرحبا\" تتكون من 5 أحرف"
+    }
+  ]
+}

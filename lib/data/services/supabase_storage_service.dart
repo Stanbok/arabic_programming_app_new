@@ -1,119 +1,149 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/constants/supabase_constants.dart';
 import '../models/lesson_content_model.dart';
-import 'supabase_service.dart';
+import '../models/manifest/manifest_models.dart';
 
-/// Service for downloading lesson content from Supabase
+/// Service for downloading content from Supabase Storage
+/// 
+/// Handles:
+/// - Global manifest downloads
+/// - Path manifest downloads
+/// - Module lessons downloads
+/// - Lesson content downloads (on-demand)
+/// 
+/// All downloads are validated before returning.
 class SupabaseStorageService {
   SupabaseStorageService._();
   static final SupabaseStorageService instance = SupabaseStorageService._();
 
-  SupabaseClient get _supabase => SupabaseService.clientInstance;
+  SupabaseClient get _client => Supabase.instance.client;
 
-  /// Download lesson content from Supabase database
-  Future<LessonContentModel?> downloadLessonContent({
-    required String lessonId,
-    required String pathId,
-  }) async {
+  /// Download and parse global manifest
+  Future<GlobalManifestModel?> downloadGlobalManifest() async {
     try {
-      final response = await _supabase
-          .from(SupabaseConstants.lessonContentTable)
-          .select('content')
-          .eq('lesson_id', lessonId)
-          .maybeSingle();
+      final url = _client.storage
+          .from(SupabaseConstants.contentBucket)
+          .getPublicUrl(SupabaseConstants.globalManifestPath);
+      
+      final jsonString = await _fetchJson(url);
+      if (jsonString == null) return null;
 
-      if (response == null || response['content'] == null) return null;
-
-      final content = response['content'] as Map<String, dynamic>;
-      return LessonContentModel.fromJson(content);
+      final jsonMap = json.decode(jsonString) as Map<String, dynamic>;
+      return GlobalManifestModel.fromJson(jsonMap);
     } catch (e) {
-      debugPrint('Download lesson content failed: $e');
       return null;
     }
   }
 
-  /// Download lesson content from Supabase Storage bucket
-  Future<LessonContentModel?> downloadLessonContentFromStorage({
-    required String lessonId,
+  /// Download and parse path manifest by path ID
+  Future<PathManifestModel?> downloadPathManifest(String pathId) async {
+    try {
+      final url = _client.storage
+          .from(SupabaseConstants.contentBucket)
+          .getPublicUrl(SupabaseConstants.pathManifestPath(pathId));
+      
+      final jsonString = await _fetchJson(url);
+      if (jsonString == null) return null;
+
+      final jsonMap = json.decode(jsonString) as Map<String, dynamic>;
+      return PathManifestModel.fromJson(jsonMap);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Download and parse module lessons by module ID
+  Future<ModuleLessonsModel?> downloadModuleLessons({
     required String pathId,
+    required String moduleId,
   }) async {
     try {
-      final bytes = await _supabase.storage
-          .from(SupabaseConstants.lessonsBucket)
-          .download('$pathId/$lessonId.json');
+      final url = _client.storage
+          .from(SupabaseConstants.contentBucket)
+          .getPublicUrl(SupabaseConstants.moduleLessonsPath(pathId, moduleId));
+      
+      final jsonString = await _fetchJson(url);
+      if (jsonString == null) return null;
 
-      final jsonString = utf8.decode(bytes);
       final jsonMap = json.decode(jsonString) as Map<String, dynamic>;
+      return ModuleLessonsModel.fromJson(jsonMap);
+    } catch (e) {
+      return null;
+    }
+  }
 
+  /// Download lesson content by direct URL
+  /// Used for on-demand lesson loading
+  Future<LessonContentModel?> downloadLessonContentByUrl(String contentUrl) async {
+    try {
+      final jsonString = await _fetchJson(
+        contentUrl,
+        timeout: AppConstants.lessonDownloadTimeout,
+      );
+      if (jsonString == null) return null;
+
+      final jsonMap = json.decode(jsonString) as Map<String, dynamic>;
       return LessonContentModel.fromJson(jsonMap);
     } catch (e) {
-      debugPrint('Download from storage failed: $e');
       return null;
     }
   }
 
-  /// Download all lessons for a path
-  /// Returns map of lessonId -> content
-  Future<Map<String, LessonContentModel>> downloadAllLessonsForPath({
+  /// Download lesson content by path structure
+  Future<LessonContentModel?> downloadLessonContent({
     required String pathId,
-    required List<String> lessonIds,
-    void Function(int downloaded, int total)? onProgress,
-  }) async {
-    final results = <String, LessonContentModel>{};
-
-    for (int i = 0; i < lessonIds.length; i++) {
-      final lessonId = lessonIds[i];
-      final content = await downloadLessonContent(
-        lessonId: lessonId,
-        pathId: pathId,
-      );
-
-      if (content != null) {
-        results[lessonId] = content;
-      }
-
-      onProgress?.call(i + 1, lessonIds.length);
-    }
-
-    return results;
-  }
-
-  /// Check if lesson exists in Supabase
-  Future<bool> lessonExists({
+    required String moduleId,
     required String lessonId,
-    required String pathId,
   }) async {
     try {
-      final response = await _supabase
-          .from(SupabaseConstants.lessonContentTable)
-          .select('id')
-          .eq('lesson_id', lessonId)
-          .maybeSingle();
+      final url = _client.storage
+          .from(SupabaseConstants.contentBucket)
+          .getPublicUrl(
+            SupabaseConstants.lessonContentPath(pathId, moduleId, lessonId),
+          );
+      
+      return downloadLessonContentByUrl(url);
+    } catch (e) {
+      return null;
+    }
+  }
 
-      return response != null;
+  /// Download manifest from direct URL (used for path/module manifest_url fields)
+  Future<String?> downloadFromUrl(String url) async {
+    return _fetchJson(url);
+  }
+
+  /// Internal: Fetch JSON string from URL with timeout
+  Future<String?> _fetchJson(
+    String url, {
+    Duration? timeout,
+  }) async {
+    try {
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(timeout ?? AppConstants.manifestDownloadTimeout);
+
+      if (response.statusCode == 200) {
+        return response.body;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Validate JSON string is parseable
+  bool isValidJson(String jsonString) {
+    try {
+      json.decode(jsonString);
+      return true;
     } catch (e) {
       return false;
-    }
-  }
-
-  /// Get content version for a path
-  Future<int> getContentVersion() async {
-    try {
-      final response = await _supabase
-          .from(SupabaseConstants.appMetadataTable)
-          .select('value')
-          .eq('key', 'content_version')
-          .maybeSingle();
-
-      if (response == null) return 1;
-      final value = response['value'] as Map<String, dynamic>;
-      return value['version'] as int? ?? 1;
-    } catch (e) {
-      return 1;
     }
   }
 }

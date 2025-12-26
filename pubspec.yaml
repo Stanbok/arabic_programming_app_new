@@ -11,11 +11,14 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  dependencies:
-  app_links: ^6.4.1
 
-  supabase_flutter: ^2.8.0
+  # Firebase (Auth only - isolated)
+  firebase_core: ^4.0.0
+  firebase_auth: ^6.0.0
   google_sign_in: ^6.2.1
+
+  supabase_flutter: ^2.8.4
+
 
   # Local Storage
   hive: ^2.2.3
@@ -29,13 +32,14 @@ dependencies:
   flutter_svg: ^2.0.10+1
   lottie: ^3.1.2
 
-  # Payments (ads temporarily disabled)
+  # Ads & Payments (ads temporarily disabled)
   in_app_purchase: ^3.1.13
 
   # Utils
   connectivity_plus: ^6.0.5
   shared_preferences: ^2.3.2
   uuid: ^4.3.3
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

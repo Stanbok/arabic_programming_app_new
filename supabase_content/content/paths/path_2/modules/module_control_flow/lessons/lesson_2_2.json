@@ -1,0 +1,102 @@
+{
+  "id": "lesson_2_2",
+  "title": "حلقات while",
+  "cards": [
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "حلقة while تكرر تنفيذ كود معين طالما الشرط متحقق."
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "count = 1\nwhile count <= 5:\n    print(count)\n    count += 1"
+        },
+        {
+          "type": "text",
+          "content": "هذا الكود يطبع الأرقام من 1 إلى 5"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "احذر من الحلقات اللانهائية!"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "# هذا الكود سيعمل للأبد!\n# while True:\n#     print(\"مرحبا\")"
+        },
+        {
+          "type": "note",
+          "content": "تأكد دائماً أن الشرط سيصبح False في نقطة ما"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "مثال عملي: جمع الأرقام من 1 إلى 10"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "total = 0\nnum = 1\n\nwhile num <= 10:\n    total += num\n    num += 1\n\nprint(f\"المجموع: {total}\")  # 55"
+        }
+      ]
+    },
+    {
+      "type": "explanation",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "استخدام while مع إدخال المستخدم:"
+        },
+        {
+          "type": "code",
+          "language": "python",
+          "content": "password = \"\"\n\nwhile password != \"secret\":\n    password = input(\"أدخل كلمة السر: \")\n\nprint(\"مرحباً بك!\")"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "blocks": [
+        {
+          "type": "text",
+          "content": "ما تعلمناه في هذا الدرس:"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "while تكرر الكود طالما الشرط True",
+            "يجب تحديث المتغير لتجنب الحلقة اللانهائية",
+            "مفيدة عندما لا نعرف عدد التكرارات مسبقاً"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quiz",
+      "questionType": "single_choice",
+      "question": "كم مرة سيتم تنفيذ الحلقة؟\nx = 0\nwhile x < 3:\n    print(x)\n    x += 1",
+      "options": ["2 مرات", "3 مرات", "4 مرات", "لانهائي"],
+      "correctIndex": 1,
+      "explanation": "ستطبع 0، 1، 2 ثم تتوقف عندما x = 3"
+    },
+    {
+      "type": "quiz",
+      "questionType": "true_false",
+      "question": "حلقة while True ستعمل للأبد إذا لم يتم إيقافها",
+      "correctAnswer": true,
+      "explanation": "نعم، while True تنشئ حلقة لانهائية ما لم يتم استخدام break"
+    }
+  ]
+}

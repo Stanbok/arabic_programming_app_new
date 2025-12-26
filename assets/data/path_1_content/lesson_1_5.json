@@ -24,6 +24,7 @@
         },
         {
           "type": "code",
+          "language": "python",
           "content": "# طباعة نص\nprint(\"مرحباً بالعالم\")\n\n# طباعة متغير\nname = \"أحمد\"\nprint(name)\n\n# طباعة عدة قيم\nage = 25\nprint(\"الاسم:\", name, \"العمر:\", age)"
         }
       ]
@@ -37,6 +38,7 @@
         },
         {
           "type": "code",
+          "language": "python",
           "content": "name = \"سارة\"\nage = 22\n\n# الطريقة الحديثة: f-string\nprint(f\"اسمي {name} وعمري {age} سنة\")\n\n# يمكن إجراء عمليات داخل الأقواس\nprint(f\"بعد 5 سنوات سيكون عمري {age + 5}\")"
         },
         {
@@ -54,6 +56,7 @@
         },
         {
           "type": "code",
+          "language": "python",
           "content": "# استقبال اسم من المستخدم\nname = input(\"ما اسمك؟ \")\nprint(f\"أهلاً {name}!\")\n\n# استقبال رقم (يجب تحويله)\nage_text = input(\"كم عمرك؟ \")\nage = int(age_text)  # تحويل النص لرقم\nprint(f\"عمرك {age} سنة\")"
         },
         {

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/lesson_content_model.dart';
+import 'code_block_widget.dart';
+import 'image_block_widget.dart';
+import 'video_block_widget.dart';
 
 class ExplanationCard extends StatelessWidget {
   final List<ContentBlock> blocks;
@@ -63,22 +66,9 @@ class ExplanationCard extends StatelessWidget {
         );
       
       case BlockType.code:
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.codeBackground,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: SelectableText(
-            block.content ?? '',
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              color: AppColors.codeText,
-              fontSize: 14,
-              height: 1.6,
-            ),
-          ),
+        return CodeBlockWidget(
+          code: block.content ?? '',
+          language: block.language,
         );
       
       case BlockType.bullets:
@@ -142,6 +132,12 @@ class ExplanationCard extends StatelessWidget {
         );
       
       case BlockType.image:
+        if (block.url != null) {
+          return ImageBlockWidget(
+            url: block.url!,
+            caption: block.caption,
+          );
+        }
         return Container(
           height: 200,
           decoration: BoxDecoration(
@@ -150,6 +146,25 @@ class ExplanationCard extends StatelessWidget {
           ),
           child: const Center(
             child: Icon(Icons.image_rounded, size: 48, color: AppColors.locked),
+          ),
+        );
+      
+      case BlockType.video:
+        if (block.url != null) {
+          return VideoBlockWidget(
+            url: block.url!,
+            caption: block.caption,
+            thumbnail: block.thumbnail,
+          );
+        }
+        return Container(
+          height: 200,
+          decoration: BoxDecoration(
+            color: AppColors.dividerLight,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Center(
+            child: Icon(Icons.videocam_off_rounded, size: 48, color: AppColors.locked),
           ),
         );
     }

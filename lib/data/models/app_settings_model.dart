@@ -23,6 +23,9 @@ class AppSettingsModel extends HiveObject {
   @HiveField(5)
   final String? reminderTime; // HH:mm format
 
+  @HiveField(6)
+  final int codeThemeIndex;
+
   AppSettingsModel({
     this.themeModeIndex = 0,
     this.fontSize = 1.0,
@@ -30,6 +33,7 @@ class AppSettingsModel extends HiveObject {
     this.achievementNotificationsEnabled = true,
     this.updateNotificationsEnabled = true,
     this.reminderTime = '09:00',
+    this.codeThemeIndex = 0, // Default to dark
   });
 
   ThemeMode get themeMode {
@@ -43,6 +47,8 @@ class AppSettingsModel extends HiveObject {
     }
   }
 
+  bool get isCodeThemeDark => codeThemeIndex == 0;
+
   AppSettingsModel copyWith({
     int? themeModeIndex,
     double? fontSize,
@@ -50,6 +56,7 @@ class AppSettingsModel extends HiveObject {
     bool? achievementNotificationsEnabled,
     bool? updateNotificationsEnabled,
     String? reminderTime,
+    int? codeThemeIndex,
   }) {
     return AppSettingsModel(
       themeModeIndex: themeModeIndex ?? this.themeModeIndex,
@@ -60,6 +67,7 @@ class AppSettingsModel extends HiveObject {
       updateNotificationsEnabled:
           updateNotificationsEnabled ?? this.updateNotificationsEnabled,
       reminderTime: reminderTime ?? this.reminderTime,
+      codeThemeIndex: codeThemeIndex ?? this.codeThemeIndex,
     );
   }
 }

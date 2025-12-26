@@ -82,7 +82,7 @@ class CardModel {
 }
 
 /// Types of content blocks
-enum BlockType { text, code, bullets, note, warning, hint, image }
+enum BlockType { text, code, bullets, note, warning, hint, image, video }
 
 /// Model representing a content block within a card
 class ContentBlock {
@@ -90,12 +90,18 @@ class ContentBlock {
   final String? content;
   final String? language; // For code blocks
   final List<String>? items; // For bullets
+  final String? url; // For image/video blocks
+  final String? caption; // For image/video blocks
+  final String? thumbnail; // For video blocks
 
   const ContentBlock({
     required this.type,
     this.content,
     this.language,
     this.items,
+    this.url,
+    this.caption,
+    this.thumbnail,
   });
 
   factory ContentBlock.fromJson(Map<String, dynamic> json) {
@@ -110,6 +116,9 @@ class ContentBlock {
       content: json['content'] as String?,
       language: json['language'] as String?,
       items: (json['items'] as List?)?.cast<String>(),
+      url: json['url'] as String?,
+      caption: json['caption'] as String?,
+      thumbnail: json['thumbnail'] as String?,
     );
   }
 
@@ -118,6 +127,9 @@ class ContentBlock {
     if (content != null) map['content'] = content;
     if (language != null) map['language'] = language;
     if (items != null) map['items'] = items;
+    if (url != null) map['url'] = url;
+    if (caption != null) map['caption'] = caption;
+    if (thumbnail != null) map['thumbnail'] = thumbnail;
     return map;
   }
 }
@@ -170,12 +182,24 @@ class QuizData {
     final typeStr = json['questionType'] as String;
     final questionType = _parseQuizType(typeStr);
 
+    bool? correctAnswer;
+    final rawCorrectAnswer = json['correctAnswer'];
+    if (rawCorrectAnswer != null) {
+      if (rawCorrectAnswer is bool) {
+        correctAnswer = rawCorrectAnswer;
+      } else if (rawCorrectAnswer is String) {
+        correctAnswer = rawCorrectAnswer.toLowerCase() == 'true';
+      } else if (rawCorrectAnswer is int) {
+        correctAnswer = rawCorrectAnswer == 1;
+      }
+    }
+
     return QuizData(
       questionType: questionType,
       question: json['question'] as String,
       options: (json['options'] as List?)?.cast<String>(),
       correctIndex: json['correctIndex'] as int?,
-      correctAnswer: json['correctAnswer'] as bool?,
+      correctAnswer: correctAnswer,
       correctText: json['correctText'] as String?,
       correctOrder: (json['correctOrder'] as List?)?.cast<String>(),
       matchingPairs: (json['matchingPairs'] as Map?)?.cast<String, String>(),

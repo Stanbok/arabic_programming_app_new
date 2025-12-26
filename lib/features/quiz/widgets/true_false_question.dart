@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 
 class TrueFalseQuestion extends StatefulWidget {
-  final bool correctAnswer;
+  final bool? correctAnswer;
   final bool enabled;
   final void Function(bool isCorrect) onAnswer;
 
@@ -20,6 +20,8 @@ class TrueFalseQuestion extends StatefulWidget {
 
 class _TrueFalseQuestionState extends State<TrueFalseQuestion> {
   bool? _selectedAnswer;
+
+  bool get _correctAnswer => widget.correctAnswer ?? false;
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +68,7 @@ class _TrueFalseQuestionState extends State<TrueFalseQuestion> {
     required IconData icon,
   }) {
     final isSelected = _selectedAnswer == value;
-    final isCorrect = value == widget.correctAnswer;
+    final isCorrect = value == _correctAnswer;
     final showResult = !widget.enabled;
 
     Color getColor() {
@@ -116,7 +118,7 @@ class _TrueFalseQuestionState extends State<TrueFalseQuestion> {
 
   void _confirmAnswer() {
     if (_selectedAnswer != null) {
-      widget.onAnswer(_selectedAnswer == widget.correctAnswer);
+      widget.onAnswer(_selectedAnswer == _correctAnswer);
     }
   }
 }

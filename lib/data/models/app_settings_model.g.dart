@@ -23,13 +23,14 @@ class AppSettingsModelAdapter extends TypeAdapter<AppSettingsModel> {
       achievementNotificationsEnabled: fields[3] as bool? ?? true,
       updateNotificationsEnabled: fields[4] as bool? ?? true,
       reminderTime: fields[5] as String? ?? '09:00',
+      codeThemeIndex: fields[6] as int? ?? 0,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettingsModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.themeModeIndex)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class AppSettingsModelAdapter extends TypeAdapter<AppSettingsModel> {
       ..writeByte(4)
       ..write(obj.updateNotificationsEnabled)
       ..writeByte(5)
-      ..write(obj.reminderTime);
+      ..write(obj.reminderTime)
+      ..writeByte(6)
+      ..write(obj.codeThemeIndex);
   }
 
   @override

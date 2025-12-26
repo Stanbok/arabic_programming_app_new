@@ -42,6 +42,14 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showFontSizeDialog(context, ref, settings.fontSize),
           ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.code_rounded),
+            title: const Text('مظهر الأكواد'),
+            subtitle: Text(_getCodeThemeName(settings.codeThemeIndex)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showCodeThemeDialog(context, ref, settings.codeThemeIndex),
+          ),
           
           // Notifications Section
           _SectionHeader(title: 'الإشعارات'),
@@ -164,6 +172,15 @@ class SettingsScreen extends ConsumerWidget {
     return 'متوسط';
   }
 
+  String _getCodeThemeName(int index) {
+    switch (index) {
+      case 1:
+        return 'فاتح';
+      default:
+        return 'داكن';
+    }
+  }
+
   void _showThemeDialog(BuildContext context, WidgetRef ref, int current) {
     showDialog(
       context: context,
@@ -237,6 +254,38 @@ class SettingsScreen extends ConsumerWidget {
               isSelected: current >= 1.2,
               onTap: () {
                 ref.read(settingsProvider.notifier).updateFontSize(1.25);
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCodeThemeDialog(BuildContext context, WidgetRef ref, int current) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('اختر مظهر الأكواد'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ThemeOption(
+              title: 'داكن',
+              icon: Icons.dark_mode,
+              isSelected: current == 0,
+              onTap: () {
+                ref.read(settingsProvider.notifier).updateCodeTheme(0);
+                Navigator.pop(context);
+              },
+            ),
+            _ThemeOption(
+              title: 'فاتح',
+              icon: Icons.light_mode,
+              isSelected: current == 1,
+              onTap: () {
+                ref.read(settingsProvider.notifier).updateCodeTheme(1);
                 Navigator.pop(context);
               },
             ),

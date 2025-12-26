@@ -55,4 +55,9 @@ class SettingsNotifier extends StateNotifier<AppSettingsModel> {
     state = state.copyWith(reminderTime: time);
     await _box.put(HiveKeys.settings, state);
   }
+
+  Future<void> updateCodeTheme(int themeIndex) async {
+    state = state.copyWith(codeThemeIndex: themeIndex);
+    await _box.put(HiveKeys.settings, state);
+  }
 }

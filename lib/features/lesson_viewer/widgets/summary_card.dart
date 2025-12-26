@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/lesson_content_model.dart';
+import 'code_block_widget.dart';
+import 'image_block_widget.dart';
+import 'video_block_widget.dart';
 
 class SummaryCard extends StatelessWidget {
   final List<ContentBlock> blocks;
@@ -102,6 +105,31 @@ class SummaryCard extends StatelessWidget {
                   ))
               .toList(),
         );
+      
+      case BlockType.code:
+        return CodeBlockWidget(
+          code: block.content ?? '',
+          language: block.language,
+        );
+      
+      case BlockType.image:
+        if (block.url != null) {
+          return ImageBlockWidget(
+            url: block.url!,
+            caption: block.caption,
+          );
+        }
+        return const SizedBox.shrink();
+      
+      case BlockType.video:
+        if (block.url != null) {
+          return VideoBlockWidget(
+            url: block.url!,
+            caption: block.caption,
+            thumbnail: block.thumbnail,
+          );
+        }
+        return const SizedBox.shrink();
       
       default:
         return Text(

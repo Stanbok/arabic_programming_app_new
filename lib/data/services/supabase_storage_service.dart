@@ -1,10 +1,11 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/supabase_constants.dart';
+import '../../core/supabase/supabase_client.dart';
 import '../models/lesson_content_model.dart';
 import '../models/manifest/manifest_models.dart';
 
@@ -21,7 +22,7 @@ class SupabaseStorageService {
   SupabaseStorageService._();
   static final SupabaseStorageService instance = SupabaseStorageService._();
 
-  SupabaseClient get _client => Supabase.instance.client;
+  SupabaseClient get _client => SupabaseClientManager.instance.client;
 
   /// Download and parse global manifest
   Future<GlobalManifestModel?> downloadGlobalManifest() async {

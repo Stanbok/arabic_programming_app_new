@@ -1,6 +1,7 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 import '../../core/constants/supabase_constants.dart';
+import '../../core/supabase/supabase_client.dart';
 import '../../core/utils/connectivity_util.dart';
 import '../models/user_progress_model.dart';
 import '../models/user_profile_model.dart';
@@ -18,7 +19,7 @@ class SupabaseProgressService {
   SupabaseProgressService._();
   static final SupabaseProgressService instance = SupabaseProgressService._();
 
-  SupabaseClient get _client => Supabase.instance.client;
+  SupabaseClient get _client => SupabaseClientManager.instance.client;
 
   /// Save progress to Supabase
   /// Uses firebase_uid as plain string identifier (not JWT auth)

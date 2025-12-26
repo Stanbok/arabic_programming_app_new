@@ -1,15 +1,14 @@
 plugins {
+    id("dev.flutter.flutter-gradle-plugin")
     id("com.android.application")
     id("kotlin-android")
-    // Flutter Gradle Plugin (لازم ييجي بعد Android و Kotlin)
-    id("dev.flutter.flutter-gradle-plugin")
-    // Firebase Services (Auth / Firestore / Analytics …)
     id("com.google.gms.google-services")
+
 }
 
 android {
     namespace = "com.example.python_in_arabic"
-    compileSdk = 35
+    compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 
     compileOptions {

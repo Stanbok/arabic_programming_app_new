@@ -134,7 +134,7 @@ class SyncRepository {
       
       // Keep local isLinked status, update name/avatar from remote
       final merged = UserProfileModel(
-        name: remoteProfile.name.isNotEmpty 
+        name: (remoteProfile.name?.isNotEmpty ?? false)
             ? remoteProfile.name 
             : (localProfile?.name ?? ''),
         avatarId: remoteProfile.avatarId,

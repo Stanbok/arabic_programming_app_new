@@ -1,6 +1,29 @@
 plugins {
-    id("com.android.application") version "8.12.1" apply false
-    id("com.google.gms.google-services") version "4.4.0" apply false
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services") apply false
+}
+
+android {
+    namespace = "com.example.python_in_arabic"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.example.python_in_arabic"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17" // JVM Target مضبوط
+    }
 }
 
 allprojects {
@@ -19,9 +42,6 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
-}
-
-subprojects {
     project.evaluationDependsOn(":app")
 }
 

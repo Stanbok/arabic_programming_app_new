@@ -1,6 +1,4 @@
 plugins {
-    id("com.android.application") version "8.12.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.3.0" apply false
     id("com.google.gms.google-services") version "4.4.0" apply false
 }
 
@@ -24,16 +22,6 @@ subprojects {
 
 subprojects {
     project.evaluationDependsOn(":app")
-}
-
-/*
- Configure Kotlin compiler JVM target using the new compilerOptions DSL.
- This replaces the old kotlinOptions { jvmTarget = "17" } which fails with recent Kotlin/Gradle.
-*/
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
 }
 
 tasks.register<Delete>("clean") {

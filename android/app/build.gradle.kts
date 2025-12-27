@@ -1,9 +1,10 @@
 plugins {
-    id("dev.flutter.flutter-gradle-plugin")
     id("com.android.application")
     id("kotlin-android")
+    // Flutter Gradle Plugin (لازم ييجي بعد Android و Kotlin)
+    id("dev.flutter.flutter-gradle-plugin")
+    // Firebase Services (Auth / Firestore / Analytics …)
     id("com.google.gms.google-services")
-
 }
 
 android {

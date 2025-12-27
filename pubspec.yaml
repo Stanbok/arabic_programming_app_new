@@ -52,7 +52,7 @@ dev_dependencies:
   build_runner: ^2.4.8
 
 dependency_overrides:
-  package_info_plus: 8.0.0
+  package_info_plus: 8.3.1
 
 
 flutter:

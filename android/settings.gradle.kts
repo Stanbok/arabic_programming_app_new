@@ -28,12 +28,16 @@ dependencyResolutionManagement {
 }
 
 plugins {
-    id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "8.7.3" apply false
-    // START: FlutterFire Configuration
-    id("com.google.gms.google-services") version("4.4.0") apply false
-    id("com.google.firebase.firebase-perf") version("1.4.1") apply false
-    // END: FlutterFire Configuration
+    // لو مش محتاج flutter-plugin-loader، ممكن تشيله
+    // id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+
+    // تحديث AGP
+    id("com.android.application") version "8.12.1" apply false
+
+    // FlutterFire Configuration
+    id("com.google.gms.google-services") version "4.4.0" apply false
+    id("com.google.firebase.firebase-perf") version "1.4.1" apply false
+
     id("org.jetbrains.kotlin.android") version "2.1.0" apply false
 }
 

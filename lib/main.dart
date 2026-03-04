@@ -1,59 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:go_router/go_router.dart';
 
-import 'app.dart';
-import 'core/constants/hive_boxes.dart';
-import 'core/supabase/supabase_client.dart';
-import 'data/models/user_progress_model.dart';
-import 'data/models/user_profile_model.dart';
-import 'data/models/app_settings_model.dart';
-import 'data/models/cached_lesson_model.dart';
-import 'data/models/manifest/cached_manifest_model.dart';
-import 'data/models/manifest/update_check_model.dart';
+import 'core/theme/app_theme.dart';
+import 'features/home/presentation/home_screen.dart';
+import 'features/unit/presentation/unit_screen.dart';
+import 'features/unit/presentation/lesson_screen.dart';
+import 'features/quiz/presentation/quiz_screen.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  runApp(const ProviderScope(child: PythonLearningApp()));
+}
 
-  // Lock orientation to portrait
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+final _router = GoRouter(
+  routes: [
+    GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+    GoRoute(path: '/unit/:id', builder: (context, state) {
+      final id = state.params['id']!;
+      return UnitScreen(unitId: id);
+    }),
+    GoRoute(path: '/lesson/:id', builder: (context, state) {
+      final id = state.params['id']!;
+      return LessonScreen(lessonId: id);
+    }),
+    GoRoute(path: '/quiz/:id', builder: (context, state) {
+      final id = state.params['id']!;
+      return QuizScreen(lessonId: id);
+    }),
+  ],
+);
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+class PythonLearningApp extends StatelessWidget {
+  const PythonLearningApp({super.key});
 
-  SupabaseClientManager.instance.initialize();
-
-  // Initialize Hive
-  await Hive.initFlutter();
-
-  // Register Hive adapters
-  Hive.registerAdapter(UserProgressModelAdapter());
-  Hive.registerAdapter(UserProfileModelAdapter());
-  Hive.registerAdapter(AppSettingsModelAdapter());
-  Hive.registerAdapter(CachedLessonModelAdapter());
-  Hive.registerAdapter(CachedManifestModelAdapter());
-  Hive.registerAdapter(UpdateCheckModelAdapter());
-
-  // Open Hive boxes
-  await Future.wait([
-    Hive.openBox<UserProgressModel>(HiveBoxes.userProgress),
-    Hive.openBox<UserProfileModel>(HiveBoxes.userProfile),
-    Hive.openBox<AppSettingsModel>(HiveBoxes.appSettings),
-    Hive.openBox<CachedLessonModel>(HiveBoxes.cachedLessons),
-    Hive.openBox<CachedManifestModel>(HiveBoxes.cachedManifests),
-    Hive.openBox<UpdateCheckModel>(HiveBoxes.updateCheck),
-  ]);
-
-  runApp(
-    const ProviderScope(
-      child: PythonInArabicApp(),
-    ),
-  );
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      title: 'Learn Python',
+      theme: AppTheme.light(),
+      routerConfig: _router,
+    );
+  }
 }

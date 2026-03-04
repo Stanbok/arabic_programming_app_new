@@ -34,21 +34,3 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 }
-
-class HomeScreen extends ConsumerWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final units = ref.watch(unitsProvider);
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Units')),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: units.length,
-        itemBuilder: (context, i) => UnitCard(unit: units[i]),
-      ),
-    );
-  }
-}

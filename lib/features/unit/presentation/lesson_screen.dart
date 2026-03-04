@@ -27,7 +27,7 @@ class LessonScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(lesson.title, style: Theme.of(context).textTheme.headline5),
+              Text(lesson.title, style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 12),
               ...lesson.content.map((block) => _buildBlock(block)),
               const SizedBox(height: 24),

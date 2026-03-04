@@ -33,6 +33,10 @@ class ContentService {
 
   Future<Quiz?> getQuizForLesson(String lessonId) async {
     final quizzes = await loadQuizzes();
-    return quizzes.firstWhere((q) => q.lessonId == lessonId, orElse: () => null);
+    try {
+      return quizzes.firstWhere((q) => q.lessonId == lessonId);
+    } catch (e) {
+      return null;
+    }
   }
 }

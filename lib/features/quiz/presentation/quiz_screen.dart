@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:confetti/confetti.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../../../core/models/quiz.dart';
 import '../../../core/providers/content_providers.dart';
 import '../../../core/providers/scores_provider.dart';
 import '../../home/state/gamification_provider.dart';
 import '../../home/state/progress_provider.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 
 class QuizScreen extends ConsumerStatefulWidget {
   final String lessonId;
@@ -25,6 +25,12 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   bool _lastCorrect = false;
   String _explanation = '';
   final TextEditingController _answerController = TextEditingController();
+
+  @override
+  void dispose() {
+    _answerController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,10 +198,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
       });
     }
   }
-  }
 }
-
-import 'package:confetti/confetti.dart';
 
 class QuizResultScreen extends StatefulWidget {
   final bool success;
@@ -222,7 +225,6 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
   @override
   void dispose() {
     _controller.dispose();
-    _answerController.dispose();
     super.dispose();
   }
 

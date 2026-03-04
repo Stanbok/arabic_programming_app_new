@@ -27,7 +27,7 @@ class UnitScreen extends ConsumerWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Text(unit.title, style: Theme.of(context).textTheme.headline5),
+                child: Text(unit.title, style: Theme.of(context).textTheme.headlineMedium),
               ),
               Expanded(
                 child: lessonsAsync.when(

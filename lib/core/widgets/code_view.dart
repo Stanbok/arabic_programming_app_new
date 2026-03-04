@@ -31,7 +31,7 @@ class CodeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final result = hi.highlight.parse(code, language: 'python', autoDetection: false, grammar: python.python);
+    final result = hi.highlight.parse(code, language: 'python', autoDetection: false);
     final baseStyle = const TextStyle(fontFamily: 'monospace', fontSize: 14.0);
     final span = TextSpan(children: result.nodes?.map((n) => _convert(n, baseStyle)).toList() ?? [TextSpan(text: code, style: baseStyle)]);
 

@@ -24,7 +24,7 @@ class AppTheme {
         ),
       ),
       textTheme: const TextTheme(
-        bodyText2: TextStyle(fontSize: 16, height: 1.5),
+        bodyMedium: TextStyle(fontSize: 16, height: 1.5),
       ),
     );
   }

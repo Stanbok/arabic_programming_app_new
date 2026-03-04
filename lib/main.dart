@@ -16,15 +16,15 @@ final _router = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
     GoRoute(path: '/unit/:id', builder: (context, state) {
-      final id = state.params['id']!;
+      final id = state.pathParameters['id']!;
       return UnitScreen(unitId: id);
     }),
     GoRoute(path: '/lesson/:id', builder: (context, state) {
-      final id = state.params['id']!;
+      final id = state.pathParameters['id']!;
       return LessonScreen(lessonId: id);
     }),
     GoRoute(path: '/quiz/:id', builder: (context, state) {
-      final id = state.params['id']!;
+      final id = state.pathParameters['id']!;
       return QuizScreen(lessonId: id);
     }),
   ],

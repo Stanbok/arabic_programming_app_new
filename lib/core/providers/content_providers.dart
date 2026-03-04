@@ -34,5 +34,8 @@ final quizForLessonProvider = FutureProvider.family<Quiz?, String>((ref, lessonI
 final contentLessonProvider = FutureProvider.family<Lesson, String>((ref, lessonId) async {
   final repo = ref.read(contentRepositoryProvider);
   final lessons = await repo.getLessons();
-  return lessons.firstWhere((l) => l.id == lessonId);
+  return lessons.firstWhere(
+    (l) => l.id == lessonId,
+    orElse: () => throw Exception('Lesson not found: $lessonId'),
+  );
 });

@@ -21,7 +21,10 @@ class UnitScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Unit')), // could show dynamic title
       body: unitsAsync.when(
         data: (units) {
-          final unit = units.firstWhere((u) => u.id == unitId);
+          final unit = units.firstWhere(
+            (u) => u.id == unitId,
+            orElse: () => throw Exception('Unit not found: $unitId'),
+          );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

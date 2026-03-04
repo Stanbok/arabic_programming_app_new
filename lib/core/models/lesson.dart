@@ -15,7 +15,7 @@ class ContentBlock with _$ContentBlock {
   const factory ContentBlock.video(String url) = VideoBlock;
 
   factory ContentBlock.fromJson(Map<String, dynamic> json) => _$ContentBlockFromJson(json);
-}}
+}
 
 @freezed
 class Lesson with _$Lesson {
@@ -28,4 +28,4 @@ class Lesson with _$Lesson {
   }) = _Lesson;
 
   factory Lesson.fromJson(Map<String, dynamic> json) => _$LessonFromJson(json);
-}}
+}

@@ -47,6 +47,8 @@ class Question with _$Question {
     required bool answer,
     String? explanation,
   }) = TrueFalseQuestion;
+
+  factory Question.fromJson(Map<String, dynamic> json) => _$QuestionFromJson(json);
 }
 
 @freezed

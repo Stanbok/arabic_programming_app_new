@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "moduleId": "module_basics",
+  "pathId": "path_1",
+  "lessons": [
+    {
+      "id": "lesson_1_1",
+      "title": "مقدمة في Python",
+      "order": 1,
+      "thumbnail": "assets/images/lessons/lesson_1_1.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_1/modules/module_basics/lessons/lesson_1_1.json"
+    },
+    {
+      "id": "lesson_1_2",
+      "title": "المتغيرات وأنواع البيانات",
+      "order": 2,
+      "thumbnail": "assets/images/lessons/lesson_1_2.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_1/modules/module_basics/lessons/lesson_1_2.json"
+    },
+    {
+      "id": "lesson_1_3",
+      "title": "العمليات الحسابية",
+      "order": 3,
+      "thumbnail": "assets/images/lessons/lesson_1_3.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_1/modules/module_basics/lessons/lesson_1_3.json"
+    },
+    {
+      "id": "lesson_1_4",
+      "title": "النصوص والسلاسل",
+      "order": 4,
+      "thumbnail": "assets/images/lessons/lesson_1_4.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_1/modules/module_basics/lessons/lesson_1_4.json"
+    },
+    {
+      "id": "lesson_1_5",
+      "title": "الإدخال والإخراج",
+      "order": 5,
+      "thumbnail": "assets/images/lessons/lesson_1_5.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_1/modules/module_basics/lessons/lesson_1_5.json"
+    }
+  ]
+}

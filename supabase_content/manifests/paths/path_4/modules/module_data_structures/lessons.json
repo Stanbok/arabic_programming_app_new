@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "moduleId": "module_data_structures",
+  "pathId": "path_4",
+  "lessons": [
+    {
+      "id": "lesson_4_1",
+      "title": "القوائم Lists",
+      "order": 1,
+      "thumbnail": "assets/images/lessons/lesson_4_1.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_4/modules/module_data_structures/lessons/lesson_4_1.json"
+    },
+    {
+      "id": "lesson_4_2",
+      "title": "الصفوف Tuples",
+      "order": 2,
+      "thumbnail": "assets/images/lessons/lesson_4_2.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_4/modules/module_data_structures/lessons/lesson_4_2.json"
+    },
+    {
+      "id": "lesson_4_3",
+      "title": "القواميس Dictionaries",
+      "order": 3,
+      "thumbnail": "assets/images/lessons/lesson_4_3.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_4/modules/module_data_structures/lessons/lesson_4_3.json"
+    },
+    {
+      "id": "lesson_4_4",
+      "title": "المجموعات Sets",
+      "order": 4,
+      "thumbnail": "assets/images/lessons/lesson_4_4.png",
+      "content_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/content/paths/path_4/modules/module_data_structures/lessons/lesson_4_4.json"
+    }
+  ]
+}

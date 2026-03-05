@@ -1,0 +1,46 @@
+[
+  {
+    "id": "path_1",
+    "name": "أساسيات Python",
+    "description": "تعلم المفاهيم الأساسية للغة Python من الصفر",
+    "level": "مبتدئ",
+    "order": 1,
+    "isVIP": false,
+    "bundled": true,
+    "thumbnail": "assets/images/paths/path_1.png",
+    "lessonIds": ["lesson_1_1", "lesson_1_2", "lesson_1_3", "lesson_1_4", "lesson_1_5"]
+  },
+  {
+    "id": "path_2",
+    "name": "التحكم في التدفق",
+    "description": "الشروط والحلقات وبنى التحكم",
+    "level": "مبتدئ",
+    "order": 2,
+    "isVIP": false,
+    "bundled": false,
+    "thumbnail": "assets/images/paths/path_2.png",
+    "lessonIds": ["lesson_2_1", "lesson_2_2", "lesson_2_3", "lesson_2_4"]
+  },
+  {
+    "id": "path_3",
+    "name": "الدوال",
+    "description": "إنشاء واستخدام الدوال في Python",
+    "level": "متوسط",
+    "order": 3,
+    "isVIP": false,
+    "bundled": false,
+    "thumbnail": "assets/images/paths/path_3.svg",
+    "lessonIds": ["lesson_3_1", "lesson_3_2", "lesson_3_3"]
+  },
+  {
+    "id": "path_4",
+    "name": "هياكل البيانات",
+    "description": "القوائم والقواميس والمجموعات",
+    "level": "متوسط",
+    "order": 4,
+    "isVIP": true,
+    "bundled": false,
+    "thumbnail": "assets/images/paths/path_4.svg",
+    "lessonIds": ["lesson_4_1", "lesson_4_2", "lesson_4_3", "lesson_4_4"]
+  }
+]

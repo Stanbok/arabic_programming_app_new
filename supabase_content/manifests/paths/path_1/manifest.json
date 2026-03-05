@@ -1,0 +1,18 @@
+{
+  "pathId": "path_1",
+  "version": 1,
+  "title": "أساسيات Python",
+  "description": "تعلم المفاهيم الأساسية للغة Python من الصفر",
+  "level": "مبتدئ",
+  "order": 1,
+  "isVIP": false,
+  "thumbnail": "assets/images/paths/path_1.png",
+  "modules": [
+    {
+      "id": "module_basics",
+      "version": 1,
+      "title": "الأساسيات",
+      "lessons_url": "https://jnimcsiushnsonyvfrtt.supabase.co/storage/v1/object/public/content/manifests/paths/path_1/modules/module_basics/lessons.json"
+    }
+  ]
+}
